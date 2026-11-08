@@ -461,3 +461,37 @@ input[type="date"].input { text-align: left; line-height: 26px; }
 input[type="date"].input::-webkit-date-and-time-value { text-align: left; margin: 0; min-height: 26px; }
 input[type="date"].input::-webkit-datetime-edit { padding: 0; }
 .note-edit textarea.input { font: 400 16px/1.45 var(--body); }
+
+/* ---------- coming up ---------- */
+.soon-sum { margin: -6px 0 6px; }
+.soon-list, .bill-list, .cat-list { margin: 0; padding: 0; list-style: none; }
+.soon-row, .bill-list li { display: grid; grid-template-columns: 86px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; padding: 10px 0; border-top: 1px dashed var(--line); }
+.soon-row:first-child, .bill-list li:first-child { border-top: 0; }
+.bill-list li { grid-template-columns: minmax(0, 1fr) auto auto; }
+.soon-when { font-size: 14px; font-weight: 800; color: var(--ink2); }
+.soon-when.due { color: var(--coral-deep); }
+.soon-main { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.soon-n { font-weight: 800; overflow-wrap: anywhere; }
+.soon-a { font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.soon-x { min-height: 32px; padding: 2px 0; margin-top: 2px; }
+.bill-form { margin-top: 14px; padding-top: 14px; border-top: 2px dashed var(--dash); }
+
+/* ---------- categories you can open ---------- */
+.hbar-btn { display: block; width: 100%; padding: 4px 0; border: 0; background: none; text-align: left; color: inherit; }
+.hbar-btn .hbar-top, .hbar-btn .hbar-track, .hbar-btn .hbar-note { display: flex; }
+.hbar-btn .hbar-track { display: block; }
+.hbar-btn .hbar-note { display: block; }
+.hbar-btn .hbar-top .ic { width: 16px; height: 16px; margin-left: 2px; vertical-align: -3px; color: var(--ink2); }
+.sub-h { margin: 16px 0 6px; font-size: 16px; }
+.cat-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; width: 100%; min-height: 44px; padding: 8px 0; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; color: inherit; }
+.cat-list li:first-child .cat-row { border-top: 0; }
+.cr-d { font-size: 13px; font-weight: 700; color: var(--ink2); }
+.cr-t { min-width: 0; overflow-wrap: anywhere; }
+.cr-a { font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cat-move { padding: 2px 0 10px; }
+
+/* ---------- fun fact ---------- */
+.fact { background: var(--marigold-soft); border-color: var(--ink); box-shadow: 0 4px 0 var(--ink); }
+.fact-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.fact-top .k { flex: 1; color: var(--ink); }
+.fact-t { font: 700 17px/1.4 var(--body); }
