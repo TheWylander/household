@@ -480,6 +480,40 @@ input[type="date"].input::-webkit-date-and-time-value { text-align: left; margin
 input[type="date"].input::-webkit-datetime-edit { padding: 0; }
 .note-edit textarea.input { font: 400 16px/1.45 var(--body); }
 
+/* ---------- coming up ---------- */
+.soon-sum { margin: -6px 0 6px; }
+.soon-list, .bill-list, .cat-list { margin: 0; padding: 0; list-style: none; }
+.soon-row, .bill-list li { display: grid; grid-template-columns: 86px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; padding: 10px 0; border-top: 1px dashed var(--line); }
+.soon-row:first-child, .bill-list li:first-child { border-top: 0; }
+.bill-list li { grid-template-columns: minmax(0, 1fr) auto auto; }
+.soon-when { font-size: 14px; font-weight: 800; color: var(--ink2); }
+.soon-when.due { color: var(--coral-deep); }
+.soon-main { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+.soon-n { font-weight: 800; overflow-wrap: anywhere; }
+.soon-a { font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.soon-x { min-height: 32px; padding: 2px 0; margin-top: 2px; }
+.bill-form { margin-top: 14px; padding-top: 14px; border-top: 2px dashed var(--dash); }
+
+/* ---------- categories you can open ---------- */
+.hbar-btn { display: block; width: 100%; padding: 4px 0; border: 0; background: none; text-align: left; color: inherit; }
+.hbar-btn .hbar-top, .hbar-btn .hbar-track, .hbar-btn .hbar-note { display: flex; }
+.hbar-btn .hbar-track { display: block; }
+.hbar-btn .hbar-note { display: block; }
+.hbar-btn .hbar-top .ic { width: 16px; height: 16px; margin-left: 2px; vertical-align: -3px; color: var(--ink2); }
+.sub-h { margin: 16px 0 6px; font-size: 16px; }
+.cat-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; width: 100%; min-height: 44px; padding: 8px 0; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; color: inherit; }
+.cat-list li:first-child .cat-row { border-top: 0; }
+.cr-d { font-size: 13px; font-weight: 700; color: var(--ink2); }
+.cr-t { min-width: 0; overflow-wrap: anywhere; }
+.cr-a { font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cat-move { padding: 2px 0 10px; }
+
+/* ---------- fun fact ---------- */
+.fact { background: var(--marigold-soft); border-color: var(--ink); box-shadow: 0 4px 0 var(--ink); }
+.fact-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.fact-top .k { flex: 1; color: var(--ink); }
+.fact-t { font: 700 17px/1.4 var(--body); }
+
 </style>
 </head>
 <body>
@@ -1055,14 +1089,21 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
      decides when the other person gets it; edits live in hh/news. The other person sees the newest shown note once,
      or as a few things to try straight after the welcome. */
   const RELEASES = [
-    { id: '2026-11-09', date: '2026-11-09', title: 'Insights, profiles and line notes', items: [
+    { id: '2026-11-09', date: '2026-11-09', title: 'Insights, profiles, bills coming up and more', items: [
       ['chart', 'Insights.', "How each month is tracking against the budget, where the money goes and your big day of the week. It's in the bottom bar."],
       ['duo', 'Profiles.', 'Add a photo for each of you: the gear on Home, then Profiles.'],
       ['plus', 'Lines with notes.', 'Add a day of spends with + and give each line its own note, like crepes or coffee.'],
       ['star', 'Points balance.', 'Enter the points from a statement and the app keeps a running total.'],
-      ['gear', 'Settings.', 'Customise, sharing and your data now live under the gear on Home.']
+      ['gear', 'Settings.', 'Customise, sharing and your data now live under the gear on Home.'],
+      ['cal', 'Coming up.', "Home shows what's due soon: the next rent, bills that come round again like council and water, and any regular bills you add."],
+      ['check', 'Tidy categories.', 'In Insights, tap a category to see every spend in it, and move any that belong somewhere else.'],
+      ['star', 'Fun fact.', 'A little fact about how we spend, a new one each time you open the app.']
     ] }
   ];
+
+  /* How often a regular bill comes round, in days, and how to say it. */
+  const EVERY_DAYS = { week: 7, fortnight: 14, month: 30, quarter: 91, half: 182, year: 365 };
+  const EVERY_LABEL = { week: 'every week', fortnight: 'every 2 weeks', month: 'every month', quarter: 'every 3 months', half: 'every 6 months', year: 'every year' };
 
   /* ---------- state ---------- */
   const S = {
@@ -1073,7 +1114,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     view: 'home', cal: null, add: null, tabForm: { amount: '', label: '', payer: null },
     recapOffset: 0, draft: null, draftSaved: false, setup: null, dialog: null,
     insMode: 'month', insYearOff: 0, insSel: null, insDay: null, pace: null, paceOn: false,
-    photos: null, photoBusy: null, photoErr: null, newsShown: false, newsDoc: null, newsEdit: null, newsId: null,
+    photos: null, photoBusy: null, photoErr: null, newsShown: false, newsDoc: null, newsEdit: null, newsId: null, factN: 0,
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -1092,7 +1133,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       categories: [],
       goal: { name: '', target: null, saved: 0 },
       card: PRESET && PRESET.card ? clone(PRESET.card) : { name: '', holder: 'b', program: '', earns: null, rates: null, ratio: 1, rate: null },
-      home: { week: true, goal: true, spot: true, recap: true },
+      home: { week: true, goal: true, spot: true, recap: true, soon: true, fact: true }, bills: [], billsHide: [],
       spot: { type: 'note', text: '', date: '' },
       remember: true, scheme: 'warm',
       moves: {},
@@ -1124,6 +1165,9 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
         pointsAsOf: typeof card.pointsAsOf === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(card.pointsAsOf) ? card.pointsAsOf : ''
       },
       home: pick('home'), spot: pick('spot'),
+      bills: Array.isArray(s.bills) ? s.bills.filter((b) => b && typeof b === 'object' && typeof b.id === 'string' && typeof b.name === 'string' && num(b.amount) > 0 && EVERY_DAYS[b.every] && /^\d{4}-\d{2}-\d{2}$/.test(b.from || ''))
+        .slice(0, 30).map((b) => ({ id: b.id.slice(0, 20), name: b.name.slice(0, 40), amount: Math.round(b.amount), every: b.every, from: b.from })) : [],
+      billsHide: Array.isArray(s.billsHide) ? s.billsHide.filter((x) => typeof x === 'string').slice(0, 60) : [],
       remember: s.remember !== false,
       scheme: SCHEMES[s.scheme] ? s.scheme : 'warm',
       moves: s.moves && typeof s.moves === 'object' ? s.moves : {},
@@ -1378,6 +1422,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
 
   /* ---------- startup ---------- */
   function boot() {
+    S.factN = (Number(lsGet('hh.factN')) || 0) + 1; lsSet('hh.factN', String(S.factN));
     render();
     slowTimer = setTimeout(() => { if (!(S.live.hh && S.live.months)) { S.slow = true; safeRender(); } }, 10000);
     const c = window.claude;
@@ -1706,6 +1751,8 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       out += '<button class="card row-card attn" data-act="go" data-arg="newsedit"><span><span class="k">Note for ' + esc(nm(other(S.me))) + '</span><span class="row-t">Claude\'s draft for ' + esc(dateY(waiting.date)) + ' is ready</span></span>' + icon('arrow') + '</button>';
     }
     out += balanceCard();
+    if (C.home.fact !== false) out += factCard();
+    if (C.home.soon !== false) out += comingUpCard();
     if (C.home.week !== false) out += weekCard();
     const tiles = (C.home.goal !== false ? goalTile() : '') + (C.home.spot !== false ? spotTile() : '');
     if (tiles) out += '<div class="grid2">' + tiles + '</div>';
@@ -2478,12 +2525,38 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
   }
   function catCard(list, noteFn) {
     const total = sumAmt(list) || 1, cats = byCat(list), keys = Object.keys(cats).sort((a, b) => cats[b] - cats[a]), cmax = cats[keys[0]] || 1;
-    return '<section class="card"><div class="card-head"><h2>Where it went</h2></div>' + keys.map((c) => {
+    return '<section class="card"><div class="card-head"><h2>Where it went</h2></div><p class="hint" style="margin:-8px 0 10px">Tap one to see what\'s in it.</p>' + keys.map((c) => {
       const note = noteFn ? noteFn(c, cats[c]) : '';
-      return '<div class="hbar"><div class="hbar-top"><span>' + esc(c) + '</span><span>' + L.fmt(cats[c]) + ' <span class="muted">' + Math.round(cats[c] / total * 100) + '%</span></span></div>' +
-        '<div class="hbar-track" aria-hidden="true"><span class="hbar-fill" style="width:' + Math.max(2, Math.round(cats[c] / cmax * 100)) + '%"></span></div>' +
-        (note ? '<p class="hbar-note">' + esc(note) + '</p>' : '') + '</div>';
+      return '<button type="button" class="hbar hbar-btn" data-act="inscat" data-arg="' + esc(c) + '"><span class="hbar-top"><span>' + esc(c) + '</span><span>' + L.fmt(cats[c]) + ' <span class="muted">' + Math.round(cats[c] / total * 100) + '%</span>' + icon('right') + '</span></span>' +
+        '<span class="hbar-track" aria-hidden="true"><span class="hbar-fill" style="width:' + Math.max(2, Math.round(cats[c] / cmax * 100)) + '%"></span></span>' +
+        (note ? '<span class="hbar-note">' + esc(note) + '</span>' : '') + '</button>';
     }).join('') + '</section>';
+  }
+  /* What the Insights screen is showing right now: this month, another month, or a year. */
+  function insContext() {
+    const t = today();
+    if (S.insMode === 'year') { const Y = insYearData(); return { label: Y.y + (S.insYearOff === 0 ? ' so far' : ''), list: Y.list }; }
+    const p = L.shiftPeriod(curPeriod(), S.recapOffset);
+    return { label: L.periodLabel(p, t) + (S.recapOffset === 0 ? ' so far' : ''), list: spendsIn(p) };
+  }
+  function insCatDialog(d) {
+    const ctx = insContext(), C = cfg();
+    const items = ctx.list.filter((e) => (e.category || 'Other') === d.cat).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.amount - a.amount));
+    const total = sumAmt(items), g = {};
+    items.forEach((e) => { const k = String(e.title || 'Spend').trim().toLowerCase().replace(/\s+/g, ' '); const x = g[k] || (g[k] = { name: cap1(String(e.title || 'Spend').trim()), n: 0, total: 0 }); x.n++; x.total += e.amount; });
+    const groups = Object.keys(g).map((k) => g[k]).sort((a, b) => b.total - a.total).slice(0, 5);
+    const cats = C.categories.concat(C.categories.indexOf('Other') >= 0 ? [] : ['Other']).filter((c) => c !== d.cat);
+    let h = '<p class="eyebrow">' + esc(ctx.label) + '</p><h2 id="dlgT">' + esc(d.cat) + '</h2>' +
+      '<p class="muted">' + L.fmt(total) + ' across ' + items.length + (items.length === 1 ? ' spend' : ' spends') + '.</p>';
+    if (!items.length) return h + '<div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
+    if (groups.length > 1) {
+      h += '<h3 class="sub-h">Most of it</h3><ul class="places">' + groups.map((x) => '<li class="place"><span class="place-n">' + esc(x.name) + '</span><span class="place-c">' + (x.n === 1 ? 'once' : x.n + ' times') + '</span><span class="place-t">' + L.fmt(x.total) + '</span></li>').join('') + '</ul>';
+    }
+    h += '<h3 class="sub-h">Every spend</h3>' + (S.readOnly ? '' : '<p class="hint" style="margin:-4px 0 6px">Tap one to move it to another category.</p>') + '<ul class="cat-list">' + items.slice(0, 300).map((e) =>
+      '<li><button type="button" class="cat-row" data-act="inscatopen" data-arg="' + esc(e.id) + '"' + (S.readOnly ? ' disabled' : '') + ' aria-expanded="' + (d.open === e.id) + '"><span class="cr-d">' + esc(shortDay(e.date)) + '</span><span class="cr-t">' + esc(e.title || 'Spend') + '</span><span class="cr-a">' + L.fmt(e.amount) + '</span></button>' +
+      (d.open === e.id ? '<div class="chips cat-move">' + cats.map((c) => '<button type="button" class="chip" data-act="inscatset" data-arg="' + esc(e.id + '|' + c) + '">' + esc(c) + '</button>').join('') + '</div>' : '') + '</li>').join('') + '</ul>' +
+      '<div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
+    return h;
   }
   function whoPaidCard(list) {
     const C = cfg(), paid = { a: 0, b: 0 };
@@ -2539,6 +2612,146 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
         '<button class="link" data-act="go" data-arg="custom">Pick how the card earns points</button>';
     }
     return out + '</section>';
+  }
+
+  /* ---------- fun fact ---------- */
+  /* A different fact each time the app opens, worked out from this year's shared spends. A fact only makes the
+     list when there's enough behind it, and they're all told kindly: nothing that reads as a dig at either of you. */
+  const DAY_BATCH = /(^|\s)(expenses?|spends?)$/i;
+  function funFacts() {
+    const t = today(), y = t.slice(0, 4), list = S.entries.filter((e) => L.isSpend(e) && e.date.slice(0, 4) === y && e.date <= t);
+    if (list.length < 10) return [];
+    const out = [], total = sumAmt(list), by = {};
+    list.forEach((e) => { const k = String(e.title || '').trim().toLowerCase().replace(/\s+/g, ' '); if (!k || DAY_BATCH.test(k)) return; const x = by[k] || (by[k] = { name: cap1(String(e.title).trim()), n: 0, sum: 0, cats: {} }); x.n++; x.sum += e.amount; x.cats[e.category || 'Other'] = 1; });
+    const named = Object.keys(by).map((k) => by[k]);
+    const place = named.slice().sort((a, b) => b.n - a.n || b.sum - a.sum)[0];
+    if (place && place.n >= 3) out.push(place.name + ' is your most visited spot this year: ' + place.n + ' trips, about ' + L.fmtRound(Math.round(place.sum / place.n)) + ' a go.');
+    const treat = named.filter((x) => x.cats['Dining out'] || x.cats['Eating out']).sort((a, b) => b.n - a.n || b.sum - a.sum)[0];
+    if (treat && treat.n >= 3 && treat !== place) out.push(treat.name + ' is your go-to treat: ' + treat.n + ' times this year.');
+    const range = { start: y + '-01-01', end: y + '-12-31' }, w = weekdayStats(list, range), all = w.days ? total / w.days : 0;
+    const top = w.avg.indexOf(Math.max.apply(null, w.avg)), low = w.avg.indexOf(Math.min.apply(null, w.avg));
+    if (all && w.avg[top] >= all * 1.3) out.push(WEEK[top] + 's are your big day: about ' + (Math.round(w.avg[top] / all * 10) / 10) + ' times an average day.');
+    if (all && low !== top) out.push(WEEK[low] + 's are your quietest day, at about ' + L.fmtRound(w.avg[low]) + ' on average.');
+    const weekend = list.filter((e) => monIdx(e.date) >= 5).reduce((a, e) => a + e.amount, 0), share = Math.round(weekend / total * 100);
+    if (share >= 35) out.push(share + '% of your shared spending happens on weekends.');
+    const sorted = list.map((e) => e.amount).sort((a, b) => a - b), median = sorted[Math.floor(sorted.length / 2)];
+    out.push('Your typical shared spend is about ' + L.fmtRound(median) + '.');
+    const months = {};
+    list.forEach((e) => { const m = e.date.slice(0, 7); if (m < t.slice(0, 7)) months[m] = (months[m] || 0) + e.amount; });
+    const mk = Object.keys(months).sort((a, b) => months[b] - months[a]);
+    if (mk.length >= 3) out.push(L.MONTHS_FULL[Number(mk[0].slice(5)) - 1] + ' was your biggest month so far this year, at ' + L.fmtRound(months[mk[0]]) + '.');
+    const days = {}; list.forEach((e) => { days[e.date] = 1; });
+    const first = list.reduce((m, e) => (e.date < m ? e.date : m), t);
+    let run = 0, best = 0, bestEnd = '';
+    for (let d = first, g = 0; d <= t && g < 400; d = L.addDays(d, 1), g++) { if (days[d]) run = 0; else { run++; if (run > best) { best = run; bestEnd = d; } } }
+    if (best >= 4) out.push('Your longest stretch without a shared spend this year was ' + best + ' days, up to ' + L.fmtDay(bestEnd) + '.');
+    const weeks = Math.max(1, daysTo(first, t) / 7);
+    out.push("You've shared " + list.length + ' spends together this year, about ' + Math.max(1, Math.round(list.length / weeks)) + ' a week.');
+    const catN = {}; list.forEach((e) => { const c = e.category || 'Other'; if (c !== 'Other') catN[c] = (catN[c] || 0) + 1; });
+    const ck = Object.keys(catN).sort((a, b) => catN[b] - catN[a])[0];
+    if (ck && catN[ck] >= 5) out.push(ck + ' has come up ' + catN[ck] + ' times this year, about once every ' + Math.max(1, Math.round(daysTo(first, t) / catN[ck])) + ' days.');
+    const p = curPeriod(), prev = L.shiftPeriod(p, -1), el = L.daysBetweenInclusive(p.start, t), cut = L.addDays(prev.start, el - 1);
+    const now = sumAmt(spendsIn({ start: p.start, end: t })), then = sumAmt(spendsIn({ start: prev.start, end: cut < prev.end ? cut : prev.end }));
+    if (then > 0 && now > 0) {
+      const pct = Math.round((now - then) / then * 100), pn = L.periodLabel(prev, t);
+      if (pct <= -5) out.push("So far this month you're " + Math.abs(pct) + '% under where you were at this point in ' + pn + '. Nice work.');
+      else if (pct >= 5) out.push('This month is running ' + pct + '% ahead of ' + pn + ' at the same point.');
+    }
+    return out;
+  }
+  function factCard(i) {
+    const facts = funFacts();
+    if (!facts.length) return '';
+    const n = i == null ? S.factN : i, text = facts[((n % facts.length) + facts.length) % facts.length];
+    return '<section class="card fact" id="factCard"><div class="fact-top"><span class="news-ic" aria-hidden="true">' + icon('star') + '</span><p class="k">Fun fact</p>' +
+      (facts.length > 1 ? '<button class="link sm" data-act="factnext">Another</button>' : '') + '</div><p class="fact-t" aria-live="polite">' + esc(text) + '</p></section>';
+  }
+
+  /* ---------- coming up ---------- */
+  /* The next rent, bills that come round again in your history (same name, steady gaps), and regular bills you add.
+     Groceries and eating out repeat as well, so they're left out; anything else can be dismissed with "Not a bill". */
+  const BILL_CATS = /^(water|insurance|heat\/gas|tv\/phone\/internet|electricity|energy|utilities|bills?|rates|council|strata|phone|internet|gas|rego)$/i;
+  const BILL_WORDS = /\b(water|council|strata|insurance|rego|registration|gas|electricity|energy|internet|nbn|phone|mobile|rates|levy|power)\b/i;
+  const NOT_BILLS = /^(groceries|dining out|eating out|liquor|takeaway|coffee)$/i;
+  const daysTo = (from, to) => L.daysBetweenInclusive(from, to) - 1;
+  const everyFor = (d) => (d < 10 ? 'week' : d < 21 ? 'fortnight' : d < 50 ? 'month' : d < 135 ? 'quarter' : d < 270 ? 'half' : 'year');
+  function detectBills() {
+    const C = cfg(), g = {};
+    S.entries.forEach((e) => {
+      if (!L.isSpend(e) || !e.title || NOT_BILLS.test(e.category || 'Other')) return;
+      const k = String(e.title).trim().toLowerCase().replace(/\s+/g, ' ');
+      if (k) (g[k] = g[k] || []).push(e);
+    });
+    const out = [];
+    Object.keys(g).forEach((k) => {
+      if (C.billsHide.indexOf(k) >= 0 || g[k].length < 2) return;
+      const list = g[k].slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)), gaps = [];
+      for (let i = 1; i < list.length; i++) gaps.push(daysTo(list[i - 1].date, list[i].date));
+      const sorted = gaps.slice().sort((a, b) => a - b), med = sorted[Math.floor(sorted.length / 2)];
+      if (med < 25 || med > 400 || sorted[sorted.length - 1] > sorted[0] * 1.6) return;
+      const last = list[list.length - 1], avg = Math.round(sumAmt(list) / list.length);
+      if (!(BILL_CATS.test(last.category || '') || BILL_WORDS.test(k) || (avg >= 15000 && med >= 60))) return;
+      out.push({ key: k, name: cap1(String(last.title).trim()), amount: avg, gap: med, last: last.date });
+    });
+    return out;
+  }
+  /* The next due date of a bill you added: its first due date moved on by its schedule until it's from 3 days ago on. */
+  function billNext(b, t) {
+    let d = b.from;
+    const back = L.addDays(t, -3);
+    for (let i = 0; d < back && i < 800; i++) {
+      if (b.every === 'week' || b.every === 'fortnight') d = L.addDays(d, EVERY_DAYS[b.every]);
+      else {
+        const x = L.parseYmd(b.from), n = { month: 1, quarter: 3, half: 6, year: 12 }[b.every] * (i + 1);
+        const m = L.addMonths(x.getFullYear(), x.getMonth(), n), dim = L.daysInMonth(m[0], m[1]);
+        d = L.ymd(new Date(m[0], m[1], Math.min(x.getDate(), dim)));
+      }
+    }
+    return d;
+  }
+  function nextWeekday(t, day) { const d = L.parseYmd(t), add = (Number(day) - d.getDay() + 7) % 7; return L.addDays(t, add); }
+  const whenLabel = (ds, t) => { const n = daysTo(t, ds); return n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : L.fmtDay(ds); };
+  function comingUpRows() {
+    const C = cfg(), t = today(), rows = [];
+    if (C.rent.on && C.rent.amount) rows.push({ when: nextWeekday(t, C.rent.day), name: 'Rent', sub: nm(C.rent.from) + ' to ' + nm(other(C.rent.from)), amount: C.rent.amount, rent: true });
+    detectBills().forEach((b) => {
+      const next = L.addDays(b.last, b.gap), d = daysTo(t, next);
+      if (d > 45 || d < -60) return;
+      rows.push({ when: d < 0 ? t : next, due: d < 0, name: b.name, sub: 'about ' + EVERY_LABEL[everyFor(b.gap)] + ' · last ' + shortDay(b.last), amount: b.amount, approx: true, key: b.key });
+    });
+    C.bills.forEach((b) => {
+      const next = billNext(b, t), d = daysTo(t, next);
+      if (d <= 45) rows.push({ when: next, due: d < 0, name: b.name, sub: EVERY_LABEL[b.every], amount: b.amount });
+    });
+    return rows.sort((a, b) => (a.when < b.when ? -1 : a.when > b.when ? 1 : (b.due ? 1 : 0) - (a.due ? 1 : 0)));
+  }
+  function comingUpCard() {
+    const t = today(), rows = comingUpRows();
+    const add = S.readOnly ? '' : '<button class="link sm" data-act="billsopen">Add a bill</button>';
+    if (!rows.length) {
+      return '<section class="card soon"><div class="card-head"><h2>Coming up</h2>' + add + '</div><p class="muted">Bills that repeat in your spends show up here before they\'re due. Add ones you pay on a schedule, like strata or insurance.</p></section>';
+    }
+    const month = rows.filter((r) => !r.rent && daysTo(t, r.when) <= 30).reduce((a, r) => a + r.amount, 0);
+    return '<section class="card soon"><div class="card-head"><h2>Coming up</h2>' + add + '</div>' +
+      (month ? '<p class="muted soon-sum">About ' + L.fmtRound(month) + ' in bills over the next 30 days.</p>' : '') +
+      '<ul class="soon-list">' + rows.map((r) => '<li class="soon-row"><span class="soon-when' + (r.due ? ' due' : '') + '">' + esc(r.due ? 'Looks due' : whenLabel(r.when, t)) + '</span>' +
+        '<span class="soon-main"><span class="soon-n">' + esc(r.name) + '</span><span class="k">' + esc(r.sub) + '</span>' +
+        (r.key && !S.readOnly ? '<button class="link sm soon-x" data-act="billhide" data-arg="' + esc(r.key) + '">Not a bill</button>' : '') + '</span>' +
+        '<span class="soon-a">' + (r.approx ? '<span class="sr">about </span><span aria-hidden="true">~</span>' : '') + L.fmtRound(r.amount) + '</span></li>').join('') + '</ul></section>';
+  }
+  function billsDialog(d) {
+    const C = cfg(), t = today(), F = d.form;
+    const opt = (v) => '<option value="' + v + '"' + (F.every === v ? ' selected' : '') + '>' + cap1(EVERY_LABEL[v]) + '</option>';
+    return '<h2 id="dlgT">Regular bills</h2><p class="muted">Add bills you pay on a schedule, like strata or insurance. They show on Home in the six weeks before they\'re due.</p>' +
+      (C.bills.length ? '<ul class="bill-list">' + C.bills.map((b) => '<li><span class="soon-main"><span class="soon-n">' + esc(b.name) + '</span><span class="k">' + esc(cap1(EVERY_LABEL[b.every])) + ' · next ' + esc(L.fmtDay(billNext(b, t))) + '</span></span>' +
+        '<span class="soon-a">' + L.fmtRound(b.amount) + '</span><button class="link sm danger" data-act="billdel" data-arg="' + esc(b.id) + '">Remove</button></li>').join('') + '</ul>' : '') +
+      '<div class="bill-form"><label class="field"><span>Bill</span><input class="input" id="billName" maxlength="40" placeholder="Strata" autocomplete="off" data-bind="dialog.form.name" value="' + esc(F.name) + '"></label>' +
+      '<div class="row2"><label class="field"><span>About</span><div class="money"><input class="input" id="billAmt" inputmode="decimal" placeholder="0" data-bind="dialog.form.amount" value="' + esc(F.amount) + '"></div></label>' +
+      '<label class="field"><span>How often</span><select class="input" id="billEvery" data-bind="dialog.form.every">' + ['month', 'quarter', 'half', 'year', 'week', 'fortnight'].map(opt).join('') + '</select></label></div>' +
+      '<label class="field"><span>Next due</span><input class="input" id="billFrom" type="date" data-bind="dialog.form.from" value="' + esc(F.from) + '"></label>' +
+      (d.error ? '<p class="err-text" role="alert">' + esc(d.error) + '</p>' : '') +
+      '<button class="btn btn-secondary btn-block" data-act="billadd">' + icon('plus') + 'Add this bill</button></div>' +
+      '<div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
   }
 
   /* ---------- notes for the other person ---------- */
@@ -2702,7 +2915,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
         ratio: String(C.card.ratio || 3),
         pointsBal: C.card.pointsBal != null ? C.card.pointsBal.toLocaleString('en-AU') : '', pointsAsOf: C.card.pointsAsOf || ''
       },
-      home: { week: C.home.week !== false, goal: C.home.goal !== false, spot: C.home.spot !== false, recap: C.home.recap !== false },
+      home: { week: C.home.week !== false, goal: C.home.goal !== false, spot: C.home.spot !== false, recap: C.home.recap !== false, soon: C.home.soon !== false, fact: C.home.fact !== false },
       spot: { type: C.spot.type === 'countdown' ? 'countdown' : 'note', text: String(C.spot.text || ''), date: String(C.spot.date || '') },
       budgetSkip: C.budgetSkip.slice(), cardFrom: C.cardFrom, scheme: C.scheme,
       welcome: { note: C.welcome.note || (S.me ? defaultNote(other(S.me)) : '') },
@@ -2751,7 +2964,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
         categories: D.categories.slice(0, 30),
         goal: { name: String(D.goal.name || '').trim().slice(0, 40), target: target.v, saved: saved.v || 0 },
         card: { name: String(D.card.name || '').trim().slice(0, 40), holder: D.card.holder === 'a' ? 'a' : 'b', program: D.card.earns ? L.CARD_PRESETS[D.card.earns].program : cfg().card.program, earns: D.card.earns || null, rates, ratio, rate: null, pointsBal, pointsAsOf },
-        home: { week: !!D.home.week, goal: !!D.home.goal, spot: !!D.home.spot, recap: !!D.home.recap },
+        home: { week: !!D.home.week, goal: !!D.home.goal, spot: !!D.home.spot, recap: !!D.home.recap, soon: !!D.home.soon, fact: !!D.home.fact },
         spot: { type: D.spot.type, text: String(D.spot.text || '').trim().slice(0, 60), date: spotDate },
         budgetSkip: D.budgetSkip.filter((c) => typeof c === 'string').slice(0, 30),
         scheme: SCHEMES[D.scheme] ? D.scheme : 'warm',
@@ -2818,7 +3031,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       '<label class="field"><span>As of</span><input class="input" id="dpasof" type="date" data-bind="draft.card.pointsAsOf" data-change="dirty" value="' + esc(D.card.pointsAsOf) + '"' + ro + '></label></div>' +
       '<p class="hint" style="margin:-6px 0 16px">From a statement or the bank app. Insights adds an estimate for card spends after that date.</p>' +
       '<label class="field" style="margin:0"><span>Bring in card spends from</span><input class="input" id="dcfrom" type="date" data-bind="draft.cardFrom" data-change="dirty" value="' + esc(D.cardFrom) + '"' + ro + '><p class="hint">Westpac imports leave out card spends before this date. Leave it empty to bring in everything.</p></label></section>';
-    out += '<section class="card"><div class="card-head"><h2>Home screen</h2></div>' + sw('week', 'Last 7 days') + sw('goal', 'Our goal') + sw('spot', 'Your spot') + sw('recap', 'Insights link') + '</section>';
+    out += '<section class="card"><div class="card-head"><h2>Home screen</h2></div>' + sw('week', 'Last 7 days') + sw('goal', 'Our goal') + sw('spot', 'Your spot') + sw('fact', 'Fun fact') + sw('soon', 'Coming up') + sw('recap', 'Insights link') + '</section>';
     out += '<section class="card"><div class="card-head"><h2>Your spot</h2></div><p class="muted" style="margin-bottom:12px">A space on Home for whatever you like: a note to each other or a countdown.</p>' +
       '<fieldset><legend class="sr">Type</legend><div class="seg">' + segBtn('cspot', 'note', D.spot.type === 'note', 'Note') + segBtn('cspot', 'countdown', D.spot.type === 'countdown', 'Countdown') + '</div></fieldset>' +
       '<label class="field"><span>' + (D.spot.type === 'countdown' ? 'Counting down to' : 'Note') + '</span><input class="input" id="dstext" maxlength="60" placeholder="' + (D.spot.type === 'countdown' ? 'Our holiday' : 'No takeaway this week') + '" data-bind="draft.spot.text" data-change="dirty" value="' + esc(D.spot.text) + '"' + ro + '></label>' +
@@ -3132,6 +3345,10 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       body = splitwiseDialog(d);
     } else if (d.type === 'swtrim') {
       body = swTrimDialog(d);
+    } else if (d.type === 'bills') {
+      body = billsDialog(d);
+    } else if (d.type === 'inscat') {
+      body = insCatDialog(d);
     } else if (d.type === 'news') {
       const n = d.preview ? S.newsEdit : noteFor(d.id), ed = editorOf();
       if (!n) { S.dialog = null; return ''; }
@@ -3270,6 +3487,31 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     swtrim: () => openDialog({ type: 'swtrim', cut: today().slice(0, 4) + '-01-01', dropCats: true, busy: false, error: null }),
     swtrimgo: () => doSwTrim(),
     newsok: () => closeDialog(),
+    factnext: () => { S.factN++; lsSet('hh.factN', String(S.factN)); const c = document.getElementById('factCard'); if (c) c.outerHTML = factCard(); },
+    billsopen: () => openDialog({ type: 'bills', form: { name: '', amount: '', every: 'quarter', from: '' }, error: null }),
+    billadd: () => {
+      const d = S.dialog, F = d && d.form, C = cfg();
+      if (!F) return;
+      const name = String(F.name || '').trim().slice(0, 40), amount = L.parseMoneyInput(String(F.amount || ''));
+      if (!name) { d.error = 'Give the bill a name, like Strata.'; render(); return; }
+      if (!(amount > 0)) { d.error = 'Add about how much it is, like 1500.'; render(); return; }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(F.from || '')) { d.error = 'Pick when it\'s next due.'; render(); return; }
+      if (C.bills.length >= 30) { d.error = 'That\'s the most bills this can keep.'; render(); return; }
+      upsert('hh/settings', { bills: C.bills.concat([{ id: uid('b'), name, amount, every: EVERY_DAYS[F.every] ? F.every : 'quarter', from: F.from }]) }, defaults()).then((ok) => { if (ok) toast('Added ' + name); });
+      d.form = { name: '', amount: '', every: F.every, from: '' }; d.error = null; render();
+    },
+    billdel: (id) => { const C = cfg(); upsert('hh/settings', { bills: C.bills.filter((b) => b.id !== id) }, defaults()); render(); },
+    billhide: (k) => { const C = cfg(); if (C.billsHide.indexOf(k) < 0) upsert('hh/settings', { billsHide: C.billsHide.concat([k]) }, defaults()).then((ok) => { if (ok) toast("Got it, that one's not a bill"); }); },
+    inscat: (c) => openDialog({ type: 'inscat', cat: c, open: null }),
+    inscatopen: (id) => { const d = S.dialog; if (d && d.type === 'inscat') { d.open = d.open === id ? null : id; render(); } },
+    inscatset: (arg) => {
+      const i = arg.lastIndexOf('|'), id = arg.slice(0, i), cat = arg.slice(i + 1), r = S.byId[id], C = cfg();
+      if (!r || !r.e) return;
+      putEntries(r.ym, { [id]: Object.assign({}, r.e, { category: cat, updatedAt: Date.now() }) }).then((ok) => { if (ok) toast('Moved to ' + cat); });
+      if (r.e.source === 'import' && r.e.key && C.remember && C.categories.indexOf(cat) >= 0) saveRule(r.e.key, null, cat);
+      if (S.dialog && S.dialog.type === 'inscat') S.dialog.open = null;
+      render();
+    },
     newsopen: () => { const n = publishedNote(); if (n) openDialog({ type: 'news', id: n.id, again: true }); },
     newsitem: (i) => { const n = S.newsEdit, it = n && n.items[Number(i)]; if (!it) return; it.on = !it.on; saveNote(); render(); },
     newspreview: () => { if (S.newsEdit) openDialog({ type: 'news', preview: true, id: S.newsEdit.id }); },
