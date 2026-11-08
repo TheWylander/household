@@ -67,6 +67,19 @@
   };
   const icon = (n) => '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[n] + '</svg>';
 
+  /* ---------- what's new ---------- */
+  /* One entry per update, newest first. Each of you sees the newest one once, the next time the app opens.
+     Whoever joins later gets it as a few things to try, straight after the welcome. */
+  const RELEASES = [
+    { id: '2026-11-09', date: '2026-11-09', title: 'Insights, profiles and line notes', items: [
+      ['chart', 'Insights.', "How each month is tracking against the budget, where the money goes and your big day of the week. It's in the bottom bar."],
+      ['duo', 'Profiles.', 'Add a photo for each of you: the gear on Home, then Profiles.'],
+      ['plus', 'Lines with notes.', 'Add a day of spends with + and give each line its own note, like crepes or coffee.'],
+      ['star', 'Points balance.', 'Enter the points from a statement and the app keeps a running total.'],
+      ['gear', 'Settings.', 'Customise, sharing and your data now live under the gear on Home.']
+    ] }
+  ];
+
   /* ---------- state ---------- */
   const S = {
     mode: 'loading', db: null, user: null, myId: null, idResolved: false,
@@ -76,7 +89,7 @@
     view: 'home', cal: null, add: null, tabForm: { amount: '', label: '', payer: null },
     recapOffset: 0, draft: null, draftSaved: false, setup: null, dialog: null,
     insMode: 'month', insYearOff: 0, insSel: null, insDay: null, pace: null, paceOn: false,
-    photos: null, photoBusy: null, photoErr: null,
+    photos: null, photoBusy: null, photoErr: null, newsShown: false,
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -100,7 +113,7 @@
       remember: true, scheme: 'warm',
       moves: {},
       budgetSkip: [], cardFrom: '', cardFromWhy: '',
-      welcome: { note: '', to: null, seen: '' },
+      welcome: { note: '', to: null, seen: '' }, news: { a: '', b: '' },
       rent: PRESET && PRESET.rent ? Object.assign(clone(PRESET.rent), { on: false }) : { on: false, amount: null, from: 'b', day: 0, start: '' },
       createdAt: Date.now()
     };
@@ -110,7 +123,7 @@
     const s = S.settings && typeof S.settings === 'object' ? S.settings : {};
     const pick = (k) => Object.assign({}, d[k], s[k] && typeof s[k] === 'object' ? s[k] : {});
     const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
-    const goal = pick('goal'), card = pick('card'), welcome = pick('welcome'), rent = pick('rent');
+    const goal = pick('goal'), card = pick('card'), welcome = pick('welcome'), rent = pick('rent'), news = pick('news');
     return {
       names: pick('names'), colours: pick('colours'), members: pick('members'),
       budget: num(s.budget) && s.budget > 0 ? s.budget : null,
@@ -133,6 +146,7 @@
       budgetSkip: Array.isArray(s.budgetSkip) ? s.budgetSkip.filter((c) => typeof c === 'string') : [],
       cardFrom: typeof s.cardFrom === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.cardFrom) ? s.cardFrom : '',
       cardFromWhy: s.cardFromWhy === 'splitwise' ? 'splitwise' : '',
+      news: { a: typeof news.a === 'string' ? news.a.slice(0, 20) : '', b: typeof news.b === 'string' ? news.b.slice(0, 20) : '' },
       welcome: {
         note: typeof welcome.note === 'string' ? welcome.note.slice(0, 400) : '',
         to: welcome.to === 'a' || welcome.to === 'b' ? welcome.to : null,
@@ -327,6 +341,7 @@
       id: o.id, kind: o.kind || 'expense', source: o.source || 'manual', status: o.status || 'shared',
       date: o.date, title: String(o.title || '').slice(0, 80), raw: o.raw || null, key: o.key || null,
       amount, items: o.items && o.items.length > 1 ? o.items.slice(0, 50) : null,
+      notes: o.notes && o.items && o.items.length > 1 && o.notes.length === o.items.length && o.notes.some(Boolean) ? o.notes.slice(0, 50).map((n) => String(n || '').slice(0, 60)) : null,
       parts: o.parts && o.parts.length ? o.parts : null,
       payer: o.kind === 'settlement' || o.kind === 'rent' ? o.from : (o.payer || null), splitA, paid, owed, onCard: !!o.onCard,
       category: o.kind === 'settlement' ? null : o.kind === 'rent' ? 'Rent' : (o.category || 'Other'), dupOf: o.dupOf || null, orig: o.orig || null,
@@ -524,6 +539,9 @@
     if (!S.settings) return bn + (S.readOnly ? viewNotSetUp() : viewSetup()) + dialogHtml();
     if (!S.me) { const w = welcomeFor(); return bn + (w ? viewWelcome(w, false) : viewWho()) + dialogHtml(); }
     if (S.welcomePreview) return bn + viewWelcome(other(S.me), true) + dialogHtml();
+    if (!S.dialog && !S.newsShown && !S.readOnly && S.view === 'home' && S.live.hh && RELEASES.length && cfg().news[S.me] !== RELEASES[0].id) {
+      S.newsShown = true; S.dialog = { type: 'news', fresh: false };
+    }
     const nav = ['home', 'cal', 'inbox', 'insights', 'settings', 'custom', 'profile', 'recap', 'tab'].indexOf(S.view) >= 0;
     return bn + '<main class="main' + (nav ? '' : ' no-nav') + '" style="' + meVars() + '">' + viewFor(S.view) + '</main>' +
       (nav ? '<div data-live="nav">' + navBar() + '</div>' : '') + dialogHtml();
@@ -792,6 +810,12 @@
       (list.length ? '<ul class="list">' + list.map((e) => entryRow(e, 'day')).join('') + '</ul>' : '<p class="muted" style="margin-bottom:14px">Nothing on this day yet.</p>') +
       (S.readOnly ? '' : '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="addon" data-arg="' + d + '">' + icon('plus') + 'Add a spend on this day</button>') + '</section>';
   }
+  /* A spend's lines with their notes: typed lines, or a day tab's items with who paid when you both did. */
+  function entryLines(e) {
+    if (e.notes && e.items && e.notes.length === e.items.length) return e.items.map((a, i) => ({ amount: a, note: e.notes[i] }));
+    if (e.parts && e.parts.length > 1 && e.parts.some((x) => x.label)) return e.parts.map((x) => ({ amount: x.amount, note: (x.label || '') + (e.payer === 'mixed' ? ' · ' + nm(x.payer) : '') }));
+    return null;
+  }
   function entryRow(e, ctx) {
     const H = holder(), id = esc(e.id), inInbox = ctx === 'inbox';
     if (e.kind === 'settlement') {
@@ -807,7 +831,9 @@
     }
     const src = e.source === 'import' ? 'From ' + poss(nm(H)) + ' card' : e.source === 'splitwise' ? 'From Splitwise' : e.source === 'tab' ? 'Day tab' : 'Added by ' + (e.by === 'a' || e.by === 'b' ? nm(e.by) : 'one of you');
     let sub = '';
-    if (e.parts && e.parts.length) sub = '<p class="e-sub">' + esc(e.parts.map((x) => (x.label ? x.label + ' ' : '') + L.fmt(x.amount)).join(', ')) + '</p>';
+    const lines = entryLines(e);
+    if (lines) sub = '<ul class="e-lines">' + lines.map((l) => '<li><span class="ln-n' + (l.note ? '' : ' muted') + '">' + esc(l.note || 'No note') + '</span><span class="ln-a">' + L.fmt(l.amount) + '</span></li>').join('') + '</ul>';
+    else if (e.parts && e.parts.length) sub = '<p class="e-sub">' + esc(e.parts.map((x) => (x.label ? x.label + ' ' : '') + L.fmt(x.amount)).join(', ')) + '</p>';
     else if (e.items && e.items.length > 1) sub = '<p class="e-sub">' + e.items.map(L.fmt).join(' + ') + '</p>';
     if (e.source === 'import' && e.raw) sub += '<p class="e-sub">' + esc(e.raw) + '</p>';
     if (e.orig && e.orig.currency) sub += '<p class="e-sub">' + esc(fmtForeign(e.orig)) + '</p>';
@@ -833,7 +859,7 @@
   function openAdd(opts) {
     const C = cfg(), H = holder();
     S.add = {
-      id: null, date: opts.date || today(), expr: '', title: '', category: null,
+      id: null, date: opts.date || today(), expr: '', notes: [], title: '', category: null,
       payer: H, onCard: true, splitMode: 'even', splitA: C.splitA, locked: false, orig: null,
       from: S.view === 'add' ? 'home' : S.view
     };
@@ -848,6 +874,7 @@
     S.add = {
       id, date: e.date,
       expr: e.items && e.items.length > 1 ? e.items.map(centsToStr).join(' + ') : centsToStr(e.amount),
+      notes: e.notes && e.items && e.notes.length === e.items.length ? e.notes.slice() : [],
       title: e.title || '', category: e.category || 'Other', payer: payer === 'mixed' ? 'mixed' : payer,
       onCard: !!e.onCard, splitMode: (e.splitA == null || e.splitA === C.splitA) ? 'even' : 'custom', splitA: e.splitA == null ? C.splitA : e.splitA,
       locked: payer === 'mixed', orig: e, from: S.view === 'add' ? 'home' : S.view
@@ -860,9 +887,9 @@
   function exprLine(A, r) {
     if (A.locked) return 'Paid on the day tab';
     if (!r.ok) return 'Check the amount';
-    if (r.items.length > 1) return r.items.length + ' spends: ' + r.items.map(L.fmt).join(' + ');
-    if (A.expr) return 'Tap + to add another and get the total';
-    return 'Use + to add up a day of spends';
+    if (r.items.length > 1) return r.items.length + ' spends · a note for each below';
+    if (A.expr) return 'Tap + to add another line';
+    return 'Use + to add up a day of spends, line by line';
   }
   function saveLabel(A, r) {
     if (A.id) return 'Save changes';
@@ -875,6 +902,17 @@
     const pts = est ? est.velocity : 0;
     if (pts < 1) return '';
     return '<div class="nudge">' + icon('star') + '<span>On ' + esc(poss(nm(H))) + ' ' + esc(cardLabel()) + ' this would earn about ' + pts.toLocaleString('en-AU') + ' ' + esc(programLabel()) + ' points.</span></div>';
+  }
+  /* The amounts typed with + are the lines of one spend. Each line can carry a note, kept in step by position. */
+  const addParts = (A) => (A.locked || !A.expr ? [] : A.expr.split(' + '));
+  const partCents = (t) => (t && t !== '.' && /^\d*\.?\d{0,2}$/.test(t) ? Math.round(parseFloat(t) * 100) : 0);
+  function linesCard(A) {
+    const parts = addParts(A);
+    if (parts.length < 2) return '';
+    return '<section class="card lines" id="addLines"><div class="card-head"><h2>Lines</h2><span class="k">' + parts.length + ' lines</span></div>' + parts.map((t, i) =>
+      '<div class="ln-row"><span class="ln-i" aria-hidden="true">' + (i + 1) + '</span><span class="ln-amt" id="lnAmt' + i + '">' + L.fmt(partCents(t)) + '</span>' +
+      '<label class="ln-field"><span class="sr">Note for line ' + (i + 1) + '</span><input class="input ln-note" id="lnNote' + i + '" data-bind="add.notes.' + i + '" placeholder="' + (i === 0 ? 'What was it? Coffee, crepes' : 'Note') + '" maxlength="60" autocomplete="off" value="' + esc((A.notes && A.notes[i]) || '') + '"></label></div>').join('') +
+      '</section>';
   }
   function viewAdd() {
     const A = S.add, C = cfg(), H = holder(), r = addTotal(A);
@@ -900,6 +938,7 @@
       '<label class="date-chip"><span id="dateLbl">' + esc(L.fmtDay(A.date)) + '</span><input type="date" id="addDate" value="' + A.date + '" data-change="adddate" aria-label="Date of the spend"></label></header>' +
       '<section class="amount-box" aria-live="polite"><p class="amt-total" id="amtTotal">' + L.fmt(r.ok ? r.total : 0) + '</p><p class="amt-expr" id="amtExpr">' + esc(exprLine(A, r)) + '</p></section>' +
       (A.locked ? '<p class="hint" style="text-align:center;margin:-6px 0 16px">' + esc(A.orig.parts ? A.orig.parts.map((x) => nm(x.payer) + ' ' + L.fmt(x.amount)).join(', ') : '') + '</p>' : keypad()) +
+      linesCard(A) +
       '<section class="card">' + payerBlock +
       '<label class="field"><span>What was it?</span><input class="input" id="addTitle" data-bind="add.title" value="' + esc(A.title) + '" placeholder="Dinner, groceries, a gift" autocomplete="off" maxlength="60"></label>' +
       (isImport ? '<p class="hint" style="margin:-10px 0 16px">On the statement: ' + esc(A.orig.raw || '') + '</p>' : '') +
@@ -931,7 +970,10 @@
       x += k;
     } else return;
     if (x.split(' + ').length > 40) return;
+    const before = addParts(A).length;
     A.expr = x;
+    const n = addParts(A).length;
+    if (n !== before) { if (A.notes && A.notes.length > n) A.notes = A.notes.slice(0, n); render(); return; }
     updateAmount();
   }
   function updateAmount() {
@@ -943,20 +985,24 @@
     if (b) { b.textContent = saveLabel(A, r); b.disabled = !(r.ok && r.total > 0); }
     const n = document.getElementById('nudge');
     if (n) n.innerHTML = nudgeHtml(A, r);
+    const parts = addParts(A);
+    if (parts.length > 1) set('lnAmt' + (parts.length - 1), L.fmt(partCents(parts[parts.length - 1])));
   }
   function saveAdd() {
     const A = S.add, C = cfg(), r = addTotal(A);
     if (!r.ok || r.total <= 0) { toast('Enter an amount first.'); return; }
     const base = A.orig || {};
     const splitA = A.splitMode === 'even' ? C.splitA : A.splitA;
-    const title = String(A.title || '').trim() || (A.category && A.category !== 'Other' ? A.category : 'Spend');
+    const kept = addParts(A).map((t, i) => ({ c: partCents(t), note: String((A.notes && A.notes[i]) || '').trim().slice(0, 60) })).filter((x) => x.c > 0);
+    const notes = kept.length > 1 && kept.length === r.items.length ? kept.map((x) => x.note) : null;
+    const title = String(A.title || '').trim() || (r.items.length > 1 && !A.locked ? L.DAYS_FULL[L.parseYmd(A.date).getDay()] + ' spends' : A.category && A.category !== 'Other' ? A.category : 'Spend');
     let e;
     if (A.locked) {
       e = Object.assign(clone(base), { date: A.date, title, category: A.category || 'Other', splitA, owed: L.splitOwed(base.amount, splitA, base.id), updatedAt: Date.now() });
     } else {
       e = makeEntry({
         id: A.id || uid('m'), kind: 'expense', source: base.source || 'manual', status: base.status || 'shared',
-        date: A.date, title, raw: base.raw, key: base.key, amount: r.total, items: r.items,
+        date: A.date, title, raw: base.raw, key: base.key, amount: r.total, items: r.items, notes,
         parts: base.parts && base.amount === r.total ? base.parts : null, payer: A.payer, onCard: A.onCard, splitA,
         category: A.category || 'Other', dupOf: base.dupOf, orig: base.orig && base.amount === r.total ? base.orig : null, createdAt: base.createdAt, by: base.by
       });
@@ -1538,6 +1584,7 @@
     let out = '<header class="top"><div><p class="eyebrow">Our household</p><h1 class="title">Settings</h1></div></header>';
     out += '<button class="card row-card" data-act="go" data-arg="profile"><span class="row-lead"><span class="duo" aria-hidden="true">' + av('a') + av('b') + '</span><span><span class="row-t">Profiles</span><span class="k">Photos, names and colours</span></span></span>' + icon('arrow') + '</button>';
     out += '<button class="card row-card" data-act="go" data-arg="custom"><span><span class="row-t">Customise</span><span class="k">Look, budget, rent, card and categories</span></span>' + icon('arrow') + '</button>';
+    if (RELEASES.length) out += '<button class="card row-card" data-act="newsopen"><span><span class="row-t">What\'s new</span><span class="k">' + esc(RELEASES[0].title) + '</span></span>' + icon('arrow') + '</button>';
     if (fb) {
       out += '<section class="card"><div class="card-head"><h2>Account</h2></div><p class="muted">Signed in as <strong>' + esc((S.authUser && S.authUser.email) || '') + '</strong></p>' +
         '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="auout">Sign out</button></section>';
@@ -1796,6 +1843,7 @@
     const pr = L.CARD_PRESETS[U.earns];
     s.card = { name: U.cardName.trim(), holder: U.holder, program: pr ? pr.program : '', earns: pr ? U.earns : null, rates: pr ? Object.assign({}, pr.rates) : null, ratio: pr ? pr.ratio : 1, rate: null };
     s.rent.on = !!U.rentOn;
+    if (RELEASES.length && (U.me === 'a' || U.me === 'b')) s.news[U.me] = RELEASES[0].id;
     if (S.myId) s.members[U.me] = S.myId;
     lsSet('hh.me', U.me);
     S.me = U.me; S.settings = s; S.view = 'home';
@@ -1859,6 +1907,7 @@
       upsert('hh/settings', patch, defaults());
     }
     ensureRent();
+    if (RELEASES.length && !S.readOnly) { S.dialog = { type: 'news', fresh: true }; S.newsShown = true; }
     render(); window.scrollTo(0, 0);
     toast("You're in. Add a spend any time with the plus.");
   }
@@ -1958,7 +2007,13 @@
 
   /* ---------- dialogs ---------- */
   function openDialog(d) { S.dialog = d; render(); }
-  function closeDialog() { S.dialog = null; render(); }
+  function closeDialog() { if (S.dialog && S.dialog.type === 'news') markNewsSeen(); S.dialog = null; render(); }
+  function markNewsSeen() {
+    if (!S.me || S.readOnly || !RELEASES.length) return;
+    const C = cfg(), id = RELEASES[0].id;
+    if (C.news[S.me] === id) return;
+    upsert('hh/settings', { news: Object.assign({}, C.news, { [S.me]: id }) }, defaults());
+  }
   function dialogHtml() {
     const d = S.dialog;
     if (!d) return '';
@@ -1989,6 +2044,12 @@
       body = splitwiseDialog(d);
     } else if (d.type === 'swtrim') {
       body = swTrimDialog(d);
+    } else if (d.type === 'news') {
+      const R = RELEASES[0];
+      body = '<h2 id="dlgT">' + (d.fresh ? 'A few things to try' : 'What\'s new') + '</h2>' +
+        '<p class="muted">' + (d.fresh ? 'Little extras ' + esc(nm(other(S.me))) + ' added for you two.' : esc(R.title) + ', ' + esc(dateY(R.date)) + '.') + '</p>' +
+        '<ul class="news">' + R.items.map((x) => '<li><span class="news-ic" aria-hidden="true">' + icon(x[0]) + '</span><span><strong>' + esc(x[1]) + '</strong> ' + esc(x[2]) + '</span></li>').join('') + '</ul>' +
+        '<div class="dialog-actions"><button class="btn btn-primary" data-act="newsok">' + (d.again ? 'Done' : 'Lovely, thanks') + '</button></div>';
     } else if (d.type === 'csv') {
       body = '<h2 id="dlgT">Copy your spends</h2><p>Copying isn\'t allowed here, so select all of this and copy it yourself.</p><textarea class="input" id="dlgCsv" readonly>' + esc(d.text) + '</textarea><div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
     }
@@ -2117,6 +2178,8 @@
     swimport: () => doSplitwise(),
     swtrim: () => openDialog({ type: 'swtrim', cut: today().slice(0, 4) + '-01-01', dropCats: true, busy: false, error: null }),
     swtrimgo: () => doSwTrim(),
+    newsok: () => closeDialog(),
+    newsopen: () => openDialog({ type: 'news', fresh: false, again: true }),
     photodel: (p) => { savePhoto(p === 'b' ? 'b' : 'a', null).then((ok) => { if (ok) toast('Photo removed'); }); render(); },
     savecustom: () => saveCustom(),
     copycsv: () => {

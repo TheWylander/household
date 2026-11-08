@@ -458,12 +458,14 @@
   function fmtDayLong(s) { var d = parseYmd(s); return DAYS_FULL[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS_FULL[d.getMonth()]; }
 
   function entriesToCSV(entries, names) {
-    var head = ['Date', 'What', 'Category', 'Amount', 'Status', names.a + ' paid', names.b + ' paid', names.a + "'s share", names.b + "'s share", 'Source', 'Bank description'];
+    var head = ['Date', 'What', 'Category', 'Amount', 'Status', names.a + ' paid', names.b + ' paid', names.a + "'s share", names.b + "'s share", 'Source', 'Bank description', 'Lines'];
     var rows = (entries || []).slice().sort(function (x, y) { return x.date < y.date ? -1 : x.date > y.date ? 1 : 0; }).map(function (e) {
       var p = e.paid || {}, o = e.owed || {};
       var status = e.kind === 'settlement' ? 'Payment between you' : e.kind === 'rent' ? 'Rent' : e.status === 'shared' ? 'Shared' : e.status === 'personal' ? 'Personal' : 'To check';
       function d(c) { return ((c || 0) / 100).toFixed(2); }
-      return [e.date, e.title, e.category || '', d(e.amount), status, d(p.a), d(p.b), d(o.a), d(o.b), e.source || '', e.raw || ''].map(csvCell).join(',');
+      var lines = e.items && e.items.length > 1 ? e.items.map(function (a, i) { var n = e.notes && e.notes[i]; return (n ? n + ' ' : '') + d(a); }).join('; ')
+        : e.parts && e.parts.length > 1 ? e.parts.map(function (x) { return (x.label ? x.label + ' ' : '') + d(x.amount); }).join('; ') : '';
+      return [e.date, e.title, e.category || '', d(e.amount), status, d(p.a), d(p.b), d(o.a), d(o.b), e.source || '', e.raw || '', lines].map(csvCell).join(',');
     });
     return head.map(csvCell).join(',') + '\n' + rows.join('\n') + '\n';
   }

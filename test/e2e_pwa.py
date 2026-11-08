@@ -228,6 +228,7 @@ try:
         check(b.locator('.av.ph-a').count() >= 1, "Jules's phone shows Robin's photo")
         shot(b, 'p04-jules-welcome', full=True)
         act(b, 'welcomein'); b.wait_for_timeout(400)
+        check('A few things to try' in b.locator('.dialog').inner_text(), 'after the welcome, a few things to try'); act(b, 'newsok'); b.wait_for_timeout(300)
         t = text(b)
         bal = re.search(r'You owe Robin\s*\$([\d,]+\.\d\d)', t)
         check('Hi Jules' in t and bal is not None and bal.group(1) == m2.group(2), "Jules's phone shows the same balance from her side: " + (bal.group(0) if bal else 'none'))
