@@ -514,6 +514,37 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
 .fact-top .k { flex: 1; color: var(--ink); }
 .fact-t { font: 700 17px/1.4 var(--body); }
 
+/* ---------- motion ---------- */
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes inR { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes inL { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@keyframes growUp { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes growRight { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop { 0% { transform: scale(.6); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+@keyframes stickerPop { 0% { transform: rotate(-3deg) scale(.6); opacity: 0; } 60% { transform: rotate(-3deg) scale(1.12); opacity: 1; } 100% { transform: rotate(-3deg) scale(1); } }
+.enter .main > * { animation: rise .45s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--enter, 0ms) + var(--i, 0) * 45ms); }
+.enter.from-r .main > *:not(.top):not(.seg) { animation-name: inR; }
+.enter.from-l .main > *:not(.top):not(.seg) { animation-name: inL; }
+.enter .main > :nth-child(2) { --i: 1; } .enter .main > :nth-child(3) { --i: 2; } .enter .main > :nth-child(4) { --i: 3; }
+.enter .main > :nth-child(5) { --i: 4; } .enter .main > :nth-child(6) { --i: 5; } .enter .main > :nth-child(7) { --i: 6; }
+.enter .main > :nth-child(n+8) { --i: 7; }
+.enter .meter span, .enter .hbar-fill { transform-origin: left center; animation: growRight .8s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--enter, 0ms) + 220ms); }
+.enter .col-fill { transform-origin: bottom center; animation: growUp .6s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--enter, 0ms) + 200ms + var(--ci, 0) * 35ms); }
+.enter .col-tip { animation: fadeIn .3s both; animation-delay: calc(var(--enter, 0ms) + 700ms); }
+.enter .pc-line { stroke-dasharray: 1; animation: draw 1s cubic-bezier(.4, 0, .2, 1) both; animation-delay: calc(var(--enter, 0ms) + 220ms); }
+.enter .pc-area, .enter .pc-proj { animation: fadeIn .45s both; animation-delay: calc(var(--enter, 0ms) + 950ms); }
+.enter .pace .pc-dot:not(#pcHairDot) { transform-box: fill-box; transform-origin: center; animation: pop .4s cubic-bezier(.3, 1.6, .5, 1) both; animation-delay: calc(var(--enter, 0ms) + 1100ms); }
+.enter .nav-i.on .ic { animation: pop .45s cubic-bezier(.3, 1.6, .5, 1) both; animation-delay: var(--enter, 0ms); }
+.enter .hero .sticker { animation: stickerPop .5s cubic-bezier(.3, 1.6, .5, 1) both; animation-delay: calc(var(--enter, 0ms) + 650ms); }
+.fact-in { animation: rise .35s cubic-bezier(.2, .7, .2, 1) both; }
+.row-card, .cat-row, .chip, .hbar-btn { transition: transform .12s ease; }
+.row-card:active, .cat-row:active, .chip:active { transform: translateY(2px); }
+.hbar-btn:active { transform: scale(.985); }
+[data-swipe] { touch-action: pan-y; }
+@media (prefers-reduced-motion: reduce) { .enter .main > *, .enter .meter span, .enter .hbar-fill, .enter .col-fill, .enter .pc-line { animation: none !important; } }
+
 </style>
 </head>
 <body>
@@ -1097,7 +1128,8 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       ['gear', 'Settings.', 'Customise, sharing and your data now live under the gear on Home.'],
       ['cal', 'Coming up.', "Home shows what's due soon: the next rent, bills that come round again like council and water, and any regular bills you add."],
       ['check', 'Tidy categories.', 'In Insights, tap a category to see every spend in it, and move any that belong somewhere else.'],
-      ['star', 'Fun fact.', 'A little fact about how we spend, a new one each time you open the app.']
+      ['star', 'Fun fact.', 'A little fact about how we spend, a new one each time you open the app.'],
+      ['arrow', 'Swipe through months.', 'Swipe left or right in Insights and the Calendar. Numbers count up and charts grow as each screen opens.']
     ] }
   ];
 
@@ -1115,6 +1147,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     recapOffset: 0, draft: null, draftSaved: false, setup: null, dialog: null,
     insMode: 'month', insYearOff: 0, insSel: null, insDay: null, pace: null, paceOn: false,
     photos: null, photoBusy: null, photoErr: null, newsShown: false, newsDoc: null, newsEdit: null, newsId: null, factN: 0,
+    enterKey: null, enterAt: 0, enterDir: 0, enterDirNow: 0, countsShown: {},
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -1575,7 +1608,8 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       if (due) { S.newsShown = true; S.dialog = { type: 'news', id: due.id }; }
     }
     const nav = ['home', 'cal', 'inbox', 'insights', 'settings', 'custom', 'profile', 'newsedit', 'recap', 'tab'].indexOf(S.view) >= 0;
-    return bn + '<main class="main' + (nav ? '' : ' no-nav') + '" style="' + meVars() + '">' + viewFor(S.view) + '</main>' +
+    const sw = S.view === 'insights' || S.view === 'recap' ? (S.insMode === 'year' ? 'insyear' : 'recapmove') : S.view === 'cal' ? 'calmove' : '';
+    return bn + '<main class="main' + (nav ? '' : ' no-nav') + '" style="' + meVars() + '"' + (sw ? ' data-swipe="' + sw + '"' : '') + '>' + viewFor(S.view) + '</main>' +
       (nav ? '<div data-live="nav">' + navBar() + '</div>' : '') + dialogHtml();
   }
   /* While someone types, refresh only the marked live regions that don't hold the field in use. */
@@ -1599,7 +1633,16 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     /* An unchanged welcome page is left alone, so data arriving doesn't restart its entrance. */
     if (shownWelcome !== null && html === shownWelcome && root.querySelector('.welcome')) return;
     shownWelcome = html.indexOf('<div class="welcome') >= 0 ? html : null;
+    const sk = screenKey(), now = performance.now();
+    if (sk !== S.enterKey) { S.enterKey = sk; S.enterAt = now; S.enterDirNow = S.enterDir; }
+    S.enterDir = 0;
+    const since = now - S.enterAt, entering = sk !== 'pre' && since < 1400 && !reduceMotion();
+    root.classList.toggle('enter', entering);
+    root.classList.toggle('from-r', entering && S.enterDirNow > 0);
+    root.classList.toggle('from-l', entering && S.enterDirNow < 0);
+    root.style.setProperty('--enter', (entering ? -Math.round(since) : 0) + 'ms');
     root.innerHTML = html;
+    runCounts();
     if (S.dialog && !S.dialog.focused) {
       S.dialog.focused = true;
       const f = root.querySelector('.dialog input, .dialog textarea') || root.querySelector('.dialog .btn-primary, .dialog .btn-danger');
@@ -1609,6 +1652,55 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       if (el) el.focus({ preventScroll: true });
     }
   }
+  /* ---------- motion ---------- */
+  /* Each screen plays its entrance once. A redraw from syncing data keeps --enter at minus the time since the screen
+     opened, so animations carry on from where they were instead of starting again. Numbers count from what you last
+     saw to the new value, so coming back to Home after adding a spend shows the change. Reduced motion turns it all off. */
+  const reduceMotion = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
+  function screenKey() {
+    if (!S.settings || !S.me || S.welcomePreview) return 'pre';
+    let k = S.view === 'recap' ? 'insights' : S.view;
+    if (k === 'insights') k += '|' + S.insMode + '|' + S.recapOffset + '|' + S.insYearOff;
+    if (k === 'cal' && S.cal) k += '|' + S.cal.y + '-' + S.cal.m;
+    return k;
+  }
+  let countRaf = 0;
+  function runCounts() {
+    cancelAnimationFrame(countRaf);
+    const jobs = Array.from(root.querySelectorAll('[data-count]')).map((el) => {
+      const to = Number(el.getAttribute('data-count')) || 0, key = el.getAttribute('data-ck') || '';
+      return { el, to, key, from: Object.prototype.hasOwnProperty.call(S.countsShown, key) ? S.countsShown[key] : 0, fmt: el.getAttribute('data-fmt') === 'c' ? L.fmt : L.fmtRound };
+    });
+    if (!jobs.length) return;
+    if (!root.classList.contains('enter')) { jobs.forEach((j) => { S.countsShown[j.key] = j.to; }); return; }
+    const step = () => {
+      const p = Math.min(1, (performance.now() - S.enterAt) / 850), k = 1 - Math.pow(1 - p, 3);
+      jobs.forEach((j) => { if (j.from !== j.to && j.el.isConnected) j.el.textContent = j.fmt(Math.round(j.from + (j.to - j.from) * k)); });
+      if (p < 1) countRaf = requestAnimationFrame(step);
+      else jobs.forEach((j) => { S.countsShown[j.key] = j.to; });
+    };
+    step();
+  }
+  /* Swipe sideways to change month (or year) in Insights and the Calendar. Charts and fields keep their own touch. */
+  let swipe = null;
+  document.addEventListener('pointerdown', (ev) => {
+    swipe = null;
+    if (ev.pointerType !== 'touch' || !ev.target.closest) return;
+    const z = ev.target.closest('[data-swipe]');
+    if (!z || !root.contains(z) || ev.target.closest('.pace, .cols-plot, input, textarea, select, .dialog')) return;
+    swipe = { x: ev.clientX, y: ev.clientY, t: Date.now(), act: z.getAttribute('data-swipe') };
+  });
+  document.addEventListener('pointerup', (ev) => {
+    const s = swipe;
+    swipe = null;
+    if (!s || ev.pointerType !== 'touch') return;
+    const dx = ev.clientX - s.x, dy = ev.clientY - s.y;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > 45 || Date.now() - s.t > 800) return;
+    const fn = ACT[s.act];
+    if (fn) fn(dx < 0 ? '1' : '-1');
+  });
+  document.addEventListener('pointercancel', () => { swipe = null; });
+
   /* Re-render for data that arrived on its own. Waits while someone is typing or pressing,
      so a live update never swaps a button out from under a tap. */
   let pointerDown = false;
@@ -1720,7 +1812,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       hero = '<section class="hero" aria-label="Budget">' +
         '<span class="blob" aria-hidden="true"></span>' +
         '<p class="hero-k">' + (over ? 'Over budget by' : 'Left to spend') + '</p>' +
-        '<p class="hero-v' + (over ? ' over' : '') + '">' + L.fmtRound(Math.abs(left)) + '</p>' +
+        '<p class="hero-v' + (over ? ' over' : '') + '" data-count="' + Math.abs(left) + '" data-ck="home-left">' + L.fmtRound(Math.abs(left)) + '</p>' +
         '<p class="hero-sub">Spent ' + L.fmt(spent) + ' of ' + L.fmtRound(C.budget) + (C.budgetSkip.length ? '<span class="hint" style="display:block;margin-top:2px">Not counting ' + esc(listNames(C.budgetSkip)) + '</span>' : '') + '</p>' +
         '<div class="meter" role="img" aria-label="' + pct + ' percent of the budget spent"><span style="width:' + pct + '%"></span></div>' +
         '<div class="hero-foot"><span class="sticker' + (over ? ' coral' : '') + '">' + (over ? 'Over budget' : 'About ' + L.fmtRound(perDay) + ' a day') + '</span>' +
@@ -1728,7 +1820,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     } else {
       hero = '<section class="hero" aria-label="Spending">' +
         '<span class="blob" aria-hidden="true"></span>' +
-        '<p class="hero-k">Spent so far</p><p class="hero-v">' + L.fmtRound(spent) + '</p>' +
+        '<p class="hero-k">Spent so far</p><p class="hero-v" data-count="' + spent + '" data-ck="home-spent">' + L.fmtRound(spent) + '</p>' +
         '<p class="hero-sub">' + esc(L.periodLabel(p, t)) + ' · ' + (daysLeft === 1 ? 'last day' : daysLeft + ' days left') + '</p>' +
         '<div class="hero-foot"><button class="link" data-act="go" data-arg="custom">Set a monthly budget</button></div></section>';
     }
@@ -2291,7 +2383,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
   const shortDay = (ds) => { const d = L.parseYmd(ds); return d.getDate() + ' ' + L.MONTHS[d.getMonth()]; };
   const cap1 = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   const byCat = (list) => { const o = {}; list.forEach((e) => { const c = e.category || 'Other'; o[c] = (o[c] || 0) + e.amount; }); return o; };
-  const kpi = (label, value, sub) => '<div class="kpi"><p class="k">' + esc(label) + '</p><p class="kpi-v">' + esc(value) + '</p>' + (sub ? '<p class="kpi-s">' + esc(sub) + '</p>' : '') + '</div>';
+  const kpi = (label, value, sub, cents, key) => '<div class="kpi"><p class="k">' + esc(label) + '</p><p class="kpi-v"' + (cents != null ? ' data-count="' + cents + '" data-ck="' + esc(key) + '"' : '') + '>' + esc(value) + '</p>' + (sub ? '<p class="kpi-s">' + esc(sub) + '</p>' : '') + '</div>';
 
   function viewInsights() {
     S.pace = null; S.paceOn = false;
@@ -2311,7 +2403,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       const diff = C.budget - budgetTotal;
       sticker = diff >= 0 ? '<span class="sticker fern">Under by ' + L.fmtRound(diff) + '</span>' : '<span class="sticker coral">Over by ' + L.fmtRound(-diff) + '</span>';
     }
-    out += '<section class="hero"><span class="blob" aria-hidden="true"></span><p class="hero-k">Shared spend</p><p class="hero-v">' + L.fmtRound(total) + '</p>' +
+    out += '<section class="hero"><span class="blob" aria-hidden="true"></span><p class="hero-k">Shared spend</p><p class="hero-v" data-count="' + total + '" data-ck="insm-' + p.start + '">' + L.fmtRound(total) + '</p>' +
       '<p class="hero-sub">' + (C.budget ? (C.budgetSkip.length ? L.fmtRound(budgetTotal) + ' counts towards the ' + L.fmtRound(C.budget) + ' budget · ' : 'of ' + L.fmtRound(C.budget) + ' budget · ') : '') + list.length + (list.length === 1 ? ' spend' : ' spends') + '</p>' + (sticker ? '<div class="hero-foot">' + sticker + '</div>' : '') + '</section>';
     if (!list.length) return out + '<section class="card empty"><h2>Nothing shared yet</h2><p>Spends you add or mark shared for ' + esc(L.periodLabel(p, t)) + ' will show up here.</p></section>';
 
@@ -2326,7 +2418,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       vs = pct === 0 ? 'Same' : (pct > 0 ? '+' : '−') + Math.abs(pct) + '%';
       vsSub = 'vs ' + ref;
     }
-    out += '<div class="kpis">' + kpi('Per day', L.fmtRound(Math.round(total / elapsed)), isCurrent ? 'so far' : 'on average') +
+    out += '<div class="kpis">' + kpi('Per day', L.fmtRound(Math.round(total / elapsed)), isCurrent ? 'so far' : 'on average', Math.round(total / elapsed), 'k-pd-' + p.start) +
       kpi('Spends', String(list.length), 'biggest ' + L.fmtRound(Math.max.apply(null, list.map((e) => e.amount)))) + kpi('Change', vs, vsSub) + '</div>';
     out += paceCard(p, C.budget ? counted(list) : list, isCurrent, C.budget, days, elapsed);
 
@@ -2377,7 +2469,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     if (budget) {
       svg += '<line class="pc-budget" x1="' + f(X(0)) + '" y1="' + yb + '" x2="' + f(X(days)) + '" y2="' + f(Y(budget)) + '"/>';
     }
-    svg += '<path class="pc-area" d="' + line + ' L' + f(lx) + ' ' + yb + ' Z"/><path class="pc-line" d="' + line + '"/>';
+    svg += '<path class="pc-area" d="' + line + ' L' + f(lx) + ' ' + yb + ' Z"/><path class="pc-line" pathLength="1" d="' + line + '"/>';
     if (proj != null) svg += '<line class="pc-proj" x1="' + f(lx) + '" y1="' + f(ly) + '" x2="' + f(X(days)) + '" y2="' + f(Y(proj)) + '"/>';
     svg += '<circle class="pc-dot" cx="' + f(lx) + '" cy="' + f(ly) + '" r="4.5"/>' +
       '<line class="pc-hair" id="pcHair" x1="0" y1="' + (yt - 8) + '" x2="0" y2="' + yb + '" visibility="hidden"/><circle class="pc-dot" id="pcHairDot" cx="0" cy="0" r="4.5" visibility="hidden"/>' +
@@ -2442,7 +2534,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       '<h2>' + Y.y + (curYear ? ' so far' : '') + '</h2>' +
       '<button class="icon-btn" data-act="insyear" data-arg="1" aria-label="Next year"' + (curYear ? ' disabled' : '') + '>' + icon('right') + '</button></div>';
     const list = Y.list, total = sumAmt(list), started = Y.months.filter((m) => !m.future), done = started.filter((m) => !m.current);
-    out += '<section class="hero"><span class="blob" aria-hidden="true"></span><p class="hero-k">Shared spend</p><p class="hero-v">' + L.fmtRound(total) + '</p>' +
+    out += '<section class="hero"><span class="blob" aria-hidden="true"></span><p class="hero-k">Shared spend</p><p class="hero-v" data-count="' + total + '" data-ck="insy-' + Y.y + '">' + L.fmtRound(total) + '</p>' +
       '<p class="hero-sub">' + list.length + (list.length === 1 ? ' spend' : ' spends') + ' in ' + Y.y + (curYear ? ' so far' : '') + '</p></section>';
     if (!list.length) return out + '<section class="card empty"><h2>Nothing shared yet</h2><p>Spends from ' + Y.y + ' will show up here.</p></section>';
     const basis = done.length ? done : started, avgM = Math.round(basis.reduce((a, m) => a + m.total, 0) / basis.length), useB = C.budget > 0;
@@ -2454,7 +2546,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       const bm = started.slice().sort((a, b) => b.total - a.total)[0];
       k2 = kpi('Biggest month', L.fmtRound(bm.total), L.MONTHS_FULL[bm.p.m]);
     }
-    out += '<div class="kpis">' + kpi('Per month', L.fmtRound(avgM), done.length ? 'on average' : 'so far') + k2 + kpi('Typical spend', L.fmtRound(Math.round(total / list.length)), 'on average') + '</div>';
+    out += '<div class="kpis">' + kpi('Per month', L.fmtRound(avgM), done.length ? 'on average' : 'so far', avgM, 'k-pm-' + Y.y) + k2 + kpi('Typical spend', L.fmtRound(Math.round(total / list.length)), 'on average', Math.round(total / list.length), 'k-ts-' + Y.y) + '</div>';
     const rows = started.map((m) => [L.periodLabel(m.p, t) + (m.current ? ' so far' : ''), L.fmt(m.total),
       useB ? (C.budget - m.towards >= 0 ? L.fmtRound(C.budget - m.towards) + ' under' : L.fmtRound(m.towards - C.budget) + ' over') : String(m.n)]);
     out += '<section class="card"><div class="card-head"><h2>Month by month</h2></div>' +
@@ -2476,7 +2568,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     o.items.forEach((it, i) => {
       if (it.off) { h += '<span class="col off" aria-hidden="true"></span>'; return; }
       const on = i === o.sel, hh = H(it.v);
-      h += '<button type="button" class="col' + (on ? ' on' : '') + '" data-act="' + o.act + '" data-arg="' + i + '" aria-pressed="' + on + '" aria-label="' + esc(it.aria || it.name + ', ' + L.fmt(it.v)) + '">' +
+      h += '<button type="button" class="col' + (on ? ' on' : '') + '" style="--ci:' + i + '" data-act="' + o.act + '" data-arg="' + i + '" aria-pressed="' + on + '" aria-label="' + esc(it.aria || it.name + ', ' + L.fmt(it.v)) + '">' +
         '<span class="col-fill" style="height:' + hh + '%"></span>' +
         (on ? '<span class="col-tip' + (i === 0 ? ' l' : i === n - 1 ? ' r' : '') + '" style="bottom:' + hh + '%">' + esc(L.fmtRound(it.v)) + '</span>' : '') + '</button>';
     });
@@ -2659,12 +2751,12 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     }
     return out;
   }
-  function factCard(i) {
+  function factCard(i, fresh) {
     const facts = funFacts();
     if (!facts.length) return '';
     const n = i == null ? S.factN : i, text = facts[((n % facts.length) + facts.length) % facts.length];
     return '<section class="card fact" id="factCard"><div class="fact-top"><span class="news-ic" aria-hidden="true">' + icon('star') + '</span><p class="k">Fun fact</p>' +
-      (facts.length > 1 ? '<button class="link sm" data-act="factnext">Another</button>' : '') + '</div><p class="fact-t" aria-live="polite">' + esc(text) + '</p></section>';
+      (facts.length > 1 ? '<button class="link sm" data-act="factnext">Another</button>' : '') + '</div><p class="fact-t' + (fresh ? ' fact-in' : '') + '" aria-live="polite">' + esc(text) + '</p></section>';
   }
 
   /* ---------- coming up ---------- */
@@ -3405,7 +3497,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     dismissimport: () => { S.importResult = null; render(); },
     selday: (d) => { S.cal.sel = d; render(); const c = document.getElementById('dayCard'); if (c && c.getBoundingClientRect().top > window.innerHeight - 120) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
     pickday: (d) => { initCal(d); go('cal'); },
-    calmove: (n) => { const t = L.addMonths(S.cal.y, S.cal.m, Number(n)); S.cal.y = t[0]; S.cal.m = t[1]; const first = ymKey(t[0], t[1]) + '-01'; S.cal.sel = today().slice(0, 7) === ymKey(t[0], t[1]) ? today() : first; render(); },
+    calmove: (n) => { S.enterDir = Number(n) > 0 ? 1 : -1; const t = L.addMonths(S.cal.y, S.cal.m, Number(n)); S.cal.y = t[0]; S.cal.m = t[1]; const first = ymKey(t[0], t[1]) + '-01'; S.cal.sel = today().slice(0, 7) === ymKey(t[0], t[1]) ? today() : first; render(); },
     caltoday: () => { initCal(); render(); },
     settle: () => { const b = balance(); if (b.state === 'square') return; openDialog({ type: 'settle', from: b.from, to: b.to, amount: centsToStr(b.amount) }); },
     tabstart: () => {
@@ -3428,9 +3520,9 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     tabdel: (id) => { upsert('hh/tab', { items: { [id]: null } }, { open: true, date: today(), startedAt: Date.now(), items: {} }); localTabItem(id, null); render(); },
     tabclose: () => openDialog({ type: 'tabclose', title: 'Day out', category: null }),
     tabdiscard: () => openDialog({ type: 'tabdiscard' }),
-    recapmove: (n) => { S.recapOffset = Math.min(0, S.recapOffset + Number(n)); render(); },
+    recapmove: (n) => { S.enterDir = Number(n) > 0 ? 1 : -1; S.recapOffset = Math.min(0, S.recapOffset + Number(n)); render(); },
     insmode: (m) => { S.insMode = m === 'year' ? 'year' : 'month'; render(); },
-    insyear: (n) => { S.insYearOff = Math.min(0, S.insYearOff + Number(n)); S.insSel = null; S.insDay = null; render(); },
+    insyear: (n) => { S.enterDir = Number(n) > 0 ? 1 : -1; S.insYearOff = Math.min(0, S.insYearOff + Number(n)); S.insSel = null; S.insDay = null; render(); },
     insbar: (i) => insPick('m', Number(i)),
     insday: (i) => insPick('d', Number(i)),
     insopen: (i) => {
@@ -3487,7 +3579,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     swtrim: () => openDialog({ type: 'swtrim', cut: today().slice(0, 4) + '-01-01', dropCats: true, busy: false, error: null }),
     swtrimgo: () => doSwTrim(),
     newsok: () => closeDialog(),
-    factnext: () => { S.factN++; lsSet('hh.factN', String(S.factN)); const c = document.getElementById('factCard'); if (c) c.outerHTML = factCard(); },
+    factnext: () => { S.factN++; lsSet('hh.factN', String(S.factN)); const c = document.getElementById('factCard'); if (c) c.outerHTML = factCard(null, true); },
     billsopen: () => openDialog({ type: 'bills', form: { name: '', amount: '', every: 'quarter', from: '' }, error: null }),
     billadd: () => {
       const d = S.dialog, F = d && d.form, C = cfg();
