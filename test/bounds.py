@@ -61,7 +61,7 @@ try:
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path='/usr/bin/google-chrome', args=['--no-sandbox'])
         for width in (320, 390):
-            ctx = browser.new_context(viewport={'width': width, 'height': 740}, device_scale_factor=2, is_mobile=True, has_touch=True,
+            ctx = browser.new_context(reduced_motion='reduce', viewport={'width': width, 'height': 740}, device_scale_factor=2, is_mobile=True, has_touch=True,
                                       locale='en-AU', timezone_id='Australia/Sydney')
             ctx.add_init_script(path=str(ROOT / 'test' / 'firebase-mock.js'))
             ctx.route('**/firebase-config.js', lambda r: r.fulfill(status=200, content_type='text/javascript', body=TEST_CONFIG))

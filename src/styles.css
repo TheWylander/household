@@ -495,3 +495,34 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
 .fact-top { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .fact-top .k { flex: 1; color: var(--ink); }
 .fact-t { font: 700 17px/1.4 var(--body); }
+
+/* ---------- motion ---------- */
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes inR { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes inL { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@keyframes growUp { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes growRight { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop { 0% { transform: scale(.6); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+@keyframes stickerPop { 0% { transform: rotate(-3deg) scale(.6); opacity: 0; } 60% { transform: rotate(-3deg) scale(1.12); opacity: 1; } 100% { transform: rotate(-3deg) scale(1); } }
+.enter .main > * { animation: rise .45s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--enter, 0ms) + var(--i, 0) * 45ms); }
+.enter.from-r .main > *:not(.top):not(.seg) { animation-name: inR; }
+.enter.from-l .main > *:not(.top):not(.seg) { animation-name: inL; }
+.enter .main > :nth-child(2) { --i: 1; } .enter .main > :nth-child(3) { --i: 2; } .enter .main > :nth-child(4) { --i: 3; }
+.enter .main > :nth-child(5) { --i: 4; } .enter .main > :nth-child(6) { --i: 5; } .enter .main > :nth-child(7) { --i: 6; }
+.enter .main > :nth-child(n+8) { --i: 7; }
+.enter .meter span, .enter .hbar-fill { transform-origin: left center; animation: growRight .8s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--enter, 0ms) + 220ms); }
+.enter .col-fill { transform-origin: bottom center; animation: growUp .6s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--enter, 0ms) + 200ms + var(--ci, 0) * 35ms); }
+.enter .col-tip { animation: fadeIn .3s both; animation-delay: calc(var(--enter, 0ms) + 700ms); }
+.enter .pc-line { stroke-dasharray: 1; animation: draw 1s cubic-bezier(.4, 0, .2, 1) both; animation-delay: calc(var(--enter, 0ms) + 220ms); }
+.enter .pc-area, .enter .pc-proj { animation: fadeIn .45s both; animation-delay: calc(var(--enter, 0ms) + 950ms); }
+.enter .pace .pc-dot:not(#pcHairDot) { transform-box: fill-box; transform-origin: center; animation: pop .4s cubic-bezier(.3, 1.6, .5, 1) both; animation-delay: calc(var(--enter, 0ms) + 1100ms); }
+.enter .nav-i.on .ic { animation: pop .45s cubic-bezier(.3, 1.6, .5, 1) both; animation-delay: var(--enter, 0ms); }
+.enter .hero .sticker { animation: stickerPop .5s cubic-bezier(.3, 1.6, .5, 1) both; animation-delay: calc(var(--enter, 0ms) + 650ms); }
+.fact-in { animation: rise .35s cubic-bezier(.2, .7, .2, 1) both; }
+.row-card, .cat-row, .chip, .hbar-btn { transition: transform .12s ease; }
+.row-card:active, .cat-row:active, .chip:active { transform: translateY(2px); }
+.hbar-btn:active { transform: scale(.985); }
+[data-swipe] { touch-action: pan-y; }
+@media (prefers-reduced-motion: reduce) { .enter .main > *, .enter .meter span, .enter .hbar-fill, .enter .col-fill, .enter .pc-line { animation: none !important; } }

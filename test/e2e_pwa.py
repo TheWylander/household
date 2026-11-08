@@ -85,7 +85,7 @@ try:
         browser = p.chromium.launch(executable_path='/usr/bin/google-chrome', args=['--no-sandbox'])
 
         # ---------- the files a phone needs to install it ----------
-        ctx0 = browser.new_context()
+        ctx0 = browser.new_context(reduced_motion='reduce', )
         r = ctx0.request.get(SITE + 'manifest.json')
         m = r.json()
         check(r.ok and m['display'] == 'standalone' and m['start_url'] == './' and m['short_name'] == 'Household', 'manifest: standalone, starts at the app, named Household')
@@ -99,7 +99,7 @@ try:
         ctx0.close()
 
         # ---------- service worker: installs, then the app opens offline ----------
-        ctx1 = browser.new_context(service_workers='allow')
+        ctx1 = browser.new_context(reduced_motion='reduce', service_workers='allow')
         fonts(ctx1)
         pg = watch(ctx1.new_page(), 'sw', console=False)
         pg.goto(BASE); pg.wait_for_timeout(1500)
@@ -115,7 +115,7 @@ try:
         ctx1.close()
 
         # without Firebase settings it says what's missing instead of failing
-        ctxp = browser.new_context(service_workers='block')
+        ctxp = browser.new_context(reduced_motion='reduce', service_workers='block')
         fonts(ctxp)
         ctxp.route('**/firebase-config.js', lambda r: r.fulfill(status=200, content_type='text/javascript', body="window.HH_FIREBASE = { apiKey: 'PASTE_API_KEY', projectId: 'PASTE_PROJECT_ID' };"))
         pp = watch(ctxp.new_page(), 'no-settings', console=False)
@@ -124,7 +124,7 @@ try:
         ctxp.close()
 
         # ---------- the real Firebase library: same calls the app makes ----------
-        ctx2 = browser.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True, service_workers='block')
+        ctx2 = browser.new_context(reduced_motion='reduce', viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True, service_workers='block')
         fonts(ctx2)
         ctx2.route('**/firebase-config.js', lambda r: r.fulfill(status=200, content_type='text/javascript', body=TEST_CONFIG))
         ctx2.route(re.compile(r'https://[a-z.]*googleapis\.com/.*'), lambda r: r.abort())
@@ -144,7 +144,7 @@ try:
         ctx2.close()
 
         # ---------- two phones on the test double ----------
-        ctx = browser.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, is_mobile=True, has_touch=True,
+        ctx = browser.new_context(reduced_motion='reduce', viewport={'width': 390, 'height': 844}, device_scale_factor=2, is_mobile=True, has_touch=True,
                                   locale='en-AU', timezone_id='Australia/Sydney', service_workers='block')
         ctx.add_init_script(path=str(ROOT / 'test' / 'firebase-mock.js'))
         ctx.route('**/firebase-config.js', lambda r: r.fulfill(status=200, content_type='text/javascript', body=TEST_CONFIG))
