@@ -216,6 +216,11 @@ try:
         check(a.locator('.av.ph-a').count() >= 1, 'profile photo saved to Firestore and shown')
         act(a, 'go', 'home')
 
+        # Robin shows Claude's draft note to Jules
+        act(a, 'go', 'home'); act(a, 'go', 'newsedit'); act(a, 'newspublish'); a.wait_for_timeout(300)
+        check(a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/news'].notes['2026-11-09'].status") == 'published', 'the update note is saved to Firestore')
+        act(a, 'go', 'home')
+
         # ---------- Jules's phone ----------
         b = watch(ctx.new_page(), 'jules')
         b.goto(BASE); b.wait_for_timeout(600)

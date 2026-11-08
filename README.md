@@ -6,9 +6,9 @@ This `source` branch holds the code. The `main` branch holds the built site that
 
 1. Edit `src/`: `app.js` for screens and behaviour, `logic.js` for money maths and CSV parsing, `styles.css` for the look.
 2. Build with `python3 build.py` (Python with Pillow; it fetches the Firebase SDK from npm the first time). The site lands in `pwa/site/`.
-3. Test with `node test/logic.test.js` and `python3 test/e2e_pwa.py` (Playwright and Chrome).
+3. Test with `node test/logic.test.js`, `python3 test/e2e_pwa.py` and `python3 test/bounds.py` (Playwright and Chrome). The bounds test checks every screen at 320px and 390px wide.
 4. Deploy: copy everything in `pwa/site/` to the root of `main`, keeping `README.md` and `.nojekyll`, then commit and push. Pages updates in about a minute. Close the app fully and reopen it to get the new version.
-5. Add an entry at the top of `RELEASES` in `src/app.js` for anything you'd want them to notice. Each of you sees the newest entry once as a What's new note, and whoever joins later sees it as a few things to try.
+5. Add a draft note at the top of `RELEASES` in `src/app.js` for anything worth noticing. Whoever set the app up reviews it in Settings, Notes for the other person, edits it and decides when it's shown. The other person sees it once.
 
 ## Keep out of this repo (it's public)
 

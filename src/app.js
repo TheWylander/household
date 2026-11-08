@@ -67,9 +67,10 @@
   };
   const icon = (n) => '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[n] + '</svg>';
 
-  /* ---------- what's new ---------- */
-  /* One entry per update, newest first. Each of you sees the newest one once, the next time the app opens.
-     Whoever joins later gets it as a few things to try, straight after the welcome. */
+  /* ---------- update notes ---------- */
+  /* Claude's draft note for each update, newest first. Whoever set the app up edits it on a page only they see and
+     decides when the other person gets it; edits live in hh/news. The other person sees the newest shown note once,
+     or as a few things to try straight after the welcome. */
   const RELEASES = [
     { id: '2026-11-09', date: '2026-11-09', title: 'Insights, profiles and line notes', items: [
       ['chart', 'Insights.', "How each month is tracking against the budget, where the money goes and your big day of the week. It's in the bottom bar."],
@@ -89,7 +90,7 @@
     view: 'home', cal: null, add: null, tabForm: { amount: '', label: '', payer: null },
     recapOffset: 0, draft: null, draftSaved: false, setup: null, dialog: null,
     insMode: 'month', insYearOff: 0, insSel: null, insDay: null, pace: null, paceOn: false,
-    photos: null, photoBusy: null, photoErr: null, newsShown: false,
+    photos: null, photoBusy: null, photoErr: null, newsShown: false, newsDoc: null, newsEdit: null, newsId: null,
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -113,7 +114,7 @@
       remember: true, scheme: 'warm',
       moves: {},
       budgetSkip: [], cardFrom: '', cardFromWhy: '',
-      welcome: { note: '', to: null, seen: '' }, news: { a: '', b: '' },
+      welcome: { note: '', to: null, seen: '' }, news: { a: '', b: '' }, editor: null,
       rent: PRESET && PRESET.rent ? Object.assign(clone(PRESET.rent), { on: false }) : { on: false, amount: null, from: 'b', day: 0, start: '' },
       createdAt: Date.now()
     };
@@ -147,6 +148,7 @@
       cardFrom: typeof s.cardFrom === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.cardFrom) ? s.cardFrom : '',
       cardFromWhy: s.cardFromWhy === 'splitwise' ? 'splitwise' : '',
       news: { a: typeof news.a === 'string' ? news.a.slice(0, 20) : '', b: typeof news.b === 'string' ? news.b.slice(0, 20) : '' },
+      editor: s.editor === 'a' || s.editor === 'b' ? s.editor : null,
       welcome: {
         note: typeof welcome.note === 'string' ? welcome.note.slice(0, 400) : '',
         to: welcome.to === 'a' || welcome.to === 'b' ? welcome.to : null,
@@ -460,10 +462,11 @@
       S.rules = got.rules && typeof got.rules === 'object' ? got.rules : null;
       S.imp = got.import && typeof got.import === 'object' ? got.import : null;
       S.photos = got.photos && typeof got.photos === 'object' ? got.photos : null;
+      S.newsDoc = got.news && typeof got.news === 'object' ? got.news : null;
       applyPhotos();
       parseStaged();
       S.hhLoaded = true; S.offline = false;
-      markLive('hh', snap); resolveMe(); ensureRent(); safeRender();
+      markLive('hh', snap); resolveMe(); ensureRent(); ensureEditor(); safeRender();
     }, (e) => subError('hh', e, subHH));
   }
   function subMonths() {
@@ -539,10 +542,11 @@
     if (!S.settings) return bn + (S.readOnly ? viewNotSetUp() : viewSetup()) + dialogHtml();
     if (!S.me) { const w = welcomeFor(); return bn + (w ? viewWelcome(w, false) : viewWho()) + dialogHtml(); }
     if (S.welcomePreview) return bn + viewWelcome(other(S.me), true) + dialogHtml();
-    if (!S.dialog && !S.newsShown && !S.readOnly && S.view === 'home' && S.live.hh && RELEASES.length && cfg().news[S.me] !== RELEASES[0].id) {
-      S.newsShown = true; S.dialog = { type: 'news', fresh: false };
+    if (!S.dialog && !S.newsShown && !S.readOnly && S.view === 'home' && S.live.hh) {
+      const due = newsDue();
+      if (due) { S.newsShown = true; S.dialog = { type: 'news', id: due.id }; }
     }
-    const nav = ['home', 'cal', 'inbox', 'insights', 'settings', 'custom', 'profile', 'recap', 'tab'].indexOf(S.view) >= 0;
+    const nav = ['home', 'cal', 'inbox', 'insights', 'settings', 'custom', 'profile', 'newsedit', 'recap', 'tab'].indexOf(S.view) >= 0;
     return bn + '<main class="main' + (nav ? '' : ' no-nav') + '" style="' + meVars() + '">' + viewFor(S.view) + '</main>' +
       (nav ? '<div data-live="nav">' + navBar() + '</div>' : '') + dialogHtml();
   }
@@ -603,6 +607,7 @@
       case 'insights': return viewInsights();
       case 'settings': return viewSettings();
       case 'profile': return viewProfile();
+      case 'newsedit': return viewNewsEdit();
       case 'custom': return viewCustom();
       default: return viewHome();
     }
@@ -712,6 +717,10 @@
     if (n) {
       out += '<button class="card row-card attn" data-act="go" data-arg="inbox"><span class="row-lead"><span class="count">' + n + '</span>' +
         '<span><span class="row-t">' + (n === 1 ? 'spend' : 'spends') + ' to check</span><span class="k">From ' + esc(poss(nm(holder()))) + ' card</span></span></span>' + icon('arrow') + '</button>';
+    }
+    const waiting = isEditor() && !S.readOnly && RELEASES.length ? noteFor(RELEASES[0].id) : null;
+    if (waiting && waiting.status === 'draft') {
+      out += '<button class="card row-card attn" data-act="go" data-arg="newsedit"><span><span class="k">Note for ' + esc(nm(other(S.me))) + '</span><span class="row-t">Claude\'s draft for ' + esc(dateY(waiting.date)) + ' is ready</span></span>' + icon('arrow') + '</button>';
     }
     out += balanceCard();
     if (C.home.week !== false) out += weekCard();
@@ -1549,6 +1558,97 @@
     return out + '</section>';
   }
 
+  /* ---------- notes for the other person ---------- */
+  function editorOf() {
+    const C = cfg(), m = C.members || {};
+    if (C.editor) return C.editor;
+    if (C.welcome.to) return other(C.welcome.to);
+    if (m.a && !m.b) return 'a';
+    if (m.b && !m.a) return 'b';
+    return 'a';
+  }
+  const isEditor = () => !!S.me && S.me === editorOf();
+  /* Records who set the app up while that's still certain: the only one signed in so far. */
+  function ensureEditor() {
+    const C = cfg(), m = C.members || {};
+    if (!S.settings || C.editor || S.readOnly || !S.me || !S.live.hh) return;
+    const only = m.a && !m.b ? 'a' : m.b && !m.a ? 'b' : null;
+    if (only && only === S.me) upsert('hh/settings', { editor: only }, defaults());
+  }
+  const noteEdits = (id) => { const n = S.newsDoc && S.newsDoc.notes; return n && typeof n === 'object' && n[id] && typeof n[id] === 'object' ? n[id] : {}; };
+  function noteFor(id) {
+    const R = RELEASES.filter((r) => r.id === id)[0];
+    if (!R) return null;
+    const E = noteEdits(id), items = Array.isArray(E.items) ? E.items : [];
+    return {
+      id, date: R.date,
+      title: typeof E.title === 'string' && E.title.trim() ? E.title.slice(0, 80) : R.title,
+      intro: typeof E.intro === 'string' ? E.intro.slice(0, 300) : 'Some new bits in our app.',
+      items: R.items.map((x, i) => {
+        const e = items[i] && typeof items[i] === 'object' ? items[i] : {};
+        return { icon: x[0], head: typeof e.head === 'string' ? e.head.slice(0, 40) : x[1], text: typeof e.text === 'string' ? e.text.slice(0, 240) : x[2], on: e.on !== false };
+      }),
+      status: E.status === 'published' || E.status === 'skipped' ? E.status : 'draft',
+      publishedAt: typeof E.publishedAt === 'number' ? E.publishedAt : 0,
+      edited: !!E.editedAt
+    };
+  }
+  /* The newest note that was shown to the other person. */
+  function publishedNote() {
+    for (let i = 0; i < RELEASES.length; i++) { const n = noteFor(RELEASES[i].id); if (n && n.status === 'published') return n; }
+    return null;
+  }
+  function newsDue() {
+    if (!S.me || isEditor()) return null;
+    const n = publishedNote();
+    return n && cfg().news[S.me] !== n.id ? n : null;
+  }
+  function saveNote(patch) {
+    const n = Object.assign(S.newsEdit, patch || {});
+    const notes = Object.assign({}, (S.newsDoc && S.newsDoc.notes) || {});
+    notes[n.id] = { title: String(n.title || '').slice(0, 80), intro: String(n.intro || '').slice(0, 300), items: n.items.map((x) => ({ head: String(x.head || '').slice(0, 40), text: String(x.text || '').slice(0, 240), on: x.on !== false })),
+      status: n.status, publishedAt: n.publishedAt || 0, editedAt: Date.now() };
+    S.newsDoc = Object.assign({}, S.newsDoc || {}, { notes });
+    return upsert('hh/news', { notes }, { notes: {} });
+  }
+  function resetNote() {
+    const n = S.newsEdit;
+    if (!n) return;
+    const notes = Object.assign({}, (S.newsDoc && S.newsDoc.notes) || {});
+    notes[n.id] = { status: n.status, publishedAt: n.publishedAt || 0 };
+    S.newsDoc = Object.assign({}, S.newsDoc || {}, { notes });
+    S.newsEdit = null;
+    upsert('hh/news', { notes }, { notes: {} });
+  }
+  function viewNewsEdit() {
+    if (!isEditor()) { S.view = 'settings'; return viewSettings(); }
+    const them = nm(other(S.me));
+    if (!S.newsId || !RELEASES.some((r) => r.id === S.newsId)) S.newsId = RELEASES.length ? RELEASES[0].id : null;
+    if (!S.newsEdit || S.newsEdit.id !== S.newsId) S.newsEdit = S.newsId ? clone(noteFor(S.newsId)) : null;
+    const n = S.newsEdit;
+    let out = '<header class="top"><div><button class="back-link" data-act="go" data-arg="settings">' + icon('left') + 'Settings</button><p class="eyebrow">Just for you</p><h1 class="title">Notes for ' + esc(them) + '</h1></div></header>';
+    if (!n) return out + '<section class="card empty"><h2>No notes yet</h2><p>When there\'s an update, Claude\'s draft shows up here.</p></section>';
+    out += '<p class="muted" style="margin:0 4px 14px">Claude drafts a note for each update. Change anything you like, then show it to ' + esc(them) + ', who sees it once, the next time the app opens.</p>';
+    const seen = cfg().news[other(S.me)] === n.id;
+    const status = n.status === 'published' ? (seen ? esc(them) + ' has read it' : 'Shown to ' + esc(them)) : n.status === 'skipped' ? 'Not showing this one' : n.edited ? 'Your draft' : 'Claude\'s draft';
+    out += '<section class="card note-edit"><div class="card-head"><h2>' + esc(dateY(n.date)) + '</h2><span class="tag' + (n.status === 'published' ? ' ok' : '') + '">' + status + '</span></div>' +
+      '<label class="field"><span>Title</span><input class="input" id="nwTitle" maxlength="80" data-bind="newsEdit.title" data-change="newssave" value="' + esc(n.title) + '"></label>' +
+      '<label class="field"><span>A line to start</span><textarea class="input" id="nwIntro" rows="2" maxlength="300" data-bind="newsEdit.intro" data-change="newssave">' + esc(n.intro) + '</textarea></label>' +
+      n.items.map((x, i) => '<div class="nw-item' + (x.on ? '' : ' off') + '"><div class="nw-top"><span class="news-ic" aria-hidden="true">' + icon(x.icon) + '</span>' +
+        '<label class="switch-row nw-sw"><span>' + (x.on ? 'Showing' : 'Hidden') + '</span><input type="checkbox" class="switch" role="switch" data-act="newsitem" data-arg="' + i + '"' + (x.on ? ' checked' : '') + ' aria-label="Show this part to ' + esc(them) + '"></label></div>' +
+        '<label class="field"><span class="sr">Heading</span><input class="input" id="nwHead' + i + '" maxlength="40" data-bind="newsEdit.items.' + i + '.head" data-change="newssave" value="' + esc(x.head) + '"></label>' +
+        '<label class="field" style="margin:0"><span class="sr">What to say</span><textarea class="input" id="nwText' + i + '" rows="3" maxlength="240" data-bind="newsEdit.items.' + i + '.text" data-change="newssave">' + esc(x.text) + '</textarea></label></div>').join('') +
+      '<div class="nw-actions"><button class="btn btn-secondary" data-act="newspreview">Preview</button>' +
+      (n.status === 'published' ? (seen ? '' : '<button class="btn btn-secondary" data-act="newsdraft">Take it back</button>') : '<button class="btn btn-primary" data-act="newspublish">Show it to ' + esc(them) + '</button>') + '</div>' +
+      '<p class="nw-more">' + (n.status !== 'skipped' && n.status !== 'published' ? '<button class="link sm" data-act="newsskip">Don\'t show this one</button>' : '') +
+      (n.edited ? '<button class="link sm" data-act="newsreset">Go back to Claude\'s draft</button>' : '') + '</p></section>';
+    const earlier = RELEASES.filter((r) => r.id !== n.id);
+    if (earlier.length) {
+      out += '<section class="card"><div class="card-head"><h2>Other notes</h2></div>' + earlier.map((r) => { const m = noteFor(r.id); return '<button class="row-btn" data-act="newspick" data-arg="' + esc(r.id) + '"><span>' + esc(m.title) + '</span><span class="k">' + esc(dateY(r.date)) + '</span></button>'; }).join('') + '</section>';
+    }
+    return out;
+  }
+
   /* ---------- profiles ---------- */
   function viewProfile() {
     if (!S.draft) S.draft = makeDraft();
@@ -1584,7 +1684,11 @@
     let out = '<header class="top"><div><p class="eyebrow">Our household</p><h1 class="title">Settings</h1></div></header>';
     out += '<button class="card row-card" data-act="go" data-arg="profile"><span class="row-lead"><span class="duo" aria-hidden="true">' + av('a') + av('b') + '</span><span><span class="row-t">Profiles</span><span class="k">Photos, names and colours</span></span></span>' + icon('arrow') + '</button>';
     out += '<button class="card row-card" data-act="go" data-arg="custom"><span><span class="row-t">Customise</span><span class="k">Look, budget, rent, card and categories</span></span>' + icon('arrow') + '</button>';
-    if (RELEASES.length) out += '<button class="card row-card" data-act="newsopen"><span><span class="row-t">What\'s new</span><span class="k">' + esc(RELEASES[0].title) + '</span></span>' + icon('arrow') + '</button>';
+    if (isEditor() && RELEASES.length) {
+      out += '<button class="card row-card" data-act="go" data-arg="newsedit"><span><span class="row-t">Notes for ' + esc(nm(other(S.me))) + '</span><span class="k">Just for you: what ' + esc(nm(other(S.me))) + ' sees after an update</span></span>' + icon('arrow') + '</button>';
+    } else if (publishedNote()) {
+      out += '<button class="card row-card" data-act="newsopen"><span><span class="row-t">What\'s new</span><span class="k">' + esc(publishedNote().title) + '</span></span>' + icon('arrow') + '</button>';
+    }
     if (fb) {
       out += '<section class="card"><div class="card-head"><h2>Account</h2></div><p class="muted">Signed in as <strong>' + esc((S.authUser && S.authUser.email) || '') + '</strong></p>' +
         '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="auout">Sign out</button></section>';
@@ -1843,7 +1947,7 @@
     const pr = L.CARD_PRESETS[U.earns];
     s.card = { name: U.cardName.trim(), holder: U.holder, program: pr ? pr.program : '', earns: pr ? U.earns : null, rates: pr ? Object.assign({}, pr.rates) : null, ratio: pr ? pr.ratio : 1, rate: null };
     s.rent.on = !!U.rentOn;
-    if (RELEASES.length && (U.me === 'a' || U.me === 'b')) s.news[U.me] = RELEASES[0].id;
+    if (U.me === 'a' || U.me === 'b') { s.editor = U.me; if (RELEASES.length) s.news[U.me] = RELEASES[0].id; }
     if (S.myId) s.members[U.me] = S.myId;
     lsSet('hh.me', U.me);
     S.me = U.me; S.settings = s; S.view = 'home';
@@ -1907,7 +2011,8 @@
       upsert('hh/settings', patch, defaults());
     }
     ensureRent();
-    if (RELEASES.length && !S.readOnly) { S.dialog = { type: 'news', fresh: true }; S.newsShown = true; }
+    const shown = publishedNote();
+    if (shown && !S.readOnly) { S.dialog = { type: 'news', id: shown.id, fresh: true }; S.newsShown = true; }
     render(); window.scrollTo(0, 0);
     toast("You're in. Add a spend any time with the plus.");
   }
@@ -2007,10 +2112,10 @@
 
   /* ---------- dialogs ---------- */
   function openDialog(d) { S.dialog = d; render(); }
-  function closeDialog() { if (S.dialog && S.dialog.type === 'news') markNewsSeen(); S.dialog = null; render(); }
-  function markNewsSeen() {
-    if (!S.me || S.readOnly || !RELEASES.length) return;
-    const C = cfg(), id = RELEASES[0].id;
+  function closeDialog() { if (S.dialog && S.dialog.type === 'news' && !S.dialog.preview) markNewsSeen(S.dialog.id); S.dialog = null; render(); }
+  function markNewsSeen(id) {
+    if (!S.me || S.readOnly || !id || isEditor()) return;
+    const C = cfg();
     if (C.news[S.me] === id) return;
     upsert('hh/settings', { news: Object.assign({}, C.news, { [S.me]: id }) }, defaults());
   }
@@ -2045,11 +2150,13 @@
     } else if (d.type === 'swtrim') {
       body = swTrimDialog(d);
     } else if (d.type === 'news') {
-      const R = RELEASES[0];
-      body = '<h2 id="dlgT">' + (d.fresh ? 'A few things to try' : 'What\'s new') + '</h2>' +
-        '<p class="muted">' + (d.fresh ? 'Little extras ' + esc(nm(other(S.me))) + ' added for you two.' : esc(R.title) + ', ' + esc(dateY(R.date)) + '.') + '</p>' +
-        '<ul class="news">' + R.items.map((x) => '<li><span class="news-ic" aria-hidden="true">' + icon(x[0]) + '</span><span><strong>' + esc(x[1]) + '</strong> ' + esc(x[2]) + '</span></li>').join('') + '</ul>' +
-        '<div class="dialog-actions"><button class="btn btn-primary" data-act="newsok">' + (d.again ? 'Done' : 'Lovely, thanks') + '</button></div>';
+      const n = d.preview ? S.newsEdit : noteFor(d.id), ed = editorOf();
+      if (!n) { S.dialog = null; return ''; }
+      body = '<p class="eyebrow">' + (d.fresh ? 'A few things to try' : 'What\'s new · ' + esc(dateY(n.date))) + '</p><h2 id="dlgT">' + esc(n.title) + '</h2>' +
+        (n.intro ? '<p class="muted" style="margin-top:6px">' + esc(n.intro) + '</p>' : '') +
+        '<ul class="news">' + n.items.filter((x) => x.on && (x.head || x.text)).map((x) => '<li><span class="news-ic" aria-hidden="true">' + icon(x.icon) + '</span><span>' + (x.head ? '<strong>' + esc(x.head) + '</strong> ' : '') + esc(x.text) + '</span></li>').join('') + '</ul>' +
+        '<p class="news-from">' + av(ed, true) + '<span>From ' + esc(nm(ed)) + '</span></p>' +
+        '<div class="dialog-actions"><button class="btn btn-primary" data-act="newsok">' + (d.preview ? 'Close the preview' : d.again ? 'Done' : 'Lovely, thanks') + '</button></div>';
     } else if (d.type === 'csv') {
       body = '<h2 id="dlgT">Copy your spends</h2><p>Copying isn\'t allowed here, so select all of this and copy it yourself.</p><textarea class="input" id="dlgCsv" readonly>' + esc(d.text) + '</textarea><div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
     }
@@ -2069,6 +2176,7 @@
   function go(v) {
     if ((S.view === 'custom' || S.view === 'profile') && v !== S.view && draftDirty()) { openDialog({ type: 'leave', to: v }); return; }
     if (v === 'custom' || v === 'profile') { S.draft = makeDraft(); S.draftSaved = false; S.photoErr = null; }
+    if (v === 'newsedit') { S.newsEdit = null; S.newsId = null; }
     if (v === 'cal' && !S.cal) initCal();
     if (v === 'recap') { S.recapOffset = S.view === 'home' ? -1 : 0; S.insMode = 'month'; v = 'insights'; }
     else if (v === 'insights' && S.view !== 'insights') { S.recapOffset = 0; S.insYearOff = 0; S.insSel = null; S.insDay = null; }
@@ -2179,7 +2287,19 @@
     swtrim: () => openDialog({ type: 'swtrim', cut: today().slice(0, 4) + '-01-01', dropCats: true, busy: false, error: null }),
     swtrimgo: () => doSwTrim(),
     newsok: () => closeDialog(),
-    newsopen: () => openDialog({ type: 'news', fresh: false, again: true }),
+    newsopen: () => { const n = publishedNote(); if (n) openDialog({ type: 'news', id: n.id, again: true }); },
+    newsitem: (i) => { const n = S.newsEdit, it = n && n.items[Number(i)]; if (!it) return; it.on = !it.on; saveNote(); render(); },
+    newspreview: () => { if (S.newsEdit) openDialog({ type: 'news', preview: true, id: S.newsEdit.id }); },
+    newspublish: () => {
+      if (!S.newsEdit) return;
+      const them = nm(other(S.me));
+      saveNote({ status: 'published', publishedAt: Date.now() }).then((ok) => { if (ok) toast('Done. ' + them + ' sees it next time the app opens.'); });
+      render();
+    },
+    newsdraft: () => { saveNote({ status: 'draft', publishedAt: 0 }); render(); },
+    newsskip: () => { saveNote({ status: 'skipped', publishedAt: 0 }); render(); toast("This one won't be shown."); },
+    newsreset: () => { resetNote(); render(); },
+    newspick: (id) => { S.newsId = id; S.newsEdit = null; render(); window.scrollTo(0, 0); },
     photodel: (p) => { savePhoto(p === 'b' ? 'b' : 'a', null).then((ok) => { if (ok) toast('Photo removed'); }); render(); },
     savecustom: () => saveCustom(),
     copycsv: () => {
@@ -2251,6 +2371,7 @@
       }, () => { S.importResult = { error: "That file couldn't be opened. Export it again from Splitwise and try once more." }; render(); });
     },
     swtrimrefresh: () => swTrimRefresh(),
+    newssave: () => { if (S.newsEdit) saveNote(); },
     photo: (el) => {
       const p = el.getAttribute('data-arg') === 'b' ? 'b' : 'a', f = el.files && el.files[0];
       el.value = '';

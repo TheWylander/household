@@ -437,3 +437,27 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
 .news li:first-child { border-top: 0; }
 .news-ic { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border: 2px solid var(--ink); border-radius: 50%; background: var(--marigold-soft); }
 .news-ic .ic { width: 18px; height: 18px; }
+.news-from { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-weight: 700; color: var(--ink2); }
+.note-edit .field { margin-bottom: 12px; }
+.note-edit textarea.input { min-height: 72px; resize: vertical; }
+.nw-item { padding: 12px 0 14px; border-top: 1px dashed var(--line); }
+.nw-item.off .field { opacity: .5; }
+.nw-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.nw-sw { margin: 0; gap: 10px; font-weight: 700; }
+.nw-actions { display: flex; gap: 10px; margin-top: 14px; }
+.nw-actions .btn { flex: 1; }
+.nw-more { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; }
+.row-btn { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; width: 100%; min-height: 44px; padding: 10px 0; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; font-weight: 800; }
+.row-btn:first-of-type { border-top: 0; }
+.tag.ok { background: var(--fern-soft); }
+
+/* ---------- fields stay inside their cards ----------
+   iOS gives date fields a minimum width from their content and centres the text, so they spill past the card.
+   Every field may shrink to its container, and date fields drop the native frame (tapping still opens the picker). */
+.input { min-width: 0; max-width: 100%; }
+.row2 > *, .field, .money, .add-row > *, .ln-field { min-width: 0; }
+input[type="date"].input, .date-chip input[type="date"] { -webkit-appearance: none; appearance: none; display: block; min-width: 0; max-width: 100%; }
+input[type="date"].input { text-align: left; line-height: 26px; }
+input[type="date"].input::-webkit-date-and-time-value { text-align: left; margin: 0; min-height: 26px; }
+input[type="date"].input::-webkit-datetime-edit { padding: 0; }
+.note-edit textarea.input { font: 400 16px/1.45 var(--body); }
