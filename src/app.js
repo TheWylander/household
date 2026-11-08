@@ -61,7 +61,9 @@
     arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
-    duo: '<circle cx="8.5" cy="12" r="5.5"/><circle cx="15.5" cy="12" r="5.5"/>'
+    duo: '<circle cx="8.5" cy="12" r="5.5"/><circle cx="15.5" cy="12" r="5.5"/>',
+    chart: '<path d="M4 20h16"/><path d="M7 16.5V12M12 16.5V6.5M17 16.5V9.5"/>',
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3 5.5 5.5"/><circle cx="12" cy="12" r="6.3"/>'
   };
   const icon = (n) => '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[n] + '</svg>';
 
@@ -73,6 +75,7 @@
     me: null, readOnly: false,
     view: 'home', cal: null, add: null, tabForm: { amount: '', label: '', payer: null },
     recapOffset: 0, draft: null, draftSaved: false, setup: null, dialog: null,
+    insMode: 'month', insYearOff: 0, insSel: null, insDay: null, pace: null, paceOn: false,
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -118,7 +121,9 @@
         name: String(card.name || ''), holder: card.holder === 'a' ? 'a' : 'b', program: String(card.program || ''), rate: num(card.rate),
         earns: ['qantas', 'velocity', 'altitude'].indexOf(card.earns) >= 0 ? card.earns : null,
         rates: card.rates && typeof card.rates === 'object' ? { intl: num(card.rates.intl), everyday: num(card.rates.everyday), other: num(card.rates.other), after: num(card.rates.after) } : null,
-        ratio: num(card.ratio) || 3
+        ratio: num(card.ratio) || 3,
+        pointsBal: num(card.pointsBal) != null && num(card.pointsBal) >= 0 ? Math.round(num(card.pointsBal)) : null,
+        pointsAsOf: typeof card.pointsAsOf === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(card.pointsAsOf) ? card.pointsAsOf : ''
       },
       home: pick('home'), spot: pick('spot'),
       remember: s.remember !== false,
@@ -516,7 +521,7 @@
     if (!S.settings) return bn + (S.readOnly ? viewNotSetUp() : viewSetup()) + dialogHtml();
     if (!S.me) { const w = welcomeFor(); return bn + (w ? viewWelcome(w, false) : viewWho()) + dialogHtml(); }
     if (S.welcomePreview) return bn + viewWelcome(other(S.me), true) + dialogHtml();
-    const nav = ['home', 'cal', 'inbox', 'custom', 'recap', 'tab'].indexOf(S.view) >= 0;
+    const nav = ['home', 'cal', 'inbox', 'insights', 'settings', 'custom', 'recap', 'tab'].indexOf(S.view) >= 0;
     return bn + '<main class="main' + (nav ? '' : ' no-nav') + '" style="' + meVars() + '">' + viewFor(S.view) + '</main>' +
       (nav ? '<div data-live="nav">' + navBar() + '</div>' : '') + dialogHtml();
   }
@@ -573,7 +578,9 @@
       case 'add': return S.add ? viewAdd() : viewHome();
       case 'tab': return viewTab();
       case 'inbox': return viewInbox();
-      case 'recap': return viewRecap();
+      case 'recap':
+      case 'insights': return viewInsights();
+      case 'settings': return viewSettings();
       case 'custom': return viewCustom();
       default: return viewHome();
     }
@@ -604,7 +611,7 @@
     return '<nav class="nav" aria-label="Main">' + item('home', 'home', 'Home') + item('cal', 'cal', 'Calendar') +
       (S.readOnly ? '' : '<button class="nav-add" data-act="add" aria-label="Add a spend">' + icon('plus') + '</button>') +
       item('inbox', 'inbox', 'Inbox', n ? '<span class="badge"><span class="sr">, </span>' + n + '<span class="sr"> to check</span></span>' : '') +
-      item('custom', 'sliders', 'Customise') + '</nav>';
+      item('insights', 'chart', 'Insights') + '</nav>';
   }
   function viewLoading() {
     return '<div class="loading"><div class="blob" aria-hidden="true"></div><p class="title sm">Opening your household</p>' +
@@ -638,7 +645,8 @@
         '<div class="hero-foot"><button class="link" data-act="go" data-arg="custom">Set a monthly budget</button></div></section>';
     }
     let out = '<header class="top"><div><p class="eyebrow">Hi ' + esc(nm(S.me)) + '</p><h1 class="title">' + esc(L.periodLabel(p, t)) + '</h1></div>' +
-      '<div class="duo" aria-hidden="true">' + av('a') + av('b') + '</div></header>' + stagedCard() + hero;
+      '<div class="top-right"><div class="duo" aria-hidden="true">' + av('a') + av('b') + '</div>' +
+      '<button class="icon-btn" data-act="go" data-arg="settings" aria-label="Settings">' + icon('gear') + '</button></div></header>' + stagedCard() + hero;
 
     const items = tabItems();
     if (S.tab && S.tab.open) {
@@ -655,7 +663,7 @@
     const tiles = (C.home.goal !== false ? goalTile() : '') + (C.home.spot !== false ? spotTile() : '');
     if (tiles) out += '<div class="grid2">' + tiles + '</div>';
     if (C.home.recap !== false) {
-      out += '<button class="card row-card" data-act="go" data-arg="recap"><span><span class="k">Recap</span><span class="row-t">Where ' + esc(L.periodLabel(L.shiftPeriod(p, -1), t)) + ' went</span></span>' + icon('arrow') + '</button>';
+      out += '<button class="card row-card" data-act="go" data-arg="recap"><span><span class="k">Insights</span><span class="row-t">Where ' + esc(L.periodLabel(L.shiftPeriod(p, -1), t)) + ' went</span></span>' + icon('arrow') + '</button>';
     }
     if (!S.entries.length) {
       out += '<section class="card note-card"><h2>Start with one spend</h2><p>Tap the plus to add what you spent today, or bring in ' + esc(poss(nm(holder()))) + ' card statement from the Inbox.</p></section>';
@@ -729,7 +737,7 @@
     }).join('');
     const isThisMonth = ym === t.slice(0, 7);
     return '<header class="top"><div><p class="eyebrow">Every spend, day by day</p><h1 class="title">Calendar</h1></div>' +
-      '<button class="link" data-act="go" data-arg="recap">Recap</button></header>' +
+      '<button class="link" data-act="go" data-arg="recap">Insights</button></header>' +
       '<section class="card cal bold"><div class="cal-head"><button class="icon-btn" data-act="calmove" data-arg="-1" aria-label="Previous month">' + icon('left') + '</button>' +
       '<h2>' + L.MONTHS_FULL[c.m] + ' ' + c.y + '</h2><button class="icon-btn" data-act="calmove" data-arg="1" aria-label="Next month">' + icon('right') + '</button></div>' +
       '<div class="cal-dow" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>' +
@@ -1151,11 +1159,29 @@
   }
 
   /* ---------- recap ---------- */
-  function viewRecap() {
+  /* ---------- insights ---------- */
+  /* Month: how one budget period went, with its pace against the budget. Year: the months side by side, where the
+     money goes and which days are big. One chart look throughout: thin columns with rounded tops on a hairline
+     baseline, the picked one darker with its value on a tag, a dashed line for the budget, numbers in a table below. */
+  const WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const monIdx = (ds) => (L.parseYmd(ds).getDay() + 6) % 7;
+  const pIndex = (p) => p.y * 12 + p.m;
+  const shortDay = (ds) => { const d = L.parseYmd(ds); return d.getDate() + ' ' + L.MONTHS[d.getMonth()]; };
+  const cap1 = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  const byCat = (list) => { const o = {}; list.forEach((e) => { const c = e.category || 'Other'; o[c] = (o[c] || 0) + e.amount; }); return o; };
+  const kpi = (label, value, sub) => '<div class="kpi"><p class="k">' + esc(label) + '</p><p class="kpi-v">' + esc(value) + '</p>' + (sub ? '<p class="kpi-s">' + esc(sub) + '</p>' : '') + '</div>';
+
+  function viewInsights() {
+    S.pace = null; S.paceOn = false;
+    return '<header class="top"><div><p class="eyebrow">How you two spend</p><h1 class="title">Insights</h1></div></header>' +
+      '<div class="seg ins-mode" role="group" aria-label="Show">' + segBtn('insmode', 'month', S.insMode !== 'year', 'Month') + segBtn('insmode', 'year', S.insMode === 'year', 'Year') + '</div>' +
+      (S.insMode === 'year' ? insYearView() : insMonthView());
+  }
+
+  function insMonthView() {
     const C = cfg(), t = today(), cur = curPeriod(), p = L.shiftPeriod(cur, S.recapOffset), list = spendsIn(p), total = sumAmt(list), budgetTotal = sumAmt(counted(list));
-    const isCurrent = S.recapOffset === 0, H = holder();
-    let out = '<header class="top"><div><p class="eyebrow">How the month went</p><h1 class="title">Recap</h1></div></header>' +
-      '<div class="period-nav"><button class="icon-btn" data-act="recapmove" data-arg="-1" aria-label="Previous month">' + icon('left') + '</button>' +
+    const isCurrent = S.recapOffset === 0;
+    let out = '<div class="period-nav"><button class="icon-btn" data-act="recapmove" data-arg="-1" aria-label="Previous month">' + icon('left') + '</button>' +
       '<h2>' + esc(L.periodLabel(p, t)) + (isCurrent ? ' so far' : '') + '</h2>' +
       '<button class="icon-btn" data-act="recapmove" data-arg="1" aria-label="Next month"' + (isCurrent ? ' disabled' : '') + '>' + icon('right') + '</button></div>';
     let sticker = '';
@@ -1167,34 +1193,263 @@
       '<p class="hero-sub">' + (C.budget ? (C.budgetSkip.length ? L.fmtRound(budgetTotal) + ' counts towards the ' + L.fmtRound(C.budget) + ' budget · ' : 'of ' + L.fmtRound(C.budget) + ' budget · ') : '') + list.length + (list.length === 1 ? ' spend' : ' spends') + '</p>' + (sticker ? '<div class="hero-foot">' + sticker + '</div>' : '') + '</section>';
     if (!list.length) return out + '<section class="card empty"><h2>Nothing shared yet</h2><p>Spends you add or mark shared for ' + esc(L.periodLabel(p, t)) + ' will show up here.</p></section>';
 
+    // a month in progress is compared with the same stretch of the month before
+    const days = L.daysBetweenInclusive(p.start, p.end), elapsed = isCurrent ? Math.min(days, L.daysBetweenInclusive(p.start, t)) : days;
+    const prevP = L.shiftPeriod(p, -1), cutEnd = L.addDays(prevP.start, elapsed - 1);
+    const prevList = spendsIn({ start: prevP.start, end: isCurrent && cutEnd < prevP.end ? cutEnd : prevP.end }), prevTotal = sumAmt(prevList);
+    const prevName = L.periodLabel(prevP, t), ref = isCurrent ? 'this point in ' + prevName : prevName;
+    let vs = 'New', vsSub = 'nothing in ' + prevName;
+    if (prevTotal) {
+      const pct = Math.round((total - prevTotal) / prevTotal * 100);
+      vs = pct === 0 ? 'Same' : (pct > 0 ? '+' : '−') + Math.abs(pct) + '%';
+      vsSub = 'vs ' + ref;
+    }
+    out += '<div class="kpis">' + kpi('Per day', L.fmtRound(Math.round(total / elapsed)), isCurrent ? 'so far' : 'on average') +
+      kpi('Spends', String(list.length), 'biggest ' + L.fmtRound(Math.max.apply(null, list.map((e) => e.amount)))) + kpi('Change', vs, vsSub) + '</div>';
+    out += paceCard(p, C.budget ? counted(list) : list, isCurrent, C.budget, days, elapsed);
+
     if (C.budget && C.goal.name && !S.readOnly) {
       const left = C.budget - budgetTotal, moved = C.moves[p.start];
       if (typeof moved === 'number') out += '<section class="card note-card"><h2>Moved ' + L.fmtRound(moved) + ' to ' + esc(C.goal.name) + '</h2><p>Nice work, you two.</p></section>';
       else if (left > 0 && !isCurrent) out += '<section class="card note-card"><h2>You came in ' + L.fmtRound(left) + ' under</h2><p style="margin-bottom:12px">Put it towards ' + esc(C.goal.name) + '?</p><button class="btn btn-primary" data-act="move">Move ' + L.fmtRound(left) + ' to ' + esc(C.goal.name) + '</button></section>';
       else if (left > 0) out += '<p class="k" style="margin:0 4px 16px">When ' + esc(L.periodLabel(p, t)) + ' ends you can move what\'s left to ' + esc(C.goal.name) + '.</p>';
     }
-    const cats = {};
-    list.forEach((e) => { const c = e.category || 'Other'; cats[c] = (cats[c] || 0) + e.amount; });
-    const catKeys = Object.keys(cats).sort((a, b) => cats[b] - cats[a]);
-    const cmax = cats[catKeys[0]] || 1;
-    out += '<section class="card"><div class="card-head"><h2>Where it went</h2></div>' + catKeys.map((c) => {
-      const pct = Math.round(cats[c] / total * 100);
-      return '<div class="hbar"><div class="hbar-top"><span>' + esc(c) + '</span><span>' + L.fmt(cats[c]) + ' <span class="muted">' + pct + '%</span></span></div>' +
-        '<div class="hbar-track" aria-hidden="true"><span class="hbar-fill" style="width:' + Math.max(2, Math.round(cats[c] / cmax * 100)) + '%"></span></div></div>';
+    const prevCats = byCat(prevList);
+    out += catCard(list, (c, v) => {
+      const pv = prevCats[c] || 0;
+      if (!pv) return isCurrent ? 'none by this point in ' + prevName : 'none in ' + prevName;
+      const d = v - pv;
+      if (Math.abs(d) < Math.max(1000, pv * 0.05)) return 'about the same as ' + ref;
+      return L.fmtRound(Math.abs(d)) + (d > 0 ? ' more than ' : ' less than ') + ref;
+    });
+    out += whoPaidCard(list) + placesCard(list) + rentSummary(p) + pointsCard(list);
+    const byDay = {};
+    list.forEach((e) => { byDay[e.date] = (byDay[e.date] || 0) + e.amount; });
+    const top = Object.keys(byDay).sort((a, b) => byDay[b] - byDay[a])[0];
+    if (top) out += '<button class="card row-card" data-act="pickday" data-arg="' + top + '"><span><span class="k">Biggest day</span><span class="row-t">' + esc(L.fmtDay(top)) + ', ' + L.fmt(byDay[top]) + '</span></span>' + icon('arrow') + '</button>';
+    return out;
+  }
+
+  /* Running total through the period against an even pace to the budget, with where today's pace ends up. */
+  function paceCard(p, list, isCurrent, budget, days, elapsed) {
+    const byDay = new Array(days).fill(0);
+    list.forEach((e) => { const i = L.daysBetweenInclusive(p.start, e.date) - 1; if (i >= 0 && i < days) byDay[i] += e.amount; });
+    const cum = [], dates = [];
+    let s = 0;
+    for (let i = 0; i < elapsed; i++) { s += byDay[i]; cum.push(s); dates.push(L.addDays(p.start, i)); }
+    const proj = isCurrent && elapsed >= 3 && elapsed < days ? Math.round(s / elapsed * days) : null;
+    const W = 320, Hh = 176, x0 = 4, x1 = 316, yb = 150, yt = 24;
+    const yMax = Math.max(budget || 0, s, proj || 0, 100) * 1.1;
+    const X = (k) => x0 + k / days * (x1 - x0), Y = (v) => yb - v / yMax * (yb - yt), f = (n) => n.toFixed(1);
+    const px = cum.map((v, i) => X(i + 1)), py = cum.map((v) => Y(v)), lx = px[px.length - 1], ly = py[py.length - 1];
+    let def;
+    if (isCurrent) {
+      def = '<strong>' + L.fmt(s) + '</strong> so far';
+      if (proj != null) def += ', on track for about ' + L.fmtRound(proj) + (budget ? (proj > budget ? ', ' + L.fmtRound(proj - budget) + ' over budget' : ', inside the budget') : '');
+    } else {
+      def = 'Finished at <strong>' + L.fmt(s) + '</strong>' + (budget ? ', ' + (s <= budget ? L.fmtRound(budget - s) + ' under budget' : L.fmtRound(s - budget) + ' over budget') : '');
+    }
+    S.pace = { W, x0, x1, days, px, py, cum, byDay: byDay.slice(0, elapsed), dates, def };
+    const line = 'M' + f(X(0)) + ' ' + yb + px.map((x, i) => ' L' + f(x) + ' ' + f(py[i])).join('');
+    let svg = '<svg viewBox="0 0 ' + W + ' ' + Hh + '" aria-hidden="true"><line class="pc-base" x1="' + x0 + '" y1="' + yb + '" x2="' + x1 + '" y2="' + yb + '"/>';
+    if (budget) {
+      svg += '<line class="pc-budget" x1="' + f(X(0)) + '" y1="' + yb + '" x2="' + f(X(days)) + '" y2="' + f(Y(budget)) + '"/>';
+    }
+    svg += '<path class="pc-area" d="' + line + ' L' + f(lx) + ' ' + yb + ' Z"/><path class="pc-line" d="' + line + '"/>';
+    if (proj != null) svg += '<line class="pc-proj" x1="' + f(lx) + '" y1="' + f(ly) + '" x2="' + f(X(days)) + '" y2="' + f(Y(proj)) + '"/>';
+    svg += '<circle class="pc-dot" cx="' + f(lx) + '" cy="' + f(ly) + '" r="4.5"/>' +
+      '<line class="pc-hair" id="pcHair" x1="0" y1="' + (yt - 8) + '" x2="0" y2="' + yb + '" visibility="hidden"/><circle class="pc-dot" id="pcHairDot" cx="0" cy="0" r="4.5" visibility="hidden"/>' +
+      '<text class="pc-t" x="' + x0 + '" y="' + (Hh - 6) + '">' + esc(shortDay(p.start)) + '</text><text class="pc-t" x="' + x1 + '" y="' + (Hh - 6) + '" text-anchor="end">' + esc(shortDay(p.end)) + '</text></svg>';
+    const rows = [];
+    for (let i = 0; i < elapsed; i++) if (byDay[i]) rows.push([L.fmtDay(dates[i]), L.fmt(byDay[i]), L.fmt(cum[i])]);
+    return '<section class="card"><div class="card-head"><h2>' + (isCurrent ? 'Pace' : 'How it built up') + '</h2></div>' +
+      '<p class="pc-read" id="paceRead">' + def + '</p><div class="pace">' + svg + '</div>' +
+      ((budget || proj != null) ? '<div class="keys">' + (budget ? '<p class="cols-key"><span class="cols-key-l" aria-hidden="true"></span>Even pace to the ' + esc(L.fmtRound(budget)) + ' budget</p>' : '') +
+        (proj != null ? '<p class="cols-key"><span class="cols-key-d" aria-hidden="true"></span>Where this pace ends up</p>' : '') + '</div>' : '') +
+      '<p class="hint">Touch the chart to see any day.</p>' +
+      tableView(['Day', 'Spent', 'Running total'], rows) + '</section>';
+  }
+  function paceAt(ev) {
+    const P = S.pace, box = P && ev.target && ev.target.closest ? ev.target.closest('.pace') : null;
+    if (!box) return false;
+    const svg = box.querySelector('svg'), r = svg && svg.getBoundingClientRect();
+    if (!r || !r.width || !P.cum.length) return false;
+    const fx = (ev.clientX - r.left) / r.width * P.W;
+    const k = Math.max(1, Math.min(P.cum.length, Math.round((fx - P.x0) / (P.x1 - P.x0) * P.days)));
+    const hair = document.getElementById('pcHair'), dot = document.getElementById('pcHairDot'), read = document.getElementById('paceRead');
+    if (!hair || !dot || !read) return false;
+    const x = P.px[k - 1].toFixed(1);
+    hair.setAttribute('x1', x); hair.setAttribute('x2', x); hair.setAttribute('visibility', 'visible');
+    dot.setAttribute('cx', x); dot.setAttribute('cy', P.py[k - 1].toFixed(1)); dot.setAttribute('visibility', 'visible');
+    read.innerHTML = '<strong>' + L.fmt(P.cum[k - 1]) + '</strong> by ' + esc(L.fmtDay(P.dates[k - 1])) + ' · ' + (P.byDay[k - 1] ? L.fmt(P.byDay[k - 1]) + ' that day' : 'nothing that day');
+    return true;
+  }
+  function paceReset() {
+    S.paceOn = false;
+    if (!S.pace) return;
+    ['pcHair', 'pcHairDot'].forEach((id) => { const el = document.getElementById(id); if (el) el.setAttribute('visibility', 'hidden'); });
+    const read = document.getElementById('paceRead');
+    if (read) read.innerHTML = S.pace.def;
+  }
+
+  function insYearData() {
+    const t = today(), y = Number(t.slice(0, 4)) + S.insYearOff;
+    let p0 = L.periodFor(y + '-01-01', cfg().resetDay);
+    if (p0.start < y + '-01-01') p0 = L.shiftPeriod(p0, 1);
+    const ps = [];
+    for (let i = 0; i < 12; i++) ps.push(L.shiftPeriod(p0, i));
+    const months = ps.map((p, i) => {
+      const future = p.start > t, list = future ? [] : spendsIn(p);
+      return { i, p, future, current: L.inPeriod(t, p), total: sumAmt(list), towards: sumAmt(counted(list)), n: list.length };
+    });
+    const range = { start: ps[0].start, end: ps[11].end };
+    return { y, ps, months, range, list: spendsIn(range) };
+  }
+  function insSelMonth(Y) {
+    const m = S.insSel != null ? Y.months[S.insSel] : null;
+    if (m && !m.future) return m.i;
+    const cur = Y.months.filter((x) => x.current)[0];
+    if (cur) return cur.i;
+    for (let i = 11; i >= 0; i--) if (!Y.months[i].future && Y.months[i].n) return i;
+    return 0;
+  }
+  function insYearView() {
+    const C = cfg(), t = today(), Y = insYearData(), curYear = S.insYearOff === 0;
+    const firstDate = S.entries.reduce((m, e) => (e.date < m ? e.date : m), t);
+    let out = '<div class="period-nav"><button class="icon-btn" data-act="insyear" data-arg="-1" aria-label="Previous year"' + (Y.y > Number(firstDate.slice(0, 4)) ? '' : ' disabled') + '>' + icon('left') + '</button>' +
+      '<h2>' + Y.y + (curYear ? ' so far' : '') + '</h2>' +
+      '<button class="icon-btn" data-act="insyear" data-arg="1" aria-label="Next year"' + (curYear ? ' disabled' : '') + '>' + icon('right') + '</button></div>';
+    const list = Y.list, total = sumAmt(list), started = Y.months.filter((m) => !m.future), done = started.filter((m) => !m.current);
+    out += '<section class="hero"><span class="blob" aria-hidden="true"></span><p class="hero-k">Shared spend</p><p class="hero-v">' + L.fmtRound(total) + '</p>' +
+      '<p class="hero-sub">' + list.length + (list.length === 1 ? ' spend' : ' spends') + ' in ' + Y.y + (curYear ? ' so far' : '') + '</p></section>';
+    if (!list.length) return out + '<section class="card empty"><h2>Nothing shared yet</h2><p>Spends from ' + Y.y + ' will show up here.</p></section>';
+    const basis = done.length ? done : started, avgM = Math.round(basis.reduce((a, m) => a + m.total, 0) / basis.length), useB = C.budget > 0;
+    let k2;
+    if (useB && done.length) {
+      const under = done.filter((m) => m.towards <= C.budget).length;
+      k2 = kpi('Under budget', under + ' of ' + done.length, done.length === 1 ? 'month' : 'months');
+    } else {
+      const bm = started.slice().sort((a, b) => b.total - a.total)[0];
+      k2 = kpi('Biggest month', L.fmtRound(bm.total), L.MONTHS_FULL[bm.p.m]);
+    }
+    out += '<div class="kpis">' + kpi('Per month', L.fmtRound(avgM), done.length ? 'on average' : 'so far') + k2 + kpi('Typical spend', L.fmtRound(Math.round(total / list.length)), 'on average') + '</div>';
+    const rows = started.map((m) => [L.periodLabel(m.p, t) + (m.current ? ' so far' : ''), L.fmt(m.total),
+      useB ? (C.budget - m.towards >= 0 ? L.fmtRound(C.budget - m.towards) + ' under' : L.fmtRound(m.towards - C.budget) + ' over') : String(m.n)]);
+    out += '<section class="card"><div class="card-head"><h2>Month by month</h2></div>' +
+      (useB && C.budgetSkip.length ? '<p class="hint" style="margin:-6px 0 0">Bars show what counts towards the budget, so they leave out ' + esc(listNames(C.budgetSkip)) + '.</p>' : '') +
+      monthsChart(Y) + tableView(['Month', 'Shared spend', useB ? 'Vs budget' : 'Spends'], rows) + '</section>';
+    out += catCard(list, (c, v) => L.fmtRound(Math.round(v / started.length)) + ' a month on average');
+    const w = weekdayStats(list, Y.range), all = w.days ? sumAmt(list) / w.days : 0, top = w.avg.indexOf(Math.max.apply(null, w.avg));
+    const lead = all && w.avg[top] >= all * 1.25 ? WEEK[top] + 's are your big day, at about ' + (Math.round(w.avg[top] / all * 10) / 10) + ' times an average day.' : 'Spending is spread fairly evenly across the week.';
+    out += '<section class="card"><div class="card-head"><h2>Days of the week</h2></div><p class="muted">' + esc(lead) + '</p>' + daysChart(list, Y.range) +
+      tableView(['Day', 'Average', 'Total'], WEEK.map((d, i) => [d, L.fmt(w.avg[i]), L.fmt(w.tot[i])])) + '</section>';
+    return out + whoPaidCard(list) + placesCard(list) + rentSummary(Y.range) + pointsCard(list);
+  }
+
+  /* Columns: one series, the picked column darker with its value on a tag, an optional dashed reference line. */
+  function colsHtml(o) {
+    const n = o.items.length, H = (v) => Math.max(0, Math.min(100, v / o.yMax * 100)).toFixed(1);
+    let h = '<div class="cols" id="' + o.id + '" style="--n:' + n + '"><div class="cols-plot" role="group" aria-label="' + esc(o.label) + '">';
+    if (o.ref) h += '<span class="cols-ref" style="bottom:' + H(o.ref) + '%" aria-hidden="true"></span>';
+    o.items.forEach((it, i) => {
+      if (it.off) { h += '<span class="col off" aria-hidden="true"></span>'; return; }
+      const on = i === o.sel, hh = H(it.v);
+      h += '<button type="button" class="col' + (on ? ' on' : '') + '" data-act="' + o.act + '" data-arg="' + i + '" aria-pressed="' + on + '" aria-label="' + esc(it.aria || it.name + ', ' + L.fmt(it.v)) + '">' +
+        '<span class="col-fill" style="height:' + hh + '%"></span>' +
+        (on ? '<span class="col-tip' + (i === 0 ? ' l' : i === n - 1 ? ' r' : '') + '" style="bottom:' + hh + '%">' + esc(L.fmtRound(it.v)) + '</span>' : '') + '</button>';
+    });
+    h += '</div><div class="cols-x" aria-hidden="true">' + o.items.map((it, i) => '<span' + (i === o.sel ? ' class="on"' : '') + '>' + esc(it.x) + '</span>').join('') + '</div>';
+    if (o.ref) h += '<p class="cols-key"><span class="cols-key-l" aria-hidden="true"></span>' + esc(o.refLabel) + '</p>';
+    return h + '<p class="cols-cap">' + o.cap + '</p></div>';
+  }
+  function monthsChart(Y) {
+    const C = cfg(), t = today(), useB = C.budget > 0, sel = insSelMonth(Y), m = Y.months[sel], v = (x) => (useB ? x.towards : x.total);
+    const started = Y.months.filter((x) => !x.future), avg = started.length ? Math.round(started.reduce((a, x) => a + v(x), 0) / started.length) : 0;
+    const ref = useB ? C.budget : avg, yMax = Math.max.apply(null, [ref, 100].concat(Y.months.map(v))) * 1.12;
+    let cap = '<strong>' + esc(L.periodLabel(m.p, t) + (m.current ? ' so far' : '')) + '</strong>: ' + L.fmt(m.total) + ' across ' + m.n + (m.n === 1 ? ' spend' : ' spends');
+    if (useB) { const d = C.budget - m.towards; cap += ', ' + (d >= 0 ? L.fmtRound(d) + (m.current ? ' left' : ' under budget') : L.fmtRound(-d) + ' over budget'); }
+    cap += '. <button class="link sm" data-act="insopen" data-arg="' + sel + '">Open ' + esc(m.p.r === 1 ? L.MONTHS_FULL[m.p.m] : 'this month') + '</button>';
+    return colsHtml({ id: 'insMonths', act: 'insbar', label: 'Shared spend by month', sel, yMax, ref, refLabel: (useB ? 'Budget ' : 'Average ') + L.fmtRound(ref), cap,
+      items: Y.months.map((x) => ({ x: L.MONTHS[x.p.m].charAt(0), name: L.periodLabel(x.p, t), v: v(x), off: x.future })) });
+  }
+  function weekdayStats(list, range) {
+    const t = today(), first = list.reduce((m, e) => (e.date < m ? e.date : m), range.end);
+    const from = first > range.start ? first : range.start, to = range.end < t ? range.end : t;
+    const occ = [0, 0, 0, 0, 0, 0, 0], tot = [0, 0, 0, 0, 0, 0, 0];
+    for (let d = from, g = 0; d <= to && g < 400; d = L.addDays(d, 1), g++) occ[monIdx(d)]++;
+    list.forEach((e) => { tot[monIdx(e.date)] += e.amount; });
+    return { occ, tot, avg: tot.map((v, i) => (occ[i] ? Math.round(v / occ[i]) : 0)), days: occ.reduce((a, b) => a + b, 0) };
+  }
+  function daysChart(list, range) {
+    const w = weekdayStats(list, range), all = w.days ? Math.round(sumAmt(list) / w.days) : 0;
+    const top = w.avg.indexOf(Math.max.apply(null, w.avg)), sel = S.insDay != null ? S.insDay : top;
+    const cap = '<strong>' + WEEK[sel] + 's</strong>: ' + L.fmt(w.avg[sel]) + ' on average, ' + L.fmt(w.tot[sel]) + ' over ' + w.occ[sel] + ' ' + WEEK[sel] + (w.occ[sel] === 1 ? '' : 's') + '.';
+    return colsHtml({ id: 'insDays', act: 'insday', label: 'Average spend by day of the week', sel, yMax: Math.max.apply(null, [all, 100].concat(w.avg)) * 1.15, ref: all, refLabel: 'Average day ' + L.fmtRound(all), cap,
+      items: WEEK.map((d, i) => ({ x: d.charAt(0), aria: d + ', ' + L.fmt(w.avg[i]) + ' on average', v: w.avg[i] })) });
+  }
+  /* Picking a column redraws just that chart, keeping focus on the column for keyboard use. */
+  function insPick(kind, i) {
+    const id = kind === 'm' ? 'insMonths' : 'insDays', box = document.getElementById(id);
+    if ((kind === 'm' ? S.insSel : S.insDay) === i && box && box.querySelector('.col.on[data-arg="' + i + '"]')) return;
+    if (kind === 'm') S.insSel = i; else S.insDay = i;
+    if (!box) return;
+    const had = box.contains(document.activeElement), Y = insYearData();
+    box.outerHTML = kind === 'm' ? monthsChart(Y) : daysChart(Y.list, Y.range);
+    if (had) { const b = document.querySelector('#' + id + ' [data-arg="' + i + '"]'); if (b) b.focus({ preventScroll: true }); }
+  }
+  function tableView(head, rows) {
+    return '<details class="tv"><summary>Show the numbers</summary><table><thead><tr>' + head.map((h, i) => '<th scope="col"' + (i ? ' class="n"' : '') + '>' + esc(h) + '</th>').join('') + '</tr></thead><tbody>' +
+      rows.map((r) => '<tr>' + r.map((c, i) => (i ? '<td class="n">' + esc(c) + '</td>' : '<th scope="row">' + esc(c) + '</th>')).join('') + '</tr>').join('') + '</tbody></table></details>';
+  }
+  function catCard(list, noteFn) {
+    const total = sumAmt(list) || 1, cats = byCat(list), keys = Object.keys(cats).sort((a, b) => cats[b] - cats[a]), cmax = cats[keys[0]] || 1;
+    return '<section class="card"><div class="card-head"><h2>Where it went</h2></div>' + keys.map((c) => {
+      const note = noteFn ? noteFn(c, cats[c]) : '';
+      return '<div class="hbar"><div class="hbar-top"><span>' + esc(c) + '</span><span>' + L.fmt(cats[c]) + ' <span class="muted">' + Math.round(cats[c] / total * 100) + '%</span></span></div>' +
+        '<div class="hbar-track" aria-hidden="true"><span class="hbar-fill" style="width:' + Math.max(2, Math.round(cats[c] / cmax * 100)) + '%"></span></div>' +
+        (note ? '<p class="hbar-note">' + esc(note) + '</p>' : '') + '</div>';
     }).join('') + '</section>';
-    const paid = { a: 0, b: 0 };
+  }
+  function whoPaidCard(list) {
+    const C = cfg(), paid = { a: 0, b: 0 };
     list.forEach((e) => { paid.a += (e.paid && e.paid.a) || 0; paid.b += (e.paid && e.paid.b) || 0; });
-    const pmax = Math.max(1, paid.a, paid.b);
-    out += '<section class="card"><div class="card-head"><h2>Who paid</h2></div>' + ['a', 'b'].map((x) => '<div class="hbar"><div class="hbar-top"><span>' + esc(nm(x)) + '</span><span>' + L.fmt(paid[x]) + '</span></div>' +
+    const pmax = Math.max(1, paid.a, paid.b), sum = paid.a + paid.b || 1;
+    return '<section class="card"><div class="card-head"><h2>Who paid</h2></div>' + ['a', 'b'].map((x) => '<div class="hbar"><div class="hbar-top"><span>' + esc(nm(x)) + '</span><span>' + L.fmt(paid[x]) + ' <span class="muted">' + Math.round(paid[x] / sum * 100) + '%</span></span></div>' +
       '<div class="hbar-track" aria-hidden="true"><span class="hbar-fill" style="width:' + Math.max(paid[x] ? 2 : 0, Math.round(paid[x] / pmax * 100)) + '%;background:' + colOf(x).main + '"></span></div></div>').join('') +
       '<p class="hint">Each of you owes ' + C.splitA + '/' + (100 - C.splitA) + ' unless you set a custom split. The balance on Home keeps track.</p></section>';
-    const rentIn = S.entries.filter((e) => e.kind === 'rent' && L.inPeriod(e.date, p));
-    if (rentIn.length) {
-      const rf = payerOf(rentIn[rentIn.length - 1]) === 'a' ? 'a' : 'b';
-      out += '<section class="card"><div class="card-head"><h2>Rent</h2><span class="amt">' + L.fmt(sumAmt(rentIn)) + '</span></div><p class="muted">' + esc(nm(rf)) + ' to ' + esc(nm(other(rf))) + '. It\'s in the balance on Home, not in shared spend.</p></section>';
+  }
+  /* Places you keep going back to: names seen at least twice, most visits first. */
+  function placesCard(list) {
+    const g = {};
+    list.forEach((e) => {
+      const name = String(e.title || '').trim();
+      if (!name) return;
+      const k = name.toLowerCase().replace(/\s+/g, ' '), x = g[k] || (g[k] = { name, count: 0, total: 0, last: '' });
+      x.count++; x.total += e.amount;
+      if (e.date >= x.last) { x.last = e.date; x.name = name; }
+    });
+    const top = Object.keys(g).map((k) => g[k]).filter((x) => x.count >= 2).sort((a, b) => b.count - a.count || b.total - a.total).slice(0, 5);
+    if (!top.length) return '';
+    return '<section class="card"><div class="card-head"><h2>Where you go most</h2></div><ul class="places">' + top.map((x) =>
+      '<li class="place"><span class="place-n">' + esc(cap1(x.name)) + '</span><span class="place-c">' + x.count + ' times</span><span class="place-t">' + L.fmt(x.total) + '</span></li>').join('') + '</ul></section>';
+  }
+  function rentSummary(range) {
+    const rentIn = S.entries.filter((e) => e.kind === 'rent' && L.inPeriod(e.date, range));
+    if (!rentIn.length) return '';
+    const rf = payerOf(rentIn[rentIn.length - 1]) === 'a' ? 'a' : 'b';
+    return '<section class="card"><div class="card-head"><h2>Rent</h2><span class="amt">' + L.fmt(sumAmt(rentIn)) + '</span></div><p class="muted">' + esc(nm(rf)) + ' to ' + esc(nm(other(rf))) + '. It\'s in the balance on Home, not in shared spend.</p></section>';
+  }
+  function pointsCard(list) {
+    const C = cfg(), H = holder(), cardList = list.filter((e) => e.onCard), onCard = sumAmt(cardList), est = L.estimatePoints(cardList, C.card);
+    let out = '<section class="card"><div class="card-head"><h2>' + esc(programLabel()) + ' points</h2></div>';
+    if (C.card.pointsBal != null && C.card.pointsAsOf) {
+      // every card spend earns, shared or not, so the running balance counts all of them since the statement date
+      const since = S.entries.filter((e) => e.kind === 'expense' && e.onCard && e.date > C.card.pointsAsOf && e.date <= today());
+      const e2 = L.estimatePoints(since, C.card), add = e2 ? e2.velocity : 0;
+      out += '<div class="stat"><span class="muted" style="font-weight:700">Balance now, about</span><span class="big">' + (C.card.pointsBal + add).toLocaleString('en-AU') + '</span></div>' +
+        '<p class="hint" style="margin-bottom:14px">' + C.card.pointsBal.toLocaleString('en-AU') + ' on ' + esc(dateY(C.card.pointsAsOf)) +
+        (e2 ? (add ? ', plus about ' + add.toLocaleString('en-AU') + ' from ' + since.length + (since.length === 1 ? ' card spend' : ' card spends') + ' since.' : '. No card spends brought in since then yet.') : '. Pick how the card earns in Customise to keep it going.') + '</p>';
     }
-    const cardList = list.filter((e) => e.onCard), onCard = sumAmt(cardList), est = L.estimatePoints(cardList, C.card);
-    out += '<section class="card"><div class="card-head"><h2>' + esc(programLabel()) + ' points</h2></div>';
     if (est) {
       const kinds = [];
       if (est.byType.everyday) kinds.push(L.fmt(est.byType.everyday) + ' at supermarkets, petrol and utilities');
@@ -1208,11 +1463,27 @@
       out += '<p class="muted" style="margin-bottom:8px">' + L.fmt(onCard) + ' of shared spend went on ' + esc(poss(nm(H))) + ' ' + esc(cardLabel()) + '.</p>' +
         '<button class="link" data-act="go" data-arg="custom">Pick how the card earns points</button>';
     }
-    out += '</section>';
-    const byDay = {};
-    list.forEach((e) => { byDay[e.date] = (byDay[e.date] || 0) + e.amount; });
-    const top = Object.keys(byDay).sort((a, b) => byDay[b] - byDay[a])[0];
-    if (top) out += '<button class="card row-card" data-act="pickday" data-arg="' + top + '"><span><span class="k">Biggest day</span><span class="row-t">' + esc(L.fmtDay(top)) + ', ' + L.fmt(byDay[top]) + '</span></span>' + icon('arrow') + '</button>';
+    return out + '</section>';
+  }
+
+  /* ---------- settings ---------- */
+  function viewSettings() {
+    const fb = S.mode === 'firebase', them = esc(nm(other(S.me || 'a')));
+    let out = '<header class="top"><div><p class="eyebrow">Our household</p><h1 class="title">Settings</h1></div></header>';
+    out += '<button class="card row-card" data-act="go" data-arg="custom"><span><span class="row-t">Customise</span><span class="k">Colours, names, budget, rent, card and categories</span></span>' + icon('arrow') + '</button>';
+    if (fb) {
+      out += '<section class="card"><div class="card-head"><h2>Account</h2></div><p class="muted">Signed in as <strong>' + esc((S.authUser && S.authUser.email) || '') + '</strong></p>' +
+        '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="auout">Sign out</button></section>';
+    }
+    out += '<section class="card"><div class="card-head"><h2>Sharing</h2></div>' + (fb
+      ? '<p>To use this together, send ' + them + ' the link to this app. ' + them + ' makes a login with the email you put in your Firebase rules.</p>'
+      : '<p>To use this together, share the app with ' + them + ' by email as an <strong>Editor</strong>. Don\'t turn on a public link: anyone with it could read your spends, and it stops outside editors from saving.</p>') + '</section>';
+    out += '<section class="card"><div class="card-head"><h2>Your data</h2></div><button class="btn btn-secondary btn-block" data-act="copycsv">Copy all spends as CSV</button><p class="hint">' +
+      S.entries.length + (S.entries.length === 1 ? ' spend' : ' spends') + ' saved. Paste into a spreadsheet for your own records.</p></section>';
+    if (fb) {
+      out += '<section class="card"><div class="card-head"><h2>App</h2></div><p class="muted" style="margin-bottom:12px">Updates go live without reinstalling. This loads the newest version now.</p>' +
+        '<button class="btn btn-secondary btn-block" data-act="reload">Get the latest version</button></section>';
+    }
     return out;
   }
 
@@ -1227,7 +1498,8 @@
       card: {
         name: C.card.name, holder: C.card.holder, earns: C.card.earns,
         rates: C.card.earns ? strRates(C.card.rates && C.card.rates.intl != null ? C.card.rates : L.CARD_PRESETS[C.card.earns].rates) : { intl: '', everyday: '', other: '', after: '' },
-        ratio: String(C.card.ratio || 3)
+        ratio: String(C.card.ratio || 3),
+        pointsBal: C.card.pointsBal != null ? C.card.pointsBal.toLocaleString('en-AU') : '', pointsAsOf: C.card.pointsAsOf || ''
       },
       home: { week: C.home.week !== false, goal: C.home.goal !== false, spot: C.home.spot !== false, recap: C.home.recap !== false },
       spot: { type: C.spot.type === 'countdown' ? 'countdown' : 'note', text: String(C.spot.text || ''), date: String(C.spot.date || '') },
@@ -1261,6 +1533,10 @@
       }
       if (D.card.earns === 'altitude') { ratio = parseFloat(D.card.ratio); if (!(ratio > 0 && ratio <= 20)) return { error: 'Altitude per Velocity Point needs to be a number, like 3.' }; }
     }
+    const balStr = String(D.card.pointsBal || '').replace(/[\s,]/g, ''), pointsBal = balStr ? Number(balStr) : null;
+    if (balStr && !(Number.isInteger(pointsBal) && pointsBal >= 0)) return { error: 'The points balance needs to be a whole number, like 50000.' };
+    const pointsAsOf = /^\d{4}-\d{2}-\d{2}$/.test(D.card.pointsAsOf || '') ? D.card.pointsAsOf : '';
+    if (pointsBal != null && !pointsAsOf) return { error: 'Add the date the points balance is from.' };
     const rentAmt = money(D.rent.amount, 'Rent'); if (rentAmt.err) return { error: rentAmt.err };
     const rentStart = /^\d{4}-\d{2}-\d{2}$/.test(D.rent.start || '') ? D.rent.start : '';
     if (D.rent.on && !rentAmt.v) return { error: 'Add how much the rent is, like 300.' };
@@ -1273,7 +1549,7 @@
         budget: budget.v, resetDay: L.clamp(parseInt(D.resetDay, 10) || 1, 1, 28), splitA: L.clamp(D.splitA, 0, 100),
         categories: D.categories.slice(0, 30),
         goal: { name: String(D.goal.name || '').trim().slice(0, 40), target: target.v, saved: saved.v || 0 },
-        card: { name: String(D.card.name || '').trim().slice(0, 40), holder: D.card.holder === 'a' ? 'a' : 'b', program: D.card.earns ? L.CARD_PRESETS[D.card.earns].program : cfg().card.program, earns: D.card.earns || null, rates, ratio, rate: null },
+        card: { name: String(D.card.name || '').trim().slice(0, 40), holder: D.card.holder === 'a' ? 'a' : 'b', program: D.card.earns ? L.CARD_PRESETS[D.card.earns].program : cfg().card.program, earns: D.card.earns || null, rates, ratio, rate: null, pointsBal, pointsAsOf },
         home: { week: !!D.home.week, goal: !!D.home.goal, spot: !!D.home.spot, recap: !!D.home.recap },
         spot: { type: D.spot.type, text: String(D.spot.text || '').trim().slice(0, 60), date: spotDate },
         budgetSkip: D.budgetSkip.filter((c) => typeof c === 'string').slice(0, 30),
@@ -1308,7 +1584,7 @@
     const sw = (key, label) => '<label class="switch-row"><span>' + label + '</span><input type="checkbox" class="switch" role="switch" data-bind="draft.home.' + key + '" data-change="dirty"' + (D.home[key] ? ' checked' : '') + ro + '></label>';
     const days = []; for (let i = 1; i <= 28; i++) days.push('<option value="' + i + '"' + (String(i) === String(D.resetDay) ? ' selected' : '') + '>' + ordinal(i) + ' of the month</option>');
     const unused = SUGGESTED.filter((c) => D.categories.indexOf(c) < 0);
-    let out = '<header class="top"><div><p class="eyebrow">Make it yours</p><h1 class="title">Customise</h1></div></header>';
+    let out = '<header class="top"><div><button class="back-link" data-act="go" data-arg="settings">' + icon('left') + 'Settings</button><p class="eyebrow">Make it yours</p><h1 class="title">Customise</h1></div></header>';
     out += '<section class="card"><div class="card-head"><h2>Colour scheme</h2></div>' + schemePicker('cscheme', D.scheme) +
       '<p class="hint">Tap one to preview the whole app, then save to keep it for both of you.</p></section>';
     out += '<section class="card"><div class="card-head"><h2>You two</h2></div>' + ['a', 'b'].map((p) =>
@@ -1342,19 +1618,16 @@
           (D.card.earns === 'altitude' ? '<label class="field"><span>Altitude per Velocity Point</span><input class="input" id="drratio" inputmode="decimal" data-bind="draft.card.ratio" data-change="dirty" value="' + esc(D.card.ratio) + '"' + ro + '></label>' : '') + '</div>' +
           '<p class="hint" style="margin:-6px 0 16px">' + L.CARD_PRESETS[D.card.earns].unit + ' per $1, filled in with Westpac\'s published rates. ' + (S.readOnly ? '' : '<button class="link sm" data-act="cpreset">Use Westpac\'s rates</button>') + '</p>'
         : '<p class="hint" style="margin:-4px 0 16px">' + EARNS_HINT + ' Pick one to see a points estimate.</p>') +
+      '<div class="row2"><label class="field"><span>Points balance</span><input class="input" id="dpbal" inputmode="numeric" placeholder="e.g. 50,000" data-bind="draft.card.pointsBal" data-change="dirty" value="' + esc(D.card.pointsBal) + '"' + ro + '></label>' +
+      '<label class="field"><span>As of</span><input class="input" id="dpasof" type="date" data-bind="draft.card.pointsAsOf" data-change="dirty" value="' + esc(D.card.pointsAsOf) + '"' + ro + '></label></div>' +
+      '<p class="hint" style="margin:-6px 0 16px">From a statement or the bank app. Insights adds an estimate for card spends after that date.</p>' +
       '<label class="field" style="margin:0"><span>Bring in card spends from</span><input class="input" id="dcfrom" type="date" data-bind="draft.cardFrom" data-change="dirty" value="' + esc(D.cardFrom) + '"' + ro + '><p class="hint">Westpac imports leave out card spends before this date. Leave it empty to bring in everything.</p></label></section>';
-    out += '<section class="card"><div class="card-head"><h2>Home screen</h2></div>' + sw('week', 'Last 7 days') + sw('goal', 'Our goal') + sw('spot', 'Your spot') + sw('recap', 'Recap link') + '</section>';
+    out += '<section class="card"><div class="card-head"><h2>Home screen</h2></div>' + sw('week', 'Last 7 days') + sw('goal', 'Our goal') + sw('spot', 'Your spot') + sw('recap', 'Insights link') + '</section>';
     out += '<section class="card"><div class="card-head"><h2>Your spot</h2></div><p class="muted" style="margin-bottom:12px">A space on Home for whatever you like: a note to each other or a countdown.</p>' +
       '<fieldset><legend class="sr">Type</legend><div class="seg">' + segBtn('cspot', 'note', D.spot.type === 'note', 'Note') + segBtn('cspot', 'countdown', D.spot.type === 'countdown', 'Countdown') + '</div></fieldset>' +
       '<label class="field"><span>' + (D.spot.type === 'countdown' ? 'Counting down to' : 'Note') + '</span><input class="input" id="dstext" maxlength="60" placeholder="' + (D.spot.type === 'countdown' ? 'Our holiday' : 'No takeaway this week') + '" data-bind="draft.spot.text" data-change="dirty" value="' + esc(D.spot.text) + '"' + ro + '></label>' +
       (D.spot.type === 'countdown' ? '<label class="field"><span>Date</span><input class="input" id="dsdate" type="date" data-bind="draft.spot.date" data-change="dirty" value="' + esc(D.spot.date) + '"' + ro + '></label>' : '') + '</section>';
     out += welcomeCard(D, ro);
-    out += '<section class="card"><div class="card-head"><h2>Sharing and data</h2></div>' +
-      (S.mode === 'firebase'
-        ? '<p style="margin-bottom:10px">To use this together, send ' + esc(nm(other(S.me))) + ' the link to this app. ' + esc(nm(other(S.me))) + ' makes a login with the email you put in your Firebase rules.</p>' +
-          '<p class="hint" style="margin:-4px 0 14px">Signed in as ' + esc((S.authUser && S.authUser.email) || '') + '. <button class="link sm" data-act="auout">Sign out</button></p>'
-        : '<p style="margin-bottom:10px">To use this together, share the app with ' + esc(nm(other(S.me))) + ' by email as an <strong>Editor</strong>. Don\'t turn on a public link: anyone with it could read your spends, and it stops outside editors from saving.</p>') +
-      '<button class="btn btn-secondary btn-block" data-act="copycsv">Copy all spends as CSV</button><p class="hint">' + S.entries.length + (S.entries.length === 1 ? ' spend' : ' spends') + ' saved. Paste into a spreadsheet for your own records.</p></section>';
     if (!S.readOnly) {
       out += '<div class="savebar above-nav">' + (D.error ? '<p class="err-text" role="alert">' + esc(D.error) + '</p>' : '') +
         '<button class="btn btn-primary btn-block" data-act="savecustom">Save changes</button></div>';
@@ -1674,7 +1947,8 @@
     if (S.view === 'custom' && v !== 'custom' && draftDirty()) { openDialog({ type: 'leave', to: v }); return; }
     if (v === 'custom') { S.draft = makeDraft(); S.draftSaved = false; }
     if (v === 'cal' && !S.cal) initCal();
-    if (v === 'recap' && S.view !== 'recap') S.recapOffset = S.view === 'home' ? -1 : 0;
+    if (v === 'recap') { S.recapOffset = S.view === 'home' ? -1 : 0; S.insMode = 'month'; v = 'insights'; }
+    else if (v === 'insights' && S.view !== 'insights') { S.recapOffset = 0; S.insYearOff = 0; S.insSel = null; S.insDay = null; }
     if (v !== 'add') S.add = null;
     S.view = v; render(); window.scrollTo(0, 0);
   }
@@ -1724,6 +1998,15 @@
     tabclose: () => openDialog({ type: 'tabclose', title: 'Day out', category: null }),
     tabdiscard: () => openDialog({ type: 'tabdiscard' }),
     recapmove: (n) => { S.recapOffset = Math.min(0, S.recapOffset + Number(n)); render(); },
+    insmode: (m) => { S.insMode = m === 'year' ? 'year' : 'month'; render(); },
+    insyear: (n) => { S.insYearOff = Math.min(0, S.insYearOff + Number(n)); S.insSel = null; S.insDay = null; render(); },
+    insbar: (i) => insPick('m', Number(i)),
+    insday: (i) => insPick('d', Number(i)),
+    insopen: (i) => {
+      const p = insYearData().ps[Number(i)];
+      if (!p) return;
+      S.recapOffset = Math.min(0, pIndex(p) - pIndex(curPeriod())); S.insMode = 'month'; render(); window.scrollTo(0, 0);
+    },
     move: () => {
       const C = cfg(), p = L.shiftPeriod(curPeriod(), S.recapOffset), left = C.budget - sumAmt(counted(spendsIn(p)));
       if (!(left > 0) || typeof C.moves[p.start] === 'number') return;
@@ -2066,6 +2349,17 @@
     const fn = CHANGE[el.getAttribute('data-change')];
     if (fn) fn(el);
   });
+  const colPick = (ev) => {
+    const b = ev.target && ev.target.closest ? ev.target.closest('.col[data-act]') : null;
+    if (!b || !root.contains(b)) return;
+    const fn = ACT[b.getAttribute('data-act')];
+    if (fn) fn(b.getAttribute('data-arg'));
+  };
+  document.addEventListener('focusin', colPick);
+  document.addEventListener('pointerover', (ev) => { if (ev.pointerType === 'mouse') colPick(ev); });
+  const paceTrack = (ev) => { if (!S.pace) return; if (paceAt(ev)) S.paceOn = true; else if (S.paceOn) paceReset(); };
+  document.addEventListener('pointermove', paceTrack);
+  document.addEventListener('pointerdown', paceTrack);
   document.addEventListener('keydown', (ev) => {
     const t = ev.target, typing = t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
     if (ev.key === 'Escape' && S.dialog) { ev.preventDefault(); closeDialog(); return; }

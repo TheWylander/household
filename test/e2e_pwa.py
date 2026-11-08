@@ -34,6 +34,13 @@ def act(page, a, arg=None):
     page.locator(sel).first.click()
     page.wait_for_timeout(150)
 
+def open_custom(page):
+    """Customise now sits under Settings, which opens from the gear on Home."""
+    page.locator('[data-act="go"][data-arg="home"]').first.click(); page.wait_for_timeout(150)
+    page.locator('[data-act="go"][data-arg="settings"]').first.click(); page.wait_for_timeout(150)
+    page.locator('[data-act="go"][data-arg="custom"]').first.click(); page.wait_for_timeout(150)
+
+
 
 def text(page):
     return page.locator('#app').inner_text()
@@ -186,7 +193,7 @@ try:
         check(len(months) == 1 and any(v and v.get('title') == 'Dinner' for v in db[months[0]]['entries'].values()), 'spend saved to Firestore')
 
         # rent from 4 Oct, set in Customise
-        act(a, 'go', 'custom')
+        open_custom(a)
         a.check('#drenton'); a.wait_for_timeout(150)
         a.fill('#drentamt', '250'); a.fill('#drentstart', '2026-10-04')
         act(a, 'savecustom'); a.wait_for_timeout(500)
@@ -238,8 +245,8 @@ try:
         check('Sign in to see your shared spends' in text(c), 'sign out goes back to sign-in')
 
         # sign out and back in on Robin's phone
-        act(a, 'go', 'custom')
-        check('Signed in as robin@example.com' in text(a), 'Customise shows who is signed in')
+        act(a, 'go', 'home'); act(a, 'go', 'settings')
+        check('Signed in as robin@example.com' in text(a), 'Settings shows who is signed in')
         act(a, 'auout'); a.wait_for_load_state('load'); a.wait_for_timeout(500)
         a.fill('#auemail', 'robin@example.com'); a.fill('#aupw', 'wrong password')
         act(a, 'auin'); a.wait_for_timeout(200)
