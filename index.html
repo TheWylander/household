@@ -428,6 +428,13 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
 .keys { display: flex; flex-wrap: wrap; column-gap: 16px; }
 .cols-key-d { width: 22px; border-top: 3px dotted var(--ink); opacity: .55; }
 
+/* ---------- profiles ---------- */
+.av.ph { background-size: cover; background-position: center; }
+.av.xl { width: 76px; height: 76px; border-width: 3px; font-size: 32px; }
+.profile-top { display: flex; align-items: center; gap: 16px; }
+.profile-act { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.row-lead .duo { margin-right: 4px; }
+
 </style>
 </head>
 <body>
@@ -1005,6 +1012,7 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
     view: 'home', cal: null, add: null, tabForm: { amount: '', label: '', payer: null },
     recapOffset: 0, draft: null, draftSaved: false, setup: null, dialog: null,
     insMode: 'month', insYearOff: 0, insSel: null, insDay: null, pace: null, paceOn: false,
+    photos: null, photoBusy: null, photoErr: null,
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -1372,6 +1380,8 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
       S.tab = got.tab && typeof got.tab === 'object' ? got.tab : null;
       S.rules = got.rules && typeof got.rules === 'object' ? got.rules : null;
       S.imp = got.import && typeof got.import === 'object' ? got.import : null;
+      S.photos = got.photos && typeof got.photos === 'object' ? got.photos : null;
+      applyPhotos();
       parseStaged();
       S.hhLoaded = true; S.offline = false;
       markLive('hh', snap); resolveMe(); ensureRent(); safeRender();
@@ -1450,7 +1460,7 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
     if (!S.settings) return bn + (S.readOnly ? viewNotSetUp() : viewSetup()) + dialogHtml();
     if (!S.me) { const w = welcomeFor(); return bn + (w ? viewWelcome(w, false) : viewWho()) + dialogHtml(); }
     if (S.welcomePreview) return bn + viewWelcome(other(S.me), true) + dialogHtml();
-    const nav = ['home', 'cal', 'inbox', 'insights', 'settings', 'custom', 'recap', 'tab'].indexOf(S.view) >= 0;
+    const nav = ['home', 'cal', 'inbox', 'insights', 'settings', 'custom', 'profile', 'recap', 'tab'].indexOf(S.view) >= 0;
     return bn + '<main class="main' + (nav ? '' : ' no-nav') + '" style="' + meVars() + '">' + viewFor(S.view) + '</main>' +
       (nav ? '<div data-live="nav">' + navBar() + '</div>' : '') + dialogHtml();
   }
@@ -1510,6 +1520,7 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
       case 'recap':
       case 'insights': return viewInsights();
       case 'settings': return viewSettings();
+      case 'profile': return viewProfile();
       case 'custom': return viewCustom();
       default: return viewHome();
     }
@@ -1524,10 +1535,43 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
     return b;
   }
   function av(p, small) {
-    const cls = 'av' + (small ? ' sm' : '');
+    const cls = 'av' + (small === 'xl' ? ' xl' : small ? ' sm' : '');
     if (p === 'both' || p === 'mixed') return '<span class="' + cls + ' av-duo" aria-hidden="true"><i style="background:' + colOf('a').main + '"></i><i style="background:' + colOf('b').main + '"></i></span>';
-    const c = colOf(p);
-    return '<span class="' + cls + '" style="background:' + c.main + ';color:' + c.on + '" aria-hidden="true">' + esc(initial(nm(p))) + '</span>';
+    const c = colOf(p), ph = hasPhoto(p);
+    return '<span class="' + cls + (ph ? ' ph ph-' + p : '') + '" style="background-color:' + c.main + ';color:' + c.on + '" aria-hidden="true">' + (ph ? '' : esc(initial(nm(p)))) + '</span>';
+  }
+  const PHOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+  const hasPhoto = (p) => !!(S.photos && typeof S.photos[p] === 'string' && S.photos[p].length < 80000 && PHOTO_RE.test(S.photos[p]));
+  let photoCss = null;
+  function applyPhotos() {
+    const css = ['a', 'b'].filter(hasPhoto).map((p) => '.av.ph-' + p + '{background-image:url("' + S.photos[p] + '")}').join('');
+    if (css === photoCss) return;
+    photoCss = css;
+    let el = document.getElementById('hhPhotos');
+    if (!el) { el = document.createElement('style'); el.id = 'hhPhotos'; document.head.appendChild(el); }
+    el.textContent = css;
+  }
+  /* A square from the middle of the photo, 192px, as a small JPEG: a few KB, so it fits in the shared data. */
+  function readPhoto(file) {
+    return new Promise((resolve, reject) => {
+      if (!file || !/^image\//.test(file.type || 'image/')) { reject(new Error('type')); return; }
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => {
+        const w = img.naturalWidth, h = img.naturalHeight, side = Math.min(w, h);
+        if (!side) { URL.revokeObjectURL(url); reject(new Error('empty')); return; }
+        const c = document.createElement('canvas');
+        c.width = c.height = 192;
+        const g = c.getContext('2d');
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(img, (w - side) / 2, (h - side) / 2, side, side, 0, 0, 192, 192);
+        URL.revokeObjectURL(url);
+        let q = 0.82, out = c.toDataURL('image/jpeg', q);
+        while (out.length > 30000 && q > 0.4) { q -= 0.12; out = c.toDataURL('image/jpeg', q); }
+        resolve(out);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode')); };
+      img.src = url;
+    });
   }
   function segBtn(act, val, pressed, label, person) {
     let style = '';
@@ -2395,11 +2439,41 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
     return out + '</section>';
   }
 
+  /* ---------- profiles ---------- */
+  function viewProfile() {
+    if (!S.draft) S.draft = makeDraft();
+    const D = S.draft, ro = S.readOnly ? ' disabled' : '';
+    let out = '<header class="top"><div><button class="back-link" data-act="go" data-arg="settings">' + icon('left') + 'Settings</button><p class="eyebrow">You two</p><h1 class="title">Profiles</h1></div></header>';
+    out += ['a', 'b'].map((p) => {
+      const has = hasPhoto(p), busy = S.photoBusy === p;
+      return '<section class="card profile"><div class="profile-top">' + av(p, 'xl') + '<div class="profile-act">' +
+        (ro ? '' : '<label class="btn btn-secondary file-btn">' + (busy ? 'Saving photo' : has ? 'Change photo' : 'Add a photo') +
+          '<input type="file" accept="image/*" data-change="photo" data-arg="' + p + '" aria-label="Choose a photo for ' + esc(nm(p)) + '"' + (busy ? ' disabled' : '') + '></label>' +
+          (has ? '<button class="link sm danger" data-act="photodel" data-arg="' + p + '">Remove photo</button>' : '')) + '</div></div>' +
+        (S.photoErr && S.photoErr.p === p ? '<p class="err-text" role="alert" style="margin-top:10px">' + esc(S.photoErr.msg) + '</p>' : '') +
+        '<label class="field" style="margin-top:14px"><span>Name</span><input class="input" id="dn' + p + '" maxlength="24" data-bind="draft.names.' + p + '" data-change="dirty" value="' + esc(D.names[p]) + '"' + ro + '></label>' +
+        '<fieldset style="margin:0"><legend>Colour</legend>' + colourPicker('ccolour', p, D.colours[p]) + '</fieldset></section>';
+    }).join('');
+    out += '<section class="card"><fieldset style="margin:0"><legend>This phone is</legend><div class="seg">' + segBtn('claim', 'a', S.me === 'a', poss(nm('a')), 'a') + segBtn('claim', 'b', S.me === 'b', poss(nm('b')), 'b') + '</div>' +
+      '<p class="hint">So the app says "you owe" to the right person.</p></fieldset></section>';
+    if (!S.readOnly) {
+      out += '<div class="savebar above-nav">' + (D.error ? '<p class="err-text" role="alert">' + esc(D.error) + '</p>' : '') +
+        '<button class="btn btn-primary btn-block" data-act="savecustom">Save changes</button></div>';
+    }
+    return out;
+  }
+  function savePhoto(p, url) {
+    S.photos = Object.assign({ a: null, b: null }, S.photos || {}, { [p]: url });
+    applyPhotos();
+    return upsert('hh/photos', { [p]: url }, { a: null, b: null });
+  }
+
   /* ---------- settings ---------- */
   function viewSettings() {
     const fb = S.mode === 'firebase', them = esc(nm(other(S.me || 'a')));
     let out = '<header class="top"><div><p class="eyebrow">Our household</p><h1 class="title">Settings</h1></div></header>';
-    out += '<button class="card row-card" data-act="go" data-arg="custom"><span><span class="row-t">Customise</span><span class="k">Colours, names, budget, rent, card and categories</span></span>' + icon('arrow') + '</button>';
+    out += '<button class="card row-card" data-act="go" data-arg="profile"><span class="row-lead"><span class="duo" aria-hidden="true">' + av('a') + av('b') + '</span><span><span class="row-t">Profiles</span><span class="k">Photos, names and colours</span></span></span>' + icon('arrow') + '</button>';
+    out += '<button class="card row-card" data-act="go" data-arg="custom"><span><span class="row-t">Customise</span><span class="k">Look, budget, rent, card and categories</span></span>' + icon('arrow') + '</button>';
     if (fb) {
       out += '<section class="card"><div class="card-head"><h2>Account</h2></div><p class="muted">Signed in as <strong>' + esc((S.authUser && S.authUser.email) || '') + '</strong></p>' +
         '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="auout">Sign out</button></section>';
@@ -2516,11 +2590,6 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
     let out = '<header class="top"><div><button class="back-link" data-act="go" data-arg="settings">' + icon('left') + 'Settings</button><p class="eyebrow">Make it yours</p><h1 class="title">Customise</h1></div></header>';
     out += '<section class="card"><div class="card-head"><h2>Colour scheme</h2></div>' + schemePicker('cscheme', D.scheme) +
       '<p class="hint">Tap one to preview the whole app, then save to keep it for both of you.</p></section>';
-    out += '<section class="card"><div class="card-head"><h2>You two</h2></div>' + ['a', 'b'].map((p) =>
-      '<div class="person"><label class="field"><span>Name</span><input class="input" id="dn' + p + '" maxlength="24" data-bind="draft.names.' + p + '" data-change="dirty" value="' + esc(D.names[p]) + '"' + ro + '></label>' +
-      '<fieldset><legend>Colour</legend>' + colourPicker('ccolour', p, D.colours[p]) + '</fieldset></div>').join('') +
-      '<fieldset style="margin:4px 0 0"><legend>This phone is</legend><div class="seg">' + segBtn('claim', 'a', S.me === 'a', poss(nm('a')), 'a') + segBtn('claim', 'b', S.me === 'b', poss(nm('b')), 'b') + '</div>' +
-      '<p class="hint">So the app says "you owe" to the right person.</p></fieldset></section>';
     out += '<section class="card"><div class="card-head"><h2>Money</h2></div>' +
       '<label class="field"><span>Monthly budget for shared spends</span><div class="money"><input class="input" id="dbudget" inputmode="decimal" placeholder="0" data-bind="draft.budget" data-change="dirty" value="' + esc(D.budget) + '"' + ro + '></div><p class="hint">Leave empty to just track what you spend.</p></label>' +
       '<label class="field"><span>Budget resets on the</span><select class="input" id="dreset" data-bind="draft.resetDay" data-change="dirty"' + ro + '>' + days.join('') + '</select></label>' +
@@ -2851,7 +2920,7 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
     } else if (d.type === 'tabdiscard') {
       body = '<h2 id="dlgT">Discard this tab?</h2><p>The ' + tabItems().length + ' spends on it won\'t be saved.</p>' + actions('Keep the tab', 'dlgtabdiscard', 'Discard tab', true);
     } else if (d.type === 'leave') {
-      body = '<h2 id="dlgT">Save your changes?</h2><p>You changed some things in Customise.</p><div class="dialog-actions"><button class="btn btn-secondary" data-act="dlgdiscard">Discard</button><button class="btn btn-primary" data-act="dlgsaveleave">Save changes</button></div>';
+      body = '<h2 id="dlgT">Save your changes?</h2><p>You changed some things in ' + (S.view === 'profile' ? 'Profiles' : 'Customise') + '.</p><div class="dialog-actions"><button class="btn btn-secondary" data-act="dlgdiscard">Discard</button><button class="btn btn-primary" data-act="dlgsaveleave">Save changes</button></div>';
     } else if (d.type === 'splitwise') {
       body = splitwiseDialog(d);
     } else if (d.type === 'swtrim') {
@@ -2873,8 +2942,8 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
 
   /* ---------- navigation ---------- */
   function go(v) {
-    if (S.view === 'custom' && v !== 'custom' && draftDirty()) { openDialog({ type: 'leave', to: v }); return; }
-    if (v === 'custom') { S.draft = makeDraft(); S.draftSaved = false; }
+    if ((S.view === 'custom' || S.view === 'profile') && v !== S.view && draftDirty()) { openDialog({ type: 'leave', to: v }); return; }
+    if (v === 'custom' || v === 'profile') { S.draft = makeDraft(); S.draftSaved = false; S.photoErr = null; }
     if (v === 'cal' && !S.cal) initCal();
     if (v === 'recap') { S.recapOffset = S.view === 'home' ? -1 : 0; S.insMode = 'month'; v = 'insights'; }
     else if (v === 'insights' && S.view !== 'insights') { S.recapOffset = 0; S.insYearOff = 0; S.insSel = null; S.insDay = null; }
@@ -2984,6 +3053,7 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
     swimport: () => doSplitwise(),
     swtrim: () => openDialog({ type: 'swtrim', cut: today().slice(0, 4) + '-01-01', dropCats: true, busy: false, error: null }),
     swtrimgo: () => doSwTrim(),
+    photodel: (p) => { savePhoto(p === 'b' ? 'b' : 'a', null).then((ok) => { if (ok) toast('Photo removed'); }); render(); },
     savecustom: () => saveCustom(),
     copycsv: () => {
       const csv = L.entriesToCSV(S.entries, { a: nm('a'), b: nm('b') });
@@ -3054,6 +3124,17 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
       }, () => { S.importResult = { error: "That file couldn't be opened. Export it again from Splitwise and try once more." }; render(); });
     },
     swtrimrefresh: () => swTrimRefresh(),
+    photo: (el) => {
+      const p = el.getAttribute('data-arg') === 'b' ? 'b' : 'a', f = el.files && el.files[0];
+      el.value = '';
+      if (!f) return;
+      S.photoBusy = p; S.photoErr = null; render();
+      readPhoto(f).then((url) => savePhoto(p, url).then((ok) => {
+        S.photoBusy = null;
+        if (ok) toast('Photo saved'); else S.photoErr = { p, msg: "The photo didn't save. Try again." };
+        render();
+      }), () => { S.photoBusy = null; S.photoErr = { p, msg: "That photo couldn't be opened. Try a JPEG or PNG." }; render(); });
+    },
     /* Waits while someone is still typing or tapping, so a field isn't swapped out from under them. */
     rerender: () => safeRender()
   };
