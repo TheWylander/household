@@ -1884,7 +1884,7 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
         '<li>Save the file, then choose it here. On a phone it will be in Files or Downloads.</li></ol></details></section>';
     }
     if (!S.readOnly) {
-      out += stagedCard() || ('<section class="card"><h2 style="font-size:19px;margin-bottom:6px">Moving from Splitwise?</h2>' +
+      out += stagedCard() || swHistoryCard() || ('<section class="card"><h2 style="font-size:19px;margin-bottom:6px">Moving from Splitwise?</h2>' +
         (S.impBad ? '<p class="err-text" style="margin:0 0 8px">The prepared copy of your Splitwise files didn\'t match the originals, so it wasn\'t used. Choose the files here instead.</p>' : '') +
         '<p class="muted" style="margin-bottom:12px">Bring in your Splitwise export and your balance carries over. You can pick more than one file, one per group.</p>' +
         '<label class="btn btn-secondary btn-block file-btn">Choose Splitwise CSV<input type="file" multiple accept=".csv,text/csv,text/plain" data-change="swfiles" aria-label="Choose Splitwise CSV files"></label></section>');
@@ -2528,6 +2528,8 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
       body = '<h2 id="dlgT">Save your changes?</h2><p>You changed some things in Customise.</p><div class="dialog-actions"><button class="btn btn-secondary" data-act="dlgdiscard">Discard</button><button class="btn btn-primary" data-act="dlgsaveleave">Save changes</button></div>';
     } else if (d.type === 'splitwise') {
       body = splitwiseDialog(d);
+    } else if (d.type === 'swtrim') {
+      body = swTrimDialog(d);
     } else if (d.type === 'csv') {
       body = '<h2 id="dlgT">Copy your spends</h2><p>Copying isn\'t allowed here, so select all of this and copy it yourself.</p><textarea class="input" id="dlgCsv" readonly>' + esc(d.text) + '</textarea><div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
     }
@@ -2644,6 +2646,8 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
     swstaged: () => { const P = S.impParsed; if (P) openSplitwise(P.groups, { rates: P.rates, rateNote: P.rateNote, staged: true }); },
     swswap: (gi) => { const m = S.dialog.maps[Number(gi)]; Object.keys(m).forEach((k) => { m[k] = other(m[k]); }); render(); },
     swimport: () => doSplitwise(),
+    swtrim: () => openDialog({ type: 'swtrim', cut: today().slice(0, 4) + '-01-01', dropCats: true, busy: false, error: null }),
+    swtrimgo: () => doSwTrim(),
     savecustom: () => saveCustom(),
     copycsv: () => {
       const csv = L.entriesToCSV(S.entries, { a: nm('a'), b: nm('b') });
@@ -2713,6 +2717,7 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
         openSplitwise(groups, {});
       }, () => { S.importResult = { error: "That file couldn't be opened. Export it again from Splitwise and try once more." }; render(); });
     },
+    swtrimrefresh: () => swTrimRefresh(),
     /* Waits while someone is still typing or tapping, so a field isn't swapped out from under them. */
     rerender: () => safeRender()
   };
@@ -2730,7 +2735,8 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
     swrefresh: () => {
       const el = document.getElementById('swResult');
       if (el && S.dialog && S.dialog.type === 'splitwise') el.innerHTML = swResultHtml(swPreview(S.dialog));
-    }
+    },
+    swtrimrefresh: () => swTrimRefresh()
   };
 
   /* ---------- Splitwise ---------- */
@@ -2828,6 +2834,83 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
       if (S.dialog === d) S.dialog = null;
       S.view = 'home'; render(); window.scrollTo(0, 0);
       toast('Brought in ' + pv.fresh.length + ' Splitwise expenses');
+    });
+  }
+
+  /* ---------- trimming Splitwise history ---------- */
+  /* Once Splitwise history is in, the Inbox shows what came across and lets you drop anything older than a date.
+     Only entries that came from Splitwise are touched. Removed ones are left as empty markers, so choosing
+     the same file again doesn't bring them back. */
+  function swHistoryCard() {
+    const list = S.entries.filter((e) => e.source === 'splitwise');
+    if (!list.length) return '';
+    const dates = list.map((e) => e.date).sort();
+    return '<section class="card"><h2 style="font-size:19px;margin-bottom:6px">Splitwise history</h2>' +
+      '<p class="muted" style="margin-bottom:12px">' + list.length + ' brought in from Splitwise, ' + esc(dateY(dates[0])) + ' to ' + esc(dateY(dates[dates.length - 1])) + '.</p>' +
+      '<button class="btn btn-secondary btn-block" data-act="swtrim">Remove older ones</button>' +
+      '<label class="link sm file-btn" style="margin-top:8px">Bring in another Splitwise file<input type="file" multiple accept=".csv,text/csv,text/plain" data-change="swfiles" aria-label="Choose more Splitwise CSV files"></label></section>';
+  }
+  function swTrimPreview(d) {
+    const cut = /^\d{4}-\d{2}-\d{2}$/.test(d.cut || '') ? d.cut : '';
+    const gone = cut ? S.entries.filter((e) => e.source === 'splitwise' && e.date < cut) : [];
+    const goneIds = {};
+    gone.forEach((e) => { goneIds[e.id] = true; });
+    const keep = S.entries.filter((e) => !goneIds[e.id]);
+    const used = {}, C = cfg(), cats = [];
+    keep.forEach((e) => { used[e.category || 'Other'] = true; });
+    gone.forEach((e) => { const c = e.category; if (c && !used[c] && C.categories.indexOf(c) >= 0 && cats.indexOf(c) < 0) cats.push(c); });
+    return { cut, gone, cats, after: L.netBalances(keep) };
+  }
+  function swTrimResultHtml(pv) {
+    if (!pv.cut) return 'Pick a date.';
+    const n = pv.gone.length;
+    if (!n) return 'Nothing from Splitwise is older than ' + esc(dateY(pv.cut)) + '.';
+    return n + (n === 1 ? ' expense' : ' expenses') + ' from before ' + esc(dateY(pv.cut)) + ' will go. After this, Home will show: <strong>' + esc(viewerLine(pv.after.a)) + '</strong>';
+  }
+  function swTrimCatsHtml(d, pv) {
+    if (!pv.cats.length) return '';
+    return '<label class="check-row"><input type="checkbox" data-bind="dialog.dropCats"' + (d.dropCats ? ' checked' : '') + '><span>Also remove ' + esc(listNames(pv.cats)) +
+      ' from your categories. Nothing else uses ' + (pv.cats.length === 1 ? 'it' : 'them') + '.</span></label>';
+  }
+  const swTrimGoLabel = (d, pv) => (d.busy ? 'Removing' : pv.gone.length ? 'Remove ' + pv.gone.length : 'Remove');
+  function swTrimDialog(d) {
+    const pv = swTrimPreview(d);
+    let h = '<h2 id="dlgT">Remove older Splitwise expenses</h2><p>Keep what came from Splitwise from this date on. Anything added in the app stays.</p>' +
+      '<label class="field"><span>Keep from</span><input class="input" id="swcut" type="date" data-bind="dialog.cut" data-input="swtrimrefresh" data-change="swtrimrefresh" value="' + esc(d.cut) + '"></label>' +
+      '<div class="sw-result" id="swTrimResult" aria-live="polite">' + swTrimResultHtml(pv) + '</div>' +
+      '<div id="swTrimCats">' + swTrimCatsHtml(d, pv) + '</div>';
+    if (d.error) h += '<p class="err-text" role="alert">' + esc(d.error) + '</p>';
+    return h + '<div class="dialog-actions"><button class="btn btn-secondary" data-act="dlgclose">Keep them</button><button class="btn btn-danger" id="swTrimGo" data-act="swtrimgo"' +
+      (pv.gone.length && !d.busy ? '' : ' disabled') + '>' + swTrimGoLabel(d, pv) + '</button></div>';
+  }
+  /* Updates the dialog in place while the date is being picked, so the picker isn't closed by a redraw. */
+  function swTrimRefresh() {
+    const d = S.dialog;
+    if (!d || d.type !== 'swtrim') return;
+    const pv = swTrimPreview(d);
+    const r = document.getElementById('swTrimResult'); if (r) r.innerHTML = swTrimResultHtml(pv);
+    const c = document.getElementById('swTrimCats'); if (c) c.innerHTML = swTrimCatsHtml(d, pv);
+    const b = document.getElementById('swTrimGo'); if (b) { b.textContent = swTrimGoLabel(d, pv); b.disabled = !pv.gone.length || !!d.busy; }
+  }
+  function doSwTrim() {
+    const d = S.dialog;
+    if (!d || d.type !== 'swtrim' || d.busy) return;
+    const pv = swTrimPreview(d), n = pv.gone.length;
+    if (!n) { closeDialog(); return; }
+    d.busy = true; d.error = null; render();
+    const byYm = {};
+    pv.gone.forEach((e) => { const r = S.byId[e.id], ym = (r && r.ym) || e.date.slice(0, 7); (byYm[ym] = byYm[ym] || {})[e.id] = null; });
+    let chain = Promise.resolve(true);
+    Object.keys(byYm).sort().forEach((ym) => { chain = chain.then((ok) => (ok ? putEntries(ym, byYm[ym]) : false)); });
+    chain.then((ok) => {
+      if (!ok) { if (S.dialog === d) { d.busy = false; d.error = "Some of it didn't save. Try again: anything already removed stays removed."; render(); } return; }
+      if (d.dropCats && pv.cats.length) {
+        const C = cfg(), keepCat = (c) => pv.cats.indexOf(c) < 0;
+        upsert('hh/settings', { categories: C.categories.filter(keepCat), budgetSkip: C.budgetSkip.filter(keepCat) }, defaults());
+      }
+      if (S.dialog === d) S.dialog = null;
+      render();
+      toast('Removed ' + n + ' Splitwise ' + (n === 1 ? 'expense' : 'expenses'));
     });
   }
 
