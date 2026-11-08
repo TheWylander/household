@@ -409,3 +409,10 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
 .cols-key-l { width: 22px; border-top: 1.5px dashed var(--ink); }
 .keys { display: flex; flex-wrap: wrap; column-gap: 16px; }
 .cols-key-d { width: 22px; border-top: 3px dotted var(--ink); opacity: .55; }
+
+/* ---------- profiles ---------- */
+.av.ph { background-size: cover; background-position: center; }
+.av.xl { width: 76px; height: 76px; border-width: 3px; font-size: 32px; }
+.profile-top { display: flex; align-items: center; gap: 16px; }
+.profile-act { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.row-lead .duo { margin-right: 4px; }

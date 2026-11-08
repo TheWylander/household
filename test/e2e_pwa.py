@@ -209,6 +209,13 @@ try:
         check(m2 is not None and 'Jules owes you' == m2.group(1), 'rent shows in the balance: ' + (m2.group(0) if m2 else 'none'))
         shot(a, 'p03-home', full=True)
 
+        # a profile photo goes to Firestore with the rest
+        act(a, 'go', 'home'); act(a, 'go', 'settings'); act(a, 'go', 'profile')
+        a.set_input_files('input[data-change="photo"][data-arg="a"]', str(ROOT / 'test' / 'photo-sample.png'))
+        a.wait_for_function("() => { const d = JSON.parse(localStorage.getItem('__fbdb') || '{}'); return d['hh/photos'] && d['hh/photos'].a; }", timeout=5000)
+        check(a.locator('.av.ph-a').count() >= 1, 'profile photo saved to Firestore and shown')
+        act(a, 'go', 'home')
+
         # ---------- Jules's phone ----------
         b = watch(ctx.new_page(), 'jules')
         b.goto(BASE); b.wait_for_timeout(600)
@@ -218,6 +225,7 @@ try:
         b.wait_for_timeout(600)
         t = text(b)
         check('Welcome home, Jules' in t and 'Robin made this for the two of you' in t, 'Jules gets her welcome')
+        check(b.locator('.av.ph-a').count() >= 1, "Jules's phone shows Robin's photo")
         shot(b, 'p04-jules-welcome', full=True)
         act(b, 'welcomein'); b.wait_for_timeout(400)
         t = text(b)
