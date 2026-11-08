@@ -1,0 +1,12 @@
+# Private: never commit these (this repo is public)
+/household-preset.json
+/pwa-config.json
+*.csv
+!/test/westpac-sample.csv
+
+# Build output and scratch
+/dist/
+/pwa/
+/shots/
+node_modules/
+__pycache__/

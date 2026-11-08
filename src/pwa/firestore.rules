@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Only your two logins can read or change anything, and only once each email is confirmed.
+    function isUs() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() in [__EMAILS__];
+    }
+    match /hh/{doc} {
+      allow read, write: if isUs();
+    }
+    match /months/{month} {
+      allow read, write: if isUs();
+    }
+  }
+}

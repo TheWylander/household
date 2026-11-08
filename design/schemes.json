@@ -1,0 +1,38 @@
+{
+  "warm": {
+    "label": "Warm",
+    "vars": {"ground": "#FFF3E4", "card": "#FFFAF3", "ink": "#2B1B12", "ink2": "#6A4F40", "line": "#EBD5BF", "dash": "#E2C9B0", "input": "#9A7C66", "track": "#F3E2CF",
+             "hi": "#F5B83D", "hiSoft": "#FDEBC2", "add": "#F07A5A", "errSoft": "#FCDCD2", "danger": "#A63E24", "ok": "#276A49", "okSoft": "#D7EEDF", "focus": "#2F57A4"},
+    "people": {"cobalt": {"main": "#2F57A4", "soft": "#DCE6F7", "on": "#FFFFFF", "label": "Blue"},
+               "coral": {"main": "#F07A5A", "soft": "#FCDCD2", "on": "#2B1B12", "label": "Coral"},
+               "marigold": {"main": "#F5B83D", "soft": "#FDEBC2", "on": "#2B1B12", "label": "Marigold"},
+               "fern": {"main": "#276A49", "soft": "#D7EEDF", "on": "#FFFFFF", "label": "Green"}}
+  },
+  "sea": {
+    "label": "Sea",
+    "vars": {"ground": "#EAF3F3", "card": "#F6FAFA", "ink": "#0F2529", "ink2": "#3D575B", "line": "#CFE1E1", "dash": "#B8D0D0", "input": "#6B878B", "track": "#DAE9E9",
+             "hi": "#6CCFBF", "hiSoft": "#D2F1EC", "add": "#FF8C6B", "errSoft": "#FFE1D8", "danger": "#A8361C", "ok": "#1F6B5C", "okSoft": "#D5EEE8", "focus": "#1F5FA8"},
+    "people": {"cobalt": {"main": "#1F5FA8", "soft": "#D9E7F7", "on": "#FFFFFF", "label": "Blue"},
+               "coral": {"main": "#FF8C6B", "soft": "#FFE1D8", "on": "#0F2529", "label": "Salmon"},
+               "marigold": {"main": "#F2C14E", "soft": "#FBEBC4", "on": "#0F2529", "label": "Sand"},
+               "fern": {"main": "#1F6B5C", "soft": "#D5EEE8", "on": "#FFFFFF", "label": "Teal"}}
+  },
+  "garden": {
+    "label": "Garden",
+    "vars": {"ground": "#F2F3E6", "card": "#FAFBF3", "ink": "#1E2616", "ink2": "#4C5841", "line": "#DDE2C8", "dash": "#C9D1AE", "input": "#7C8868", "track": "#E5EAD3",
+             "hi": "#E9B949", "hiSoft": "#F6E6BC", "add": "#E07A5F", "errSoft": "#F7DDD5", "danger": "#9E3B22", "ok": "#3B6E35", "okSoft": "#DCEBD6", "focus": "#2D5A8C"},
+    "people": {"cobalt": {"main": "#2D5A8C", "soft": "#DCE5F0", "on": "#FFFFFF", "label": "Blue"},
+               "coral": {"main": "#E07A5F", "soft": "#F7DDD5", "on": "#1E2616", "label": "Terracotta"},
+               "marigold": {"main": "#E9B949", "soft": "#F6E6BC", "on": "#1E2616", "label": "Mustard"},
+               "fern": {"main": "#3B6E35", "soft": "#DCEBD6", "on": "#FFFFFF", "label": "Olive"}}
+  },
+  "berry": {
+    "label": "Berry",
+    "vars": {"ground": "#FBEFF2", "card": "#FFF8FA", "ink": "#2A1420", "ink2": "#654356", "line": "#EED3DC", "dash": "#E3BFCC", "input": "#9A7385", "track": "#F4DFE6",
+             "hi": "#FFB547", "hiSoft": "#FFE9C7", "add": "#F25C8A", "errSoft": "#FBD9DF", "danger": "#A3264D", "ok": "#2E6B4F", "okSoft": "#D6ECE1", "focus": "#5B3FA0"},
+    "people": {"cobalt": {"main": "#5B3FA0", "soft": "#E6DDF5", "on": "#FFFFFF", "label": "Plum"},
+               "coral": {"main": "#F25C8A", "soft": "#FCD9E5", "on": "#2A1420", "label": "Pink"},
+               "marigold": {"main": "#FFB547", "soft": "#FFE9C7", "on": "#2A1420", "label": "Apricot"},
+               "fern": {"main": "#2E6B4F", "soft": "#D6ECE1", "on": "#FFFFFF", "label": "Green"}}
+  }
+}
