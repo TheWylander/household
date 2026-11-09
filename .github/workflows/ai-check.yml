@@ -1,4 +1,4 @@
-# One-off: checks the product photo links in Harris Farm and Umall's public store data.
+# One-off: checks whether GitHub can reach Liquorland specials and OzBargain's Liquorland feed.
 name: AI Logic check
 on:
   push:

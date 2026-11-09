@@ -1,20 +1,22 @@
-// One-off: what product photo links Harris Farm and Umall's public store data gives. Prints a few as notes.
-const lists = [
-  ['Harris Farm', 'https://www.harrisfarm.com.au/collections/online-specials/products.json?limit=4'],
-  ['Umall', 'https://www.umall.com.au/collections/half-price/products.json?limit=4']
+// One-off: can GitHub reach Liquorland's specials, and OzBargain's Liquorland deals feed? Prints a few notes.
+const UA = 'Mozilla/5.0 (household deals check)';
+const urls = [
+  ['OzBargain Liquorland feed', 'https://www.ozbargain.com.au/deals/liquorland.com.au/feed'],
+  ['OzBargain alcohol feed', 'https://www.ozbargain.com.au/cat/alcohol/feed'],
+  ['Liquorland specials page', 'https://www.liquorland.com.au/specials'],
+  ['Liquorland catalogue page', 'https://www.liquorland.com.au/catalogue'],
+  ['Liquorland home', 'https://www.liquorland.com.au/']
 ];
-for (const [shop, url] of lists) {
+for (const [name, url] of urls) {
   try {
-    const r = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (household deals check)', accept: 'application/json' } });
-    const j = await r.json();
-    const ps = j.products || [];
-    const withImg = ps.filter((p) => p.images && p.images.length).length;
-    console.log(`::notice::${shop}: HTTP ${r.status}, ${ps.length} products, ${withImg} with images`);
-    ps.slice(0, 3).forEach((p) => {
-      const im = (p.images || [])[0] || {}, vf = ((p.variants || [])[0] || {}).featured_image;
-      console.log(`::notice::${shop} | ${String(p.title).slice(0, 40)} | img=${im.src} | ${im.width}x${im.height} | variantImg=${vf ? vf.src : 'none'}`);
-    });
+    const r = await fetch(url, { headers: { 'user-agent': UA, accept: /feed$/.test(url) ? 'application/rss+xml' : 'text/html' }, redirect: 'follow' });
+    const t = await r.text();
+    const items = (t.match(/<item>/g) || []).length;
+    const titles = [...t.matchAll(/<item>\s*<title>([^<]{0,90})/g)].slice(0, 3).map((m) => m[1]);
+    const title = (/<title>([^<]{0,80})/.exec(t) || [])[1] || '';
+    const guard = /incapsula|_Incapsula_|imperva|akamai|access denied|just a moment|cf-chl|captcha|reese84/i.exec(t);
+    console.log(`::notice::${name}: HTTP ${r.status}, ${t.length} bytes, final ${r.url.slice(0, 60)}, items ${items}, title "${title}"${guard ? ', bot check: ' + guard[0] : ''}${titles.length ? ' | ' + titles.join(' || ') : ''}`);
   } catch (e) {
-    console.log(`::notice::${shop}: failed ${e.message}`);
+    console.log(`::notice::${name}: failed ${e.message}`);
   }
 }
