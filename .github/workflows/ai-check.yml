@@ -1,4 +1,4 @@
-# One-off: checks whether GitHub can reach Liquorland specials and OzBargain's Liquorland feed.
+# One-off: checks what United Meat Co and Meat Emporium publish.
 name: AI Logic check
 on:
   push:
