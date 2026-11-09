@@ -1,5 +1,4 @@
-# One-off: opens the live app in Chrome and asks App Check for a token the way a phone does, to see why reCAPTCHA fails.
-# Lives on its own branch, which is deleted after it runs.
+# One-off: checks which Sydney Asian grocers publish their specials as public store data. Deleted after it runs.
 name: AI Logic check
 on:
   push:
@@ -9,13 +8,11 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Playwright library only (the runner's own Chrome does the browsing)
-        run: npm i --no-save --no-audit --no-fund playwright-core@1
-      - name: Ask App Check for a token on the live app
-        run: node .github/recaptcha-check.mjs
+      - name: Look at each store's specials collections
+        run: node .github/grocer-check.mjs
