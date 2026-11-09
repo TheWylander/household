@@ -37,7 +37,7 @@ export function weekHits(feed, watch, day) {
   if (!feed || !Array.isArray(watch) || !watch.length) return [];
   /* A list counts once it has started: next week's half-price list is posted days early. */
   const s = feed.sources || {}, live = (k) => !!(s[k] && s[k].to && s[k].to >= day && (!s[k].from || s[k].from <= day));
-  const running = (x) => (x.src === 'um' ? !!x.to && x.to >= day : live(x.src === 'hf' ? 'harris' : 'report'));
+  const running = (x) => (x.src === 'um' ? !!x.to && x.to >= day : live(x.src === 'hf' ? 'harris' : x.src === 'me' ? 'meat' : 'report'));
   const specials = L.sortSpecials((feed.specials || []).filter((x) => x && x.n && running(x) && L.watchHits(x.n, watch).length), watch)
     .map((x) => ({ n: x.n, s: L.storeName(x.s), now: x.now }));
   const deals = (feed.deals || []).filter((d) => d && d.t && !d.hp && (!d.to || d.to >= day) && L.watchHits(d.t + ' ' + d.s, watch).length)
