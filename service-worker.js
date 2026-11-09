@@ -1,6 +1,6 @@
 /* Lets the app open from the home screen quickly and without a connection.
    The page itself is fetched fresh when online, so a new upload shows up the next time the app opens. */
-const VERSION = 'household-c168424872';
+const VERSION = 'household-b208ee6c55';
 const FILES = ["./", "apple-touch-icon.png", "firebase-ai.js", "firebase-app-check.js", "firebase-app-compat.js", "firebase-app.js", "firebase-auth-compat.js", "firebase-config.js", "firebase-firestore-compat.js", "icon-192.png", "icon-32.png", "icon-512.png", "icon-maskable-512.png", "index.html", "manifest.json"];
 
 self.addEventListener('install', (event) => {
@@ -47,7 +47,7 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('push', (event) => {
   let d = {};
   try { d = event.data ? event.data.json() : {}; } catch (e) { d = { body: event.data ? event.data.text() : '' }; }
-  event.waitUntil(self.registration.showNotification(String(d.title || 'Our household').slice(0, 80), {
+  event.waitUntil(self.registration.showNotification(String(d.title || 'Two of Us').slice(0, 80), {
     body: String(d.body || '').slice(0, 240), icon: 'icon-192.png', badge: 'icon-192.png',
     tag: d.tag ? String(d.tag).slice(0, 60) : undefined, data: { url: typeof d.url === 'string' ? d.url : './' }
   }));
