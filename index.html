@@ -564,11 +564,13 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
 @media (prefers-reduced-motion: reduce) { .enter .main > *, .enter .meter span, .enter .hbar-fill, .enter .col-fill, .enter .pc-line { animation: none !important; } }
 
 /* ---------- deals ---------- */
+/* Sale days are diamonds, so they never look like a spend's dots: coral when we're keen, an outline when not. */
+.dot.sale, .dot.keen { width: 7px; height: 7px; border-radius: 1.5px; transform: rotate(45deg); margin: 0 1px; }
 .dot.sale { border: 2px solid var(--ink); background: var(--card); }
-.dot.keen { background: var(--marigold); box-shadow: 0 0 0 1.5px var(--ink); }
+.dot.keen { background: var(--coral); box-shadow: 0 0 0 1.5px var(--ink); }
 .cal-day.sale .v { color: var(--ink); max-width: 100%; overflow: hidden; text-overflow: clip; }
-.cal-day.keen { background: var(--marigold-soft); }
-.cal-day.keen.sel { background: var(--marigold-soft); }
+.cal-day.keen { background: var(--coral-soft); }
+.cal-day.keen.sel { background: var(--coral-soft); }
 .cal-day.past.sale .v { color: var(--ink2); }
 .sale-list { margin: 0; padding: 0; list-style: none; }
 .sale-row { display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px dashed var(--line); }
@@ -1454,8 +1456,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       ['check', 'Tidy categories.', 'In Insights, tap a category to see every spend in it, and move any that belong somewhere else.'],
       ['star', 'Fun fact.', 'A little fact about how we spend, a new one each time you open the app.'],
       ['arrow', 'Swipe through months.', 'Swipe left or right in Insights and the Calendar. Numbers count up and charts grow as each screen opens.'],
-      ['tag', 'Deals.', "Deals has its own tab. Everything on special this week is at the top, from Coles, Woolies, Harris Farm and Umall (with photos for Harris Farm and Umall), with filters by shop and category and the things that are rarely this cheap. Below it, the best deal for each thing on our watch list, then sale days and OzBargain."],
-      ['cal', 'Next sale day.', "Home shows the next sale day we're keen on, like Lucky Mart's monthly sale, with the address and a Keen button."],
+      ['tag', 'Deals.', "Deals has its own tab. Everything on special this week is at the top, from Coles, Woolies, Harris Farm and Umall (with photos for Harris Farm and Umall), with filters by shop and category and the things that are rarely this cheap. Below it, the best deal for each thing on our watch list, then OzBargain."],
+      ['cal', 'Sale days.', "Sale days are in the Calendar: marked on the month, with a Keen button on each. Home shows the next one we're keen on, like Lucky Mart's monthly sale, with the address."],
       ['camera', 'Capture a receipt.', "Tap the plus and choose Capture a receipt. The app reads the shop, total and every item. Tap anything that's just one person's, and it adds the spends."],
       ['gear', 'Upload.', 'Bringing in the Westpac statement and Splitwise files has moved to Settings, under Upload. Spends to check still show on Home.'],
       ['cart', 'Weekend shopping list.', "Tap + on any special, or on a match from the watch list, to add it to our list for the weekend shop or put it on the watch list. The list is under the trolley at the top of Deals: tick things off as you go, and add your own."],
@@ -1789,9 +1791,11 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   function boot() {
     S.factN = (Number(lsGet('hh.factN')) || 0) + 1; lsSet('hh.factN', String(S.factN));
     try { S.feed = cleanFeed(JSON.parse(lsGet('hh.deals') || 'null')); } catch (e) { S.feed = null; }
-    /* A tapped notification opens Deals. */
-    if (location.hash === '#deals') {
-      S.view = 'deals';
+    /* A tapped notification opens Deals, or a sale day's pop-up the Calendar on that day. */
+    const calHash = /^#cal=(\d{4}-\d{2}-\d{2})$/.exec(location.hash || '');
+    if (location.hash === '#deals' || calHash) {
+      S.view = calHash ? 'cal' : 'deals';
+      if (calHash) initCal(calHash[1]);
       try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* fine either way */ }
     }
     setTimeout(() => loadFeed(), 1200);
@@ -2259,14 +2263,18 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       if (L.isSpend(e)) { d.total += e.amount; if (e.source === 'import') d.imp = true; else d.man = true; }
     });
     const monthTotal = Object.keys(info).reduce((s, k) => s + info[k].total, 0);
+    /* Sale days sit on the calendar too: a dot, and a warm day when we're keen on it. */
+    const sby = {};
+    saleDays(ym + '-01', ym + '-' + L.pad(L.daysInMonth(c.y, c.m))).forEach((o) => { (sby[o.date] = sby[o.date] || []).push(o); });
+    const anySale = Object.keys(sby).length > 0;
     const cells = L.monthGrid(c.y, c.m).map((d) => {
       if (!d) return '<span class="cal-day pad" aria-hidden="true"></span>';
-      const i = info[d] || {};
-      const cls = ['cal-day', i.total ? 'has' : '', d === t ? 'today' : '', d === c.sel ? 'sel' : '', d > t ? 'future' : ''].filter(Boolean).join(' ');
-      const label = L.fmtDayLong(d) + (i.total ? ', ' + L.fmt(i.total) + ' shared' : '') + (i.chk ? ', some to check' : '');
+      const i = info[d] || {}, sl = sby[d] || [], keen = sl.some((o) => o.keen);
+      const cls = ['cal-day', i.total ? 'has' : '', sl.length ? 'sale' : '', keen && d >= t ? 'keen' : '', d === t ? 'today' : '', d === c.sel ? 'sel' : '', d > t ? 'future' : ''].filter(Boolean).join(' ');
+      const label = L.fmtDayLong(d) + (i.total ? ', ' + L.fmt(i.total) + ' shared' : '') + (i.chk ? ', some to check' : '') + sl.map((o) => ', ' + o.sale.store + ' sale' + (o.keen ? ', keen' : '')).join('');
       return '<button class="' + cls + '" data-act="selday" data-arg="' + d + '" aria-label="' + esc(label) + '" aria-pressed="' + (d === c.sel) + '">' +
         '<span class="n">' + L.parseYmd(d).getDate() + '</span><span class="v">' + (i.total ? L.fmtShort(i.total) : '') + '</span>' +
-        '<span class="dots">' + (i.man ? '<i class="dot man"></i>' : '') + (i.imp ? '<i class="dot imp"></i>' : '') + (i.chk ? '<i class="dot chk"></i>' : '') + '</span></button>';
+        '<span class="dots">' + (i.man ? '<i class="dot man"></i>' : '') + (i.imp ? '<i class="dot imp"></i>' : '') + (i.chk ? '<i class="dot chk"></i>' : '') + (sl.length ? '<i class="dot ' + (keen ? 'keen' : 'sale') + '"></i>' : '') + '</span></button>';
     }).join('');
     const isThisMonth = ym === t.slice(0, 7);
     return '<header class="top"><div><p class="eyebrow">Every spend, day by day</p><h1 class="title">Calendar</h1></div>' +
@@ -2275,18 +2283,22 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       '<h2>' + L.MONTHS_FULL[c.m] + ' ' + c.y + '</h2><button class="icon-btn" data-act="calmove" data-arg="1" aria-label="Next month">' + icon('right') + '</button></div>' +
       '<div class="cal-dow" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>' +
       '<div class="cal-grid">' + cells + '</div>' +
-      '<div class="legend"><span><i class="dot man"></i>Added by you two</span><span><i class="dot imp"></i>From ' + esc(poss(nm(H))) + ' card</span><span><i class="dot chk"></i>To check</span></div>' +
+      '<div class="legend"><span><i class="dot man"></i>Added by you two</span><span><i class="dot imp"></i>From ' + esc(poss(nm(H))) + ' card</span><span><i class="dot chk"></i>To check</span>' +
+        (anySale ? '<span><i class="dot keen"></i>Sale day we\'re keen on</span><span><i class="dot sale"></i>Sale day</span>' : '') + '</div>' +
       '<div class="cal-foot"><span>Shared spend in ' + L.MONTHS_FULL[c.m] + '</span><span class="amt">' + L.fmt(monthTotal) + '</span></div>' +
       (isThisMonth ? '' : '<p style="margin-top:6px"><button class="link sm" data-act="caltoday">Back to this month</button></p>') + '</section>' +
-      (c.sel && c.sel.slice(0, 7) === ym ? dayCard(c.sel) : '');
+      (c.sel && c.sel.slice(0, 7) === ym ? dayCard(c.sel) : '') + saleMonthCard(c);
   }
   function dayCard(d) {
     const order = { shared: 0, check: 1, dupe: 2, personal: 3 };
     const list = S.entries.filter((e) => e.date === d).sort((x, y) => (order[x.status] || 0) - (order[y.status] || 0) || (x.createdAt || 0) - (y.createdAt || 0));
-    const shared = sumAmt(list.filter(L.isSpend));
+    const shared = sumAmt(list.filter(L.isSpend)), sales = saleDays(d, d), t = today();
     return '<section class="card" id="dayCard"><div class="card-head"><h2>' + esc(L.fmtDayLong(d)) + '</h2><span class="amt">' + (shared ? L.fmt(shared) : '') + '</span></div>' +
-      (list.length ? '<ul class="list">' + list.map((e) => entryRow(e, 'day')).join('') + '</ul>' : '<p class="muted" style="margin-bottom:14px">Nothing on this day yet.</p>') +
-      (S.readOnly ? '' : '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="addon" data-arg="' + d + '">' + icon('plus') + 'Add a spend on this day</button>') + '</section>';
+      (sales.length ? '<ul class="sale-list day-sales">' + sales.map((o) => saleRow(o, t)).join('') + '</ul>' : '') +
+      (L.parseYmd(d).getDay() === 3 && d >= t ? '<p class="hint">New Coles and Woolies specials start today.</p>' : '') +
+      (list.length ? '<ul class="list">' + list.map((e) => entryRow(e, 'day')).join('') + '</ul>' : '<p class="muted" style="margin-bottom:14px">' + (sales.length ? 'No spends on this day yet.' : 'Nothing on this day yet.') + '</p>') +
+      (S.readOnly ? '' : '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="addon" data-arg="' + d + '">' + icon('plus') + 'Add a spend on this day</button>' +
+        '<p class="dlg-extra"><button class="link sm" data-act="saleadd" data-arg="' + d + '">Add a sale day on this day</button></p>') + '</section>';
   }
   /* A spend's lines with their notes: typed lines, or a day tab's items with who paid when you both did. */
   function entryLines(e) {
@@ -3809,19 +3821,12 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   }
   function saleMonthCard(c) {
     const first = ymKey(c.y, c.m) + '-01', last = ymKey(c.y, c.m) + '-' + L.pad(L.daysInMonth(c.y, c.m)), t = today(), list = saleDays(first, last);
-    return '<section class="sale-sec" id="saleMonth"><h3>In ' + L.MONTHS_FULL[c.m] + '</h3>' +
+    return '<section class="card sale-card" id="saleMonth"><div class="card-head"><h2>Sale days in ' + L.MONTHS_FULL[c.m] + '</h2>' + (list.length ? '<span class="k">' + list.length + '</span>' : '') + '</div>' +
       (list.length ? '<ul class="sale-list">' + list.map((o) => saleRow(o, t)).join('') + '</ul>'
-        : '<p class="muted">' + (dealsCfg().sales.length ? 'No sale days this month.' : 'Add the days your shops run sales, like a monthly 20% off Saturday. Mark the ones you\'re keen on and they show on Home.') + '</p>') +
+        : '<p class="muted">' + (dealsCfg().sales.length ? 'No sale days this month.' : 'Add the days your shops run sales, like a monthly 20% off Saturday. Mark the ones you\'re keen on: they show on Home, and your phones pop up the evening before.') + '</p>') +
       saleIdeaHtml() + (S.readOnly ? '' : '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="saleadd">' + icon('plus') + 'Add a sale day</button>') + '</section>';
   }
-  function saleDayCard(d) {
-    const list = saleDays(d, d), t = today();
-    return '<section class="sale-sec" id="dayCard"><h3>' + esc(L.fmtDayLong(d)) + '</h3>' +
-      (list.length ? '<ul class="sale-list">' + list.map((o) => saleRow(o, t)).join('') + '</ul>' : '<p class="muted">No sale days on this day.</p>') +
-      (L.parseYmd(d).getDay() === 3 ? '<p class="hint">New Coles and Woolies specials start today.</p>' : '') +
-      (S.readOnly ? '' : '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="saleadd" data-arg="' + d + '">' + icon('plus') + 'Add a sale day on this day</button>') + '</section>';
-  }
-  /* The Deals tab: everything on special first, then the watch list, sale days and OzBargain. */
+  /* The Deals tab: everything on special first, then the watch list and OzBargain. Sale days live in the Calendar. */
   function listBtn() {
     const n = dealsCfg().list.filter((i) => !i.done).length;
     return '<button class="icon-btn list-btn" data-act="shoplist" aria-label="Weekend shopping list' + (n ? ', ' + n + ' to get' : '') + '">' + icon('cart') + (n ? '<span class="list-n" aria-hidden="true">' + n + '</span>' : '') + '</button>';
@@ -3829,40 +3834,10 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   function dealsView() {
     const F = S.feed, t = today(), rep = F && F.sources.report, hf = F && F.sources.harris;
     const wk = F ? (rep.to >= t ? rep : hf.to >= t ? hf : null) : null;
-    const eyebrow = wk && wk.from && wk.to ? 'Specials ' + L.fmtDay(wk.from) + ' to ' + L.fmtDay(wk.to) : 'Sale days and specials';
+    const eyebrow = wk && wk.from && wk.to ? 'Specials ' + L.fmtDay(wk.from) + ' to ' + L.fmtDay(wk.to) : 'This week\'s specials';
     return '<header class="top"><div><p class="eyebrow">' + esc(eyebrow) + '</p><h1 class="title">Deals</h1></div>' +
-      '<div class="top-right">' + listBtn() + '<button class="icon-btn" data-act="salemonth" aria-label="Sale days by month">' + icon('cal') + '</button></div></header>' +
-      everythingCard() + matchesCard() + saleDaysRow() + ozbCard() + dealsFoot();
-  }
-  function saleDaysRow() {
-    const D = dealsCfg(), t = today(), next = saleDays(t, L.addDays(t, 120))[0];
-    return '<button class="card row-card" data-act="salemonth"><span class="row-lead"><span class="news-ic" aria-hidden="true">' + icon('cal') + '</span><span><span class="k">Sale days</span><span class="row-t">' +
-      esc(next ? 'Next: ' + next.sale.store + ', ' + L.fmtDay(next.date) : D.sales.length ? 'None in the next few months' : 'Add the days your shops have sales') + '</span></span></span>' + icon('arrow') + '</button>';
-  }
-  /* The month of sale days, in a panel. */
-  function monthDialog() {
-    if (!S.cal) initCal();
-    const c = S.cal, t = today(), ym = ymKey(c.y, c.m);
-    const first = ym + '-01', last = ym + '-' + L.pad(L.daysInMonth(c.y, c.m)), by = {};
-    saleDays(first, last).forEach((o) => { (by[o.date] = by[o.date] || []).push(o); });
-    const cells = L.monthGrid(c.y, c.m).map((d) => {
-      if (!d) return '<span class="cal-day pad" aria-hidden="true"></span>';
-      const list = by[d] || [], keen = list.some((o) => o.keen);
-      const cls = ['cal-day', list.length ? 'sale' : '', keen && d >= t ? 'keen' : '', d === t ? 'today' : '', d === c.sel && c.picked ? 'sel' : '', d > t ? 'future' : '', d < t ? 'past' : ''].filter(Boolean).join(' ');
-      const label = L.fmtDayLong(d) + list.map((o) => ', ' + o.sale.store + ' sale' + (o.keen ? ', keen' : '')).join('');
-      const short = list.length ? list[0].sale.store.split(' ')[0].slice(0, 6) : '';
-      return '<button class="' + cls + '" data-act="selday" data-arg="' + d + '" aria-label="' + esc(label) + '" aria-pressed="' + (d === c.sel && !!c.picked) + '">' +
-        '<span class="n">' + L.parseYmd(d).getDate() + '</span><span class="v">' + esc(short) + '</span>' +
-        '<span class="dots">' + (list.length ? '<i class="dot ' + (keen ? 'keen' : 'sale') + '"></i>' : '') + '</span></button>';
-    }).join('');
-    return '<div class="dlg-head"><h2 id="dlgT">Sale days</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>' +
-      '<div class="cal"><div class="cal-head"><button class="icon-btn" data-act="calmove" data-arg="-1" aria-label="Previous month">' + icon('left') + '</button>' +
-      '<h3>' + L.MONTHS_FULL[c.m] + ' ' + c.y + '</h3><button class="icon-btn" data-act="calmove" data-arg="1" aria-label="Next month">' + icon('right') + '</button></div>' +
-      '<div class="cal-dow" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>' +
-      '<div class="cal-grid">' + cells + '</div>' +
-      '<div class="legend"><span><i class="dot keen"></i>Sale day we\'re keen on</span><span><i class="dot sale"></i>Sale day</span></div>' +
-      (ym === t.slice(0, 7) ? '' : '<p style="margin-top:6px"><button class="link sm" data-act="caltoday">Back to this month</button></p>') + '</div>' +
-      (c.sel && c.sel.slice(0, 7) === ym && c.picked ? saleDayCard(c.sel) : '') + saleMonthCard(c);
+      '<div class="top-right">' + listBtn() + '</div></header>' +
+      everythingCard() + matchesCard() + ozbCard() + dealsFoot();
   }
   /* Home: the next sale day, keen ones first. */
   function nextSaleCard() {
@@ -3873,7 +3848,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       '<h2>' + esc(s.store) + '</h2><p class="ns-when">' + esc([L.fmtDayLong(o.date), s.offer].filter(Boolean).join(' · ')) + '</p>' +
       (s.where ? '<p class="ns-where">' + icon('pin') + '<span>' + esc(s.where) + '</span></p>' : '') +
       '<div class="ns-act">' + (S.readOnly ? '' : '<button class="keen-btn" data-act="salekeen" data-arg="' + esc(s.id + '|' + o.date) + '" aria-pressed="' + o.keen + '" aria-label="Keen on ' + esc(s.store) + ', ' + esc(L.fmtDayLong(o.date)) + '">' +
-        (o.keen ? icon('check') + 'We\'re keen' : 'Keen?') + '</button>') + '<button class="link" data-act="salemonthgo">All sale days</button></div></section>';
+        (o.keen ? icon('check') + 'We\'re keen' : 'Keen?') + '</button>') + '<button class="link" data-act="salecal" data-arg="' + o.date + '">See it in the calendar</button></div></section>';
   }
   /* Home: how many things on the watch list are on special. */
   function onSpecialCard() {
@@ -4800,8 +4775,6 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       body = spItemDialog(d);
     } else if (d.type === 'shoplist') {
       body = shopListDialog();
-    } else if (d.type === 'salemonth') {
-      body = monthDialog();
     } else if (d.type === 'receipt') {
       body = receiptDialog(d);
     } else if (d.type === 'aitoken') {
@@ -5044,8 +5017,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       render();
       if (el()) el().focus();
     },
-    salemonth: () => { if (!S.cal) initCal(); else S.cal.picked = false; openDialog({ type: 'salemonth' }); },
-    salemonthgo: () => { go('deals'); ACT.salemonth(); },
+    /* The Calendar, on a sale day's month with that day picked. */
+    salecal: (d) => { go('cal'); initCal(ISO_DAY.test(d || '') ? d : today()); render(); window.scrollTo(0, 0); },
     rcptype: () => { S.dialog = null; if (S.view === 'add') render(); else openAdd({ from: S.view === 'upload' ? 'upload' : 'home' }); },
     rcpitem: (i) => {
       const f = S.dialog && S.dialog.form, x = f && f.items[Number(i)];
@@ -5078,8 +5051,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       saveDeals({ sales: D.sales.concat([sale]) }).then((ok) => { if (ok) toast('Added ' + x.store + '. Next one is ' + L.fmtDay(nextSale(sale, t))); });
       render();
     },
-    saleadd: (d) => openDialog({ type: 'sale', id: null, form: saleForm(null, ISO_DAY.test(d || '') ? d : null), error: null, back: S.dialog && S.dialog.type === 'salemonth' ? 'salemonth' : null }),
-    saleopen: (id) => { const s = dealsCfg().sales.filter((x) => x.id === id)[0]; if (s) openDialog({ type: 'sale', id, form: saleForm(s), error: null, back: S.dialog && S.dialog.type === 'salemonth' ? 'salemonth' : null }); },
+    saleadd: (d) => openDialog({ type: 'sale', id: null, form: saleForm(null, ISO_DAY.test(d || '') ? d : null), error: null }),
+    saleopen: (id) => { const s = dealsCfg().sales.filter((x) => x.id === id)[0]; if (s) openDialog({ type: 'sale', id, form: saleForm(s), error: null }); },
     salesave: () => {
       const d = S.dialog, F = d && d.form;
       if (!F) return;
@@ -5528,7 +5501,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     navigator.serviceWorker.addEventListener('message', (ev) => {
       const m = ev.data || {};
       if (m.hh !== 'open' || !S.settings || !S.me) return;
-      if (m.hash === '#deals') ACT.godeals(); else go('home');
+      const cal = /^#cal=(\d{4}-\d{2}-\d{2})$/.exec(m.hash || '');
+      if (m.hash === '#deals') ACT.godeals(); else if (cal) ACT.salecal(cal[1]); else go('home');
     });
   }
 
