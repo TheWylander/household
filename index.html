@@ -545,6 +545,62 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
 [data-swipe] { touch-action: pan-y; }
 @media (prefers-reduced-motion: reduce) { .enter .main > *, .enter .meter span, .enter .hbar-fill, .enter .col-fill, .enter .pc-line { animation: none !important; } }
 
+/* ---------- deals ---------- */
+.cal-mode { margin: 0 0 16px; }
+.dot.sale { border: 2px solid var(--ink); background: var(--card); }
+.dot.keen { background: var(--marigold); box-shadow: 0 0 0 1.5px var(--ink); }
+.cal-day.sale .v { color: var(--ink); max-width: 100%; overflow: hidden; text-overflow: clip; }
+.cal-day.keen { background: var(--marigold-soft); }
+.cal-day.keen.sel { background: var(--marigold-soft); }
+.cal-day.past.sale .v { color: var(--ink2); }
+.sale-list { margin: 0; padding: 0; list-style: none; }
+.sale-row { display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px dashed var(--line); }
+.sale-row:first-child { border-top: 0; }
+.sale-main { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; min-height: 48px; padding: 4px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.sale-main .k { overflow-wrap: anywhere; }
+.keen-btn { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 12px; border-radius: 999px; border: 2px solid var(--ink); background: var(--card); color: var(--ink); font: inherit; font-size: 14px; font-weight: 800; cursor: pointer; }
+.keen-btn[aria-pressed="true"] { background: var(--marigold); }
+.keen-btn .ic { width: 15px; height: 15px; }
+.keen-btn:active { transform: translateY(2px); }
+.idea { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 12px; border: 2px dashed var(--line); border-radius: 14px; }
+.idea p { flex: 1; min-width: 0; margin: 0; font-size: 15px; }
+.idea .btn { flex: none; }
+.soon-tag { display: inline-block; padding: 1px 9px; border: 2px solid var(--ink); border-radius: 999px; background: var(--marigold); font-size: 13px; font-weight: 800; }
+.row-card.hot { background: var(--marigold-soft); border-color: var(--ink); }
+.row-card .row-lead .news-ic { margin-right: 2px; }
+.watch { margin: 4px 0 14px; padding: 12px; border-radius: 14px; background: var(--track); }
+.watch .chips { margin-top: 8px; }
+.watch .hint { margin: 4px 0 0; }
+.chip.sm { min-height: 40px; padding: 0 12px; font-size: 14px; }
+.chip.sm .ic { width: 14px; height: 14px; }
+.chip .n { font-weight: 600; color: var(--ink2); font-variant-numeric: tabular-nums; }
+.chip[aria-pressed="true"] .n { color: inherit; }
+.watch-add { display: flex; gap: 8px; margin-top: 10px; }
+.watch-add .input { flex: 1; min-width: 0; }
+.store-chips { margin: 0 0 10px; }
+.sp-when { margin: -6px 0 10px; }
+.sp-search { margin-bottom: 4px; }
+.sp-list, .ozb-list { margin: 6px 0 0; padding: 0; list-style: none; }
+.sp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 10px 0; border-top: 1px dashed var(--line); }
+.sp-row:first-child { border-top: 0; }
+.sp-main { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.sp-n { font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.sp-main .k { overflow-wrap: anywhere; }
+.sp-price { display: flex; flex-direction: column; align-items: flex-end; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sp-now { font-weight: 800; }
+.sp-was { font-size: 13px; color: var(--ink2); }
+.sp-off { margin-top: 3px; padding: 1px 7px; border-radius: 8px; background: var(--marigold-soft); font-size: 12px; font-weight: 800; }
+.tag.hit { margin-top: 4px; background: var(--marigold); border-color: var(--ink); color: var(--ink); }
+.sp-none { margin: 10px 0; }
+.sp-more { margin-top: 10px; }
+.sp-src { margin-top: 12px; }
+.ozb-row { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-top: 1px dashed var(--line); }
+.ozb-row:first-child { border-top: 0; }
+.ozb-t { font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+.dlg-extra { margin: 12px 0 0; text-align: center; }
+@media (max-width: 360px) { .sale-row { grid-template-columns: 64px minmax(0, 1fr) auto; } .sale-row .soon-when { font-size: 13px; } .keen-btn { padding: 0 10px; } }
+
 </style>
 </head>
 <body>
@@ -1027,8 +1083,96 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     return head.map(csvCell).join(',') + '\n' + rows.join('\n') + '\n';
   }
 
+  /* ---------- deals ---------- */
+  var ORD = ['1st', '2nd', '3rd', '4th', 'Last'];
+  /* The date of the nth weekday (0 = Sunday) in a month. n = 5 means the last one. */
+  function nthWeekday(y, m, n, dow) {
+    var d;
+    if (n >= 5) { d = new Date(y, m + 1, 0); while (d.getDay() !== dow) d.setDate(d.getDate() - 1); return ymd(d); }
+    d = new Date(y, m, 1);
+    while (d.getDay() !== dow) d.setDate(d.getDate() + 1);
+    d.setDate(d.getDate() + 7 * (Math.max(1, n) - 1));
+    return d.getMonth() === m ? ymd(d) : null;
+  }
+  /* Every date a sale day falls on from one date to another, inclusive. A rule is once on a date, every week on a
+     weekday, every month on a date (the last day in shorter months), or every month on the nth weekday. */
+  function saleDates(rule, from, to) {
+    var re = /^\d{4}-\d{2}-\d{2}$/, out = [];
+    if (!rule || !re.test(from || '') || !re.test(to || '') || from > to) return out;
+    var lo = re.test(rule.start || '') && rule.start > from ? rule.start : from;
+    var hi = re.test(rule.until || '') && rule.until < to ? rule.until : to;
+    if (lo > hi) return out;
+    if (rule.k === 'once') return re.test(rule.date || '') && rule.date >= lo && rule.date <= hi ? [rule.date] : out;
+    if (rule.k === 'weekly') return weeklyDates(lo, clamp(rule.dow, 0, 6), hi);
+    if (rule.k !== 'nth' && rule.k !== 'monthly') return out;
+    var a = parseYmd(lo), y = a.getFullYear(), m = a.getMonth(), g = 0, d, nx;
+    while (g++ < 240 && ymd(new Date(y, m, 1)) <= hi) {
+      d = rule.k === 'nth' ? nthWeekday(y, m, clamp(rule.n, 1, 5), clamp(rule.dow, 0, 6))
+        : ymd(new Date(y, m, Math.min(clamp(rule.day, 1, 31), daysInMonth(y, m))));
+      if (d && d >= lo && d <= hi) out.push(d);
+      nx = addMonths(y, m, 1); y = nx[0]; m = nx[1];
+    }
+    return out;
+  }
+  function ordinalDay(n) { var s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+  function saleRuleLabel(rule) {
+    if (!rule) return '';
+    if (rule.k === 'once') return 'One day only';
+    if (rule.k === 'weekly') return 'Every ' + DAYS_FULL[clamp(rule.dow, 0, 6)];
+    if (rule.k === 'monthly') return 'The ' + ordinalDay(clamp(rule.day, 1, 31)) + ' of every month';
+    if (rule.k === 'nth') return ORD[clamp(rule.n, 1, 5) - 1] + ' ' + DAYS_FULL[clamp(rule.dow, 0, 6)] + ' of every month';
+    return '';
+  }
+  /* One name per store, so "WW", "Woolies" and "WOOLWORTHS 1234 MACQUARIE" all count as Woolworths. */
+  var STORES = [
+    ['Coles', /\bcoles\b|^cl$/i], ['Woolworths', /\bwoolworths\b|\bwoolies\b|^ww$/i], ['Harris Farm', /\bharris ?farm/i],
+    ['ALDI', /\baldi\b/i], ['Costco', /\bcostco\b/i], ['IGA', /\biga\b/i], ['Lucky Mart', /\blucky ?mart\b/i]
+  ];
+  function storeName(s) {
+    s = String(s || '').trim();
+    for (var i = 0; i < STORES.length; i++) if (STORES[i][1].test(s)) return STORES[i][0];
+    return s;
+  }
+  /* Which watch words a special's name matches. A word matches at the start of a word in the name, ignoring case,
+     punctuation and a plural s, so "tim tams" finds "Tim Tam Original". Longer single words also match run together,
+     so "weetbix" finds "Weet-Bix". */
+  var squash = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); };
+  function watchHits(name, words) {
+    var n = ' ' + String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() + ' ', flat = squash(name), out = [];
+    (words || []).forEach(function (w) {
+      var k = String(w || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      if (k.length > 3) k = k.replace(/s$/, '');
+      if (!k) return;
+      if (n.indexOf(' ' + k) >= 0 || (k.indexOf(' ') < 0 && k.length >= 6 && flat.indexOf(squash(k)) >= 0)) out.push(w);
+    });
+    return out;
+  }
+  /* How long since an item was last this cheap, in weeks, from text like "11 weeks ago @ WW". Never counts as long ago. */
+  function weeksSince(s) {
+    s = String(s || '');
+    if (/never|first/i.test(s)) return 99;
+    var m = /(\d+)\s*(day|week|wk|month|year)/i.exec(s);
+    if (!m) return 0;
+    var n = Number(m[1]), u = m[2].toLowerCase();
+    return u === 'day' ? n / 7 : u === 'month' ? n * 4.3 : u === 'year' ? n * 52 : n;
+  }
+  /* Specials in the order worth looking at: ones on your watch list first, then the biggest saving by percent,
+     then the ones that haven't been this cheap for longest. */
+  function sortSpecials(list, words) {
+    return (list || []).map(function (x, i) { return { x: x, i: i, hit: watchHits(x.n, words).length ? 1 : 0 }; })
+      .sort(function (a, b) { return (b.hit - a.hit) || ((b.x.off || 0) - (a.x.off || 0)) || (weeksSince(b.x.last) - weeksSince(a.x.last)) || (a.i - b.i); })
+      .map(function (o) { return o.x; });
+  }
+  /* The Wednesday-to-Tuesday week that supermarket specials run in, for a date. */
+  function specialsWeek(s) {
+    var back = (parseYmd(s).getDay() + 4) % 7, from = addDays(s, -back);
+    return { from: from, to: addDays(from, 6) };
+  }
+
   var L = {
     MONTHS: MONTHS, MONTHS_FULL: MONTHS_FULL, DAYS: DAYS, DAYS_FULL: DAYS_FULL,
+    nthWeekday: nthWeekday, saleDates: saleDates, saleRuleLabel: saleRuleLabel, ordinalDay: ordinalDay, storeName: storeName,
+    watchHits: watchHits, weeksSince: weeksSince, sortSpecials: sortSpecials, specialsWeek: specialsWeek,
     pad: pad, ymd: ymd, parseYmd: parseYmd, addDays: addDays, addMonths: addMonths, daysInMonth: daysInMonth,
     daysBetweenInclusive: daysBetweenInclusive, clamp: clamp,
     toCents: toCents, fmt: fmt, fmtRound: fmtRound, fmtShort: fmtShort, parseMoneyInput: parseMoneyInput, parseExpr: parseExpr,
@@ -1111,6 +1255,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
     duo: '<circle cx="8.5" cy="12" r="5.5"/><circle cx="15.5" cy="12" r="5.5"/>',
     chart: '<path d="M4 20h16"/><path d="M7 16.5V12M12 16.5V6.5M17 16.5V9.5"/>',
+    tag: '<path d="M3.5 12.3V4.5a1 1 0 0 1 1-1h7.8l8.2 8.2a1.6 1.6 0 0 1 0 2.2l-6.1 6.1a1.6 1.6 0 0 1-2.2 0z"/><circle cx="8.3" cy="8.3" r="1.6"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3 5.5 5.5"/><circle cx="12" cy="12" r="6.3"/>'
   };
   const icon = (n) => '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[n] + '</svg>';
@@ -1129,7 +1274,8 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       ['cal', 'Coming up.', "Home shows what's due soon: the next rent, bills that come round again like council and water, and any regular bills you add."],
       ['check', 'Tidy categories.', 'In Insights, tap a category to see every spend in it, and move any that belong somewhere else.'],
       ['star', 'Fun fact.', 'A little fact about how we spend, a new one each time you open the app.'],
-      ['arrow', 'Swipe through months.', 'Swipe left or right in Insights and the Calendar. Numbers count up and charts grow as each screen opens.']
+      ['arrow', 'Swipe through months.', 'Swipe left or right in Insights and the Calendar. Numbers count up and charts grow as each screen opens.'],
+      ['tag', 'Deals.', "The Calendar has a Deals view: sale days like Lucky Mart's monthly sale, plus this week's Coles, Woolies and Harris Farm specials. Add things we buy to the watch list and Home tells us when they're cheap."]
     ] }
   ];
 
@@ -1148,6 +1294,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     insMode: 'month', insYearOff: 0, insSel: null, insDay: null, pace: null, paceOn: false,
     photos: null, photoBusy: null, photoErr: null, newsShown: false, newsDoc: null, newsEdit: null, newsId: null, factN: 0,
     enterKey: null, enterAt: 0, enterDir: 0, enterDirNow: 0, countsShown: {},
+    calMode: 'spend', dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, spStore: 'all', spQuery: '', spAll: false, ozbAll: false, watchNew: '',
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -1166,7 +1313,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       categories: [],
       goal: { name: '', target: null, saved: 0 },
       card: PRESET && PRESET.card ? clone(PRESET.card) : { name: '', holder: 'b', program: '', earns: null, rates: null, ratio: 1, rate: null },
-      home: { week: true, goal: true, spot: true, recap: true, soon: true, fact: true }, bills: [], billsHide: [],
+      home: { week: true, goal: true, spot: true, recap: true, soon: true, fact: true, deals: true }, bills: [], billsHide: [],
       spot: { type: 'note', text: '', date: '' },
       remember: true, scheme: 'warm',
       moves: {},
@@ -1456,6 +1603,8 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
   /* ---------- startup ---------- */
   function boot() {
     S.factN = (Number(lsGet('hh.factN')) || 0) + 1; lsSet('hh.factN', String(S.factN));
+    try { S.feed = cleanFeed(JSON.parse(lsGet('hh.deals') || 'null')); } catch (e) { S.feed = null; }
+    setTimeout(() => loadFeed(), 1200);
     render();
     slowTimer = setTimeout(() => { if (!(S.live.hh && S.live.months)) { S.slow = true; safeRender(); } }, 10000);
     const c = window.claude;
@@ -1524,6 +1673,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       S.imp = got.import && typeof got.import === 'object' ? got.import : null;
       S.photos = got.photos && typeof got.photos === 'object' ? got.photos : null;
       S.newsDoc = got.news && typeof got.news === 'object' ? got.news : null;
+      S.dealsDoc = got.deals && typeof got.deals === 'object' ? got.deals : null;
       applyPhotos();
       parseStaged();
       S.hhLoaded = true; S.offline = false;
@@ -1661,7 +1811,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     if (!S.settings || !S.me || S.welcomePreview) return 'pre';
     let k = S.view === 'recap' ? 'insights' : S.view;
     if (k === 'insights') k += '|' + S.insMode + '|' + S.recapOffset + '|' + S.insYearOff;
-    if (k === 'cal' && S.cal) k += '|' + S.cal.y + '-' + S.cal.m;
+    if (k === 'cal' && S.cal) k += '|' + S.cal.y + '-' + S.cal.m + '|' + S.calMode;
     return k;
   }
   let countRaf = 0;
@@ -1687,7 +1837,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     swipe = null;
     if (ev.pointerType !== 'touch' || !ev.target.closest) return;
     const z = ev.target.closest('[data-swipe]');
-    if (!z || !root.contains(z) || ev.target.closest('.pace, .cols-plot, input, textarea, select, .dialog')) return;
+    if (!z || !root.contains(z) || ev.target.closest('.pace, .cols-plot, input, textarea, select, .dialog, .specials')) return;
     swipe = { x: ev.clientX, y: ev.clientY, t: Date.now(), act: z.getAttribute('data-swipe') };
   });
   document.addEventListener('pointerup', (ev) => {
@@ -1845,6 +1995,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     out += balanceCard();
     if (C.home.fact !== false) out += factCard();
     if (C.home.soon !== false) out += comingUpCard();
+    if (C.home.deals !== false) out += onSpecialCard();
     if (C.home.week !== false) out += weekCard();
     const tiles = (C.home.goal !== false ? goalTile() : '') + (C.home.spot !== false ? spotTile() : '');
     if (tiles) out += '<div class="grid2">' + tiles + '</div>';
@@ -1903,6 +2054,8 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
   }
   function viewCal() {
     if (!S.cal) initCal();
+    const modeSeg = '<div class="seg cal-mode" role="group" aria-label="Show">' + segBtn('calmode', 'spend', S.calMode !== 'deals', 'Spending') + segBtn('calmode', 'deals', S.calMode === 'deals', 'Deals') + '</div>';
+    if (S.calMode === 'deals') return dealsView(modeSeg);
     const c = S.cal, t = today(), ym = ymKey(c.y, c.m), H = holder();
     const info = {};
     S.entries.forEach((e) => {
@@ -1923,7 +2076,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     }).join('');
     const isThisMonth = ym === t.slice(0, 7);
     return '<header class="top"><div><p class="eyebrow">Every spend, day by day</p><h1 class="title">Calendar</h1></div>' +
-      '<button class="link" data-act="go" data-arg="recap">Insights</button></header>' +
+      '<button class="link" data-act="go" data-arg="recap">Insights</button></header>' + modeSeg +
       '<section class="card cal bold"><div class="cal-head"><button class="icon-btn" data-act="calmove" data-arg="-1" aria-label="Previous month">' + icon('left') + '</button>' +
       '<h2>' + L.MONTHS_FULL[c.m] + ' ' + c.y + '</h2><button class="icon-btn" data-act="calmove" data-arg="1" aria-label="Next month">' + icon('right') + '</button></div>' +
       '<div class="cal-dow" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>' +
@@ -2815,6 +2968,9 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       const next = billNext(b, t), d = daysTo(t, next);
       if (d <= 45) rows.push({ when: next, due: d < 0, name: b.name, sub: EVERY_LABEL[b.every], amount: b.amount });
     });
+    saleDays(t, L.addDays(t, 14)).forEach((o) => {
+      if (o.keen) rows.push({ when: o.date, name: o.sale.store + ' sale', sub: [o.sale.offer, o.sale.where.split(', ').pop()].filter(Boolean).join(' · '), sale: true });
+    });
     return rows.sort((a, b) => (a.when < b.when ? -1 : a.when > b.when ? 1 : (b.due ? 1 : 0) - (a.due ? 1 : 0)));
   }
   function comingUpCard() {
@@ -2823,13 +2979,13 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     if (!rows.length) {
       return '<section class="card soon"><div class="card-head"><h2>Coming up</h2>' + add + '</div><p class="muted">Bills that repeat in your spends show up here before they\'re due. Add ones you pay on a schedule, like strata or insurance.</p></section>';
     }
-    const month = rows.filter((r) => !r.rent && daysTo(t, r.when) <= 30).reduce((a, r) => a + r.amount, 0);
+    const month = rows.filter((r) => !r.rent && !r.sale && daysTo(t, r.when) <= 30).reduce((a, r) => a + r.amount, 0);
     return '<section class="card soon"><div class="card-head"><h2>Coming up</h2>' + add + '</div>' +
       (month ? '<p class="muted soon-sum">About ' + L.fmtRound(month) + ' in bills over the next 30 days.</p>' : '') +
       '<ul class="soon-list">' + rows.map((r) => '<li class="soon-row"><span class="soon-when' + (r.due ? ' due' : '') + '">' + esc(r.due ? 'Looks due' : whenLabel(r.when, t)) + '</span>' +
         '<span class="soon-main"><span class="soon-n">' + esc(r.name) + '</span><span class="k">' + esc(r.sub) + '</span>' +
         (r.key && !S.readOnly ? '<button class="link sm soon-x" data-act="billhide" data-arg="' + esc(r.key) + '">Not a bill</button>' : '') + '</span>' +
-        '<span class="soon-a">' + (r.approx ? '<span class="sr">about </span><span aria-hidden="true">~</span>' : '') + L.fmtRound(r.amount) + '</span></li>').join('') + '</ul></section>';
+        (r.sale ? '<span class="soon-a"><span class="soon-tag">Keen</span></span></li>' : '<span class="soon-a">' + (r.approx ? '<span class="sr">about </span><span aria-hidden="true">~</span>' : '') + L.fmtRound(r.amount) + '</span></li>')).join('') + '</ul></section>';
   }
   function billsDialog(d) {
     const C = cfg(), t = today(), F = d.form;
@@ -2844,6 +3000,285 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       (d.error ? '<p class="err-text" role="alert">' + esc(d.error) + '</p>' : '') +
       '<button class="btn btn-secondary btn-block" data-act="billadd">' + icon('plus') + 'Add this bill</button></div>' +
       '<div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
+  }
+
+  /* ---------- deals ---------- */
+  /* Sale days (a shop's regular sale, like a monthly 20% off Saturday) and this week's supermarket specials.
+     Sale days, the watch list and what you're keen on live in hh/deals with the rest of your data. Specials come from
+     deals.json, which a free GitHub job builds twice a day from public sources. Each phone filters it, so nothing about
+     the two of you goes into that file. */
+  const SALE_IDEAS = [
+    { key: 'luckymart', store: 'Lucky Mart', offer: 'Up to 20% off', where: 'Shop 2, 2 Wilkes Ave, Artarmon', rule: { k: 'nth', n: 2, dow: 6 },
+      link: 'https://www.sushifactory.com.au/our-group/', note: 'Japanese grocer by Artarmon station. Its sale is the 2nd Saturday of every month.' }
+  ];
+  const DEALS_BASE = { sales: [], watch: [], keen: {} };
+  const LINK_OK = /^https:\/\/(www\.)?(ozbargain\.com\.au|coles\.com\.au|woolworths\.com\.au|harrisfarm\.com\.au|sushifactory\.com\.au)\/[^\s"'<>]*$/;
+  const linkOk = (u) => (LINK_OK.test(String(u || '')) ? String(u).slice(0, 300) : '');
+  const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+  const shopLabel = (s) => (s === 'Woolworths' ? 'Woolies' : s);
+  function saleRule(r) {
+    if (!r || typeof r !== 'object') return null;
+    if (r.k === 'once') return ISO_DAY.test(r.date || '') ? { k: 'once', date: r.date } : null;
+    if (r.k === 'weekly') return { k: 'weekly', dow: L.clamp(r.dow, 0, 6) };
+    if (r.k === 'monthly') return { k: 'monthly', day: L.clamp(r.day, 1, 31) };
+    if (r.k === 'nth') return { k: 'nth', n: L.clamp(r.n, 1, 5), dow: L.clamp(r.dow, 0, 6) };
+    return null;
+  }
+  function dealsCfg() {
+    const d = S.dealsDoc && typeof S.dealsDoc === 'object' ? S.dealsDoc : {};
+    const days = (a) => (Array.isArray(a) ? a.filter((x) => typeof x === 'string' && ISO_DAY.test(x)).slice(-60) : []);
+    return {
+      sales: (Array.isArray(d.sales) ? d.sales : []).filter((x) => x && typeof x.id === 'string' && typeof x.store === 'string' && x.store.trim() && saleRule(x.rule)).slice(0, 30).map((x) => ({
+        id: x.id.slice(0, 24), key: typeof x.key === 'string' ? x.key.slice(0, 24) : '', store: x.store.trim().slice(0, 40), offer: String(x.offer || '').slice(0, 60),
+        where: String(x.where || '').slice(0, 80), note: String(x.note || '').slice(0, 160), link: linkOk(x.link), rule: saleRule(x.rule),
+        keen: x.keen !== false, skip: days(x.skip), on: days(x.on)
+      })),
+      watch: (Array.isArray(d.watch) ? d.watch : []).filter((w) => typeof w === 'string' && w.trim()).map((w) => w.trim().slice(0, 30)).slice(0, 30)
+    };
+  }
+  /* Saved right away on this phone too, so a tap shows straight away instead of after the round trip. */
+  function saveDeals(patch) {
+    S.dealsDoc = Object.assign({}, S.dealsDoc || DEALS_BASE, clone(patch));
+    return upsert('hh/deals', patch, DEALS_BASE);
+  }
+  /* Every sale day from one date to another, and whether you're keen on that one. */
+  function saleDays(from, to) {
+    const out = [];
+    dealsCfg().sales.forEach((s) => {
+      L.saleDates(s.rule, from, to).forEach((d) => out.push({ sale: s, date: d, keen: s.keen ? s.skip.indexOf(d) < 0 : s.on.indexOf(d) >= 0 }));
+    });
+    return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.sale.store.localeCompare(b.sale.store)));
+  }
+  const nextSale = (s, t) => L.saleDates(s.rule, t, L.addDays(t, 400))[0] || '';
+  function saleIdeas() {
+    const D = dealsCfg();
+    return SALE_IDEAS.filter((x) => !D.sales.some((s) => s.key === x.key || s.store.toLowerCase() === x.store.toLowerCase()));
+  }
+
+  /* This week's specials file. On GitHub Pages it's next door on the repo's "deals" branch. */
+  function dealsUrl() {
+    if (window.HH_DEALS_URL) return String(window.HH_DEALS_URL);
+    const m = /^([a-z0-9-]+)\.github\.io$/i.exec(location.hostname || ''), repo = (location.pathname || '').split('/').filter(Boolean)[0];
+    return m && repo ? 'https://raw.githubusercontent.com/' + m[1] + '/' + repo + '/deals/deals.json' : '';
+  }
+  /* Only what the app expects gets through: plain text, whole cents, real dates, links to the stores and OzBargain. */
+  function cleanFeed(j) {
+    if (!j || typeof j !== 'object' || j.v !== 1) return null;
+    const str = (x, n) => String(x == null ? '' : x).slice(0, n), int = (x) => (typeof x === 'number' && isFinite(x) ? Math.round(x) : 0), day = (x) => (ISO_DAY.test(x || '') ? x : '');
+    const src = (x) => (x && typeof x === 'object' ? { ok: x.ok === true, stale: x.stale === true, from: day(x.from), to: day(x.to), link: linkOk(x.link), n: int(x.n) } : { ok: false });
+    const so = j.sources && typeof j.sources === 'object' ? j.sources : {};
+    return {
+      updated: str(j.updated, 40),
+      sources: { ozb: src(so.ozb), report: src(so.report), harris: src(so.harris) },
+      specials: (Array.isArray(j.specials) ? j.specials : []).slice(0, 1500).filter((x) => x && typeof x.n === 'string' && x.n.trim() && int(x.now) > 0).map((x) => ({
+        s: L.storeName(str(x.s, 40)), n: str(x.n, 120), was: int(x.was), now: int(x.now), off: L.clamp(int(x.off), 0, 99), cat: str(x.cat, 40), last: str(x.last, 40),
+        link: linkOk(x.link), src: x.src === 'hf' ? 'hf' : 'hp'
+      })),
+      deals: (Array.isArray(j.deals) ? j.deals : []).slice(0, 150).filter((x) => x && typeof x.t === 'string' && x.t.trim()).map((x) => ({
+        id: str(x.id, 12), t: str(x.t, 160), s: str(x.s, 40), link: linkOk(x.link), from: day(x.from), to: day(x.to), votes: int(x.votes), hp: x.hp === true
+      }))
+    };
+  }
+  function loadFeed(force) {
+    const url = dealsUrl();
+    if (!url || S.feedBusy || (!force && S.feedAt && Date.now() - S.feedAt < 30 * 60000)) return;
+    S.feedBusy = true;
+    fetch(url, { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : Promise.reject(r.status === 404 ? 'none' : 'net')))
+      .then((j) => { const f = cleanFeed(j); if (!f) throw 'bad'; S.feed = f; S.feedErr = null; lsSet('hh.deals', JSON.stringify(j)); },
+        (e) => { S.feedErr = e === 'none' ? 'none' : 'net'; })
+      .catch(() => { S.feedErr = 'bad'; })
+      .then(() => { S.feedBusy = false; S.feedAt = Date.now(); if (S.settings && S.me) safeRender(); });
+  }
+  /* Specials whose week hasn't ended. */
+  function specialsNow() {
+    const F = S.feed, t = today();
+    if (!F) return [];
+    const live = (k) => { const s = F.sources[k]; return !!(s && s.to && s.to >= t); };
+    return F.specials.filter((x) => live(x.src === 'hf' ? 'harris' : 'report'));
+  }
+  /* Shops you actually go to, from this past year of shared spends: Coles 19 trips and so on. */
+  function shopVisits() {
+    const since = L.addDays(today(), -365), n = {};
+    S.entries.forEach((e) => {
+      if (!L.isSpend(e) || e.date < since) return;
+      const raw = String(e.title || '').trim(), s = L.storeName(raw);
+      if (s && s !== raw) n[s] = (n[s] || 0) + 1;
+      else if (/^(coles|woolworths|aldi|costco|iga)$/i.test(raw)) n[L.storeName(raw)] = (n[L.storeName(raw)] || 0) + 1;
+    });
+    return n;
+  }
+  function lastLabel(s) {
+    s = String(s || '').trim();
+    if (!s) return '';
+    if (/never|first/i.test(s)) return 'First time at half price';
+    const m = /^(.*?)\s*@\s*(WW|CL|Woolworths|Coles)$/i.exec(s);
+    return 'Last half price ' + (m ? m[1] + ' at ' + (/^(ww|woolworths)$/i.test(m[2]) ? 'Woolies' : 'Coles') : s);
+  }
+  function spFiltered() {
+    const D = dealsCfg(), q = String(S.spQuery || '').trim().toLowerCase();
+    let list = specialsNow();
+    if (S.spStore !== 'all') list = list.filter((x) => x.s === S.spStore);
+    if (q) list = list.filter((x) => (x.n + ' ' + x.cat).toLowerCase().indexOf(q) >= 0);
+    return L.sortSpecials(list, D.watch);
+  }
+  function spRow(x, words) {
+    const hit = L.watchHits(x.n, words).length > 0;
+    const name = x.link ? '<a class="sp-n" href="' + esc(x.link) + '" target="_blank" rel="noopener">' + esc(x.n) + '</a>' : '<span class="sp-n">' + esc(x.n) + '</span>';
+    return '<li class="sp-row' + (hit ? ' hit' : '') + '"><span class="sp-main">' + name + '<span class="k">' + esc([shopLabel(x.s), x.cat, lastLabel(x.last)].filter(Boolean).join(' · ')) + '</span>' +
+      (hit ? '<span class="tag hit">On our list</span>' : '') + '</span>' +
+      '<span class="sp-price"><span class="sp-now">' + L.fmt(x.now) + '</span>' + (x.was > x.now ? '<s class="sp-was"><span class="sr">was </span>' + L.fmt(x.was) + '</s>' : '') +
+      (x.off ? '<span class="sp-off">' + x.off + '% off</span>' : '') + '</span></li>';
+  }
+  function spListHtml() {
+    const D = dealsCfg(), list = spFiltered(), shown = S.spAll ? list.slice(0, 500) : list.slice(0, 12);
+    if (!list.length) return '<p class="muted sp-none">' + (String(S.spQuery || '').trim() ? 'Nothing on special matches that this week.' : 'Nothing here this week.') + '</p>';
+    return '<ul class="sp-list">' + shown.map((x) => spRow(x, D.watch)).join('') + '</ul>' +
+      (list.length > 12 ? '<button class="btn btn-secondary btn-block sp-more" data-act="spmore">' + (S.spAll ? 'Show fewer' : 'Show all ' + list.length) + '</button>' : '');
+  }
+  function agoLabel(iso) {
+    const t = Date.parse(iso || '');
+    if (!t) return '';
+    const mins = Math.max(0, Math.round((Date.now() - t) / 60000));
+    if (mins < 60) return mins <= 1 ? 'just now' : mins + ' minutes ago';
+    const d = new Date(t), day = L.ymd(d), hm = d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }).replace(/\s/g, '').toLowerCase();
+    return day === today() ? 'at ' + hm + ' today' : day === L.addDays(today(), -1) ? 'yesterday at ' + hm : 'on ' + L.fmtDay(day);
+  }
+  function specialsCard() {
+    const F = S.feed, D = dealsCfg(), t = today();
+    const head = '<div class="card-head"><h2>Specials this week</h2></div>';
+    const watch = '<div class="watch"><p class="k">Our watch list</p>' +
+      (D.watch.length ? '<div class="chips">' + D.watch.map((w) => '<button class="chip sm" data-act="watchdel" data-arg="' + esc(w) + '">' + esc(w) + '<span aria-hidden="true">' + icon('close') + '</span><span class="sr">, remove</span></button>').join('') + '</div>'
+        : '<p class="hint">Add things you buy, like coffee or Weet-Bix. Specials on them go to the top, and Home tells you when they\'re cheap.</p>') +
+      (S.readOnly ? '' : '<div class="watch-add"><label class="sr" for="watchIn">Add to the watch list</label><input class="input" id="watchIn" maxlength="30" placeholder="Add something we buy" autocomplete="off" enterkeyhint="done" data-bind="watchNew" data-enter="watchadd" value="' + esc(S.watchNew) + '">' +
+        '<button class="btn btn-secondary btn-small" data-act="watchadd">Add</button></div>') + '</div>';
+    if (!F) {
+      const why = !dealsUrl() ? 'Specials show here in the app on your phones.' : S.feedBusy || !S.feedAt ? 'Getting this week\'s specials.'
+        : S.feedErr === 'none' ? 'The deals job hasn\'t run yet. It runs every morning and evening, so check back soon.' : 'This week\'s specials couldn\'t be reached. Check your connection.';
+      return '<section class="card specials">' + head + '<p class="muted">' + esc(why) + '</p>' +
+        (S.feedErr === 'net' || S.feedErr === 'bad' ? '<button class="link sm" data-act="feedretry">Try again</button>' : '') + watch + '</section>';
+    }
+    const all = specialsNow(), rep = F.sources.report, hf = F.sources.harris, wk = rep.to >= t ? rep : hf.to >= t ? hf : null;
+    const counts = {};
+    all.forEach((x) => { counts[x.s] = (counts[x.s] || 0) + 1; });
+    const visits = shopVisits(), stores = Object.keys(counts).sort((a, b) => (visits[b] || 0) - (visits[a] || 0) || counts[b] - counts[a]);
+    if (S.spStore !== 'all' && !counts[S.spStore]) S.spStore = 'all';
+    const chip = (v, label, n) => '<button class="chip sm" data-act="spstore" data-arg="' + esc(v) + '" aria-pressed="' + (S.spStore === v) + '">' + esc(label) + ' <span class="n">' + n + '</span></button>';
+    const when = wk ? (wk.from > t ? 'Starts ' + L.fmtDay(wk.from) + ', to ' : wk.from ? L.fmtDay(wk.from) + ' to ' : 'Until ') + L.fmtDay(wk.to) + ' · NSW · new ones every Wednesday' : 'New ones every Wednesday';
+    const srcs = [];
+    if (rep.ok || rep.stale) srcs.push('Coles and Woolies from the weekly half-price list posted on ' + (rep.link ? '<a href="' + esc(rep.link) + '" target="_blank" rel="noopener">OzBargain</a>' : 'OzBargain'));
+    if (hf.ok || hf.stale) srcs.push('Harris Farm from its online specials');
+    return '<section class="card specials">' + head + '<p class="muted sp-when">' + esc(when) + '</p>' + watch +
+      (all.length ? '<div class="chips store-chips" role="group" aria-label="Shop">' + chip('all', 'All', all.length) + stores.map((s) => chip(s, shopLabel(s), counts[s])).join('') + '</div>' +
+        '<label class="sr" for="spQ">Search specials</label><input class="input sp-search" id="spQ" type="search" placeholder="Search specials" autocomplete="off" enterkeyhint="search" data-bind="spQuery" data-input="spsearch" value="' + esc(S.spQuery) + '">' +
+        '<div id="spList">' + spListHtml() + '</div>'
+        : '<p class="muted">No specials have come through for this week yet. They update every morning and evening.</p>') +
+      (srcs.length ? '<p class="hint sp-src">' + srcs.join('. ') + '. Updated ' + esc(agoLabel(F.updated)) + '. Prices can differ by store.</p>' : '') + '</section>';
+  }
+  /* OzBargain deals at your shops, or matching your watch list. */
+  function ozbCard() {
+    const F = S.feed, t = today();
+    if (!F || !F.deals.length) return '';
+    const D = dealsCfg(), shops = /^(Coles|Woolworths|Harris Farm|ALDI|Costco|IGA|Lucky Mart)$/;
+    const list = F.deals.filter((d) => !d.hp && (!d.to || d.to >= t)).map((d) => Object.assign({ shop: L.storeName(d.s) }, d));
+    const mine = list.filter((d) => shops.test(d.shop) || L.watchHits(d.t, D.watch).length);
+    const shown = S.ozbAll ? list.slice(0, 40) : mine.slice(0, 6);
+    if (!list.length) return '';
+    return '<section class="card specials"><div class="card-head"><h2>From OzBargain</h2></div><p class="muted">Deals people have posted for the shops you use.</p>' +
+      (shown.length ? '<ul class="ozb-list">' + shown.map((d) => '<li class="ozb-row">' + (d.link ? '<a class="ozb-t" href="' + esc(d.link) + '" target="_blank" rel="noopener">' + esc(d.t) + '</a>' : '<span class="ozb-t">' + esc(d.t) + '</span>') +
+        '<span class="k">' + esc([shopLabel(d.shop || d.s), d.to ? 'until ' + L.fmtDay(d.to) : '', d.votes > 0 ? d.votes + ' votes' : ''].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul>'
+        : '<p class="muted" style="margin-top:8px">Nothing for your shops right now.</p>') +
+      (list.length > shown.length || S.ozbAll ? '<button class="link sm" style="margin-top:8px" data-act="ozball">' + (S.ozbAll ? 'Just our shops' : 'See all ' + list.length + ' grocery deals') + '</button>' : '') + '</section>';
+  }
+  function saleRow(o, t) {
+    const s = o.sale, past = o.date < t, what = [s.offer, L.saleRuleLabel(s.rule)].filter(Boolean).join(' · ');
+    return '<li class="sale-row"><span class="soon-when">' + esc(whenLabel(o.date, t)) + '</span>' +
+      '<button class="sale-main" data-act="saleopen" data-arg="' + esc(s.id) + '"><span class="soon-n">' + esc(s.store) + '</span><span class="k">' + esc(what) + '</span></button>' +
+      (S.readOnly || past ? '<span></span>' : '<button class="keen-btn" data-act="salekeen" data-arg="' + esc(s.id + '|' + o.date) + '" aria-pressed="' + o.keen + '" aria-label="Keen on ' + esc(s.store) + ', ' + esc(L.fmtDayLong(o.date)) + '">' + (o.keen ? icon('check') : '') + 'Keen</button>') + '</li>';
+  }
+  function saleIdeaHtml() {
+    if (S.readOnly) return '';
+    return saleIdeas().map((x) => '<div class="idea"><p><strong>' + esc(x.store) + '</strong>, ' + esc(x.where.split(', ').pop()) + '. ' + esc(x.offer) + ', ' + esc(L.saleRuleLabel(x.rule).toLowerCase().replace(/^last/, 'the last').replace(/^(\d)/, 'the $1')) + '.</p>' +
+      '<button class="btn btn-secondary btn-small" data-act="saleidea" data-arg="' + esc(x.key) + '">Add</button></div>').join('');
+  }
+  function saleMonthCard(c) {
+    const first = ymKey(c.y, c.m) + '-01', last = ymKey(c.y, c.m) + '-' + L.pad(L.daysInMonth(c.y, c.m)), t = today(), list = saleDays(first, last);
+    return '<section class="card" id="saleMonth"><div class="card-head"><h2>Sale days in ' + L.MONTHS_FULL[c.m] + '</h2></div>' +
+      (list.length ? '<ul class="sale-list">' + list.map((o) => saleRow(o, t)).join('') + '</ul>'
+        : '<p class="muted">' + (dealsCfg().sales.length ? 'No sale days this month.' : 'Add the days your shops run sales, like a monthly 20% off Saturday. Mark the ones you\'re keen on and they show on Home.') + '</p>') +
+      saleIdeaHtml() + (S.readOnly ? '' : '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="saleadd">' + icon('plus') + 'Add a sale day</button>') + '</section>';
+  }
+  function saleDayCard(d) {
+    const list = saleDays(d, d), t = today();
+    return '<section class="card" id="dayCard"><div class="card-head"><h2>' + esc(L.fmtDayLong(d)) + '</h2></div>' +
+      (list.length ? '<ul class="sale-list">' + list.map((o) => saleRow(o, t)).join('') + '</ul>' : '<p class="muted">No sale days on this day.</p>') +
+      (L.parseYmd(d).getDay() === 3 ? '<p class="hint">New Coles and Woolies specials start today.</p>' : '') +
+      (S.readOnly ? '' : '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="saleadd" data-arg="' + d + '">' + icon('plus') + 'Add a sale day on this day</button>') + '</section>';
+  }
+  function dealsView(modeSeg) {
+    const c = S.cal, t = today(), ym = ymKey(c.y, c.m);
+    const first = ym + '-01', last = ym + '-' + L.pad(L.daysInMonth(c.y, c.m)), by = {};
+    saleDays(first, last).forEach((o) => { (by[o.date] = by[o.date] || []).push(o); });
+    const cells = L.monthGrid(c.y, c.m).map((d) => {
+      if (!d) return '<span class="cal-day pad" aria-hidden="true"></span>';
+      const list = by[d] || [], keen = list.some((o) => o.keen);
+      const cls = ['cal-day', list.length ? 'sale' : '', keen && d >= t ? 'keen' : '', d === t ? 'today' : '', d === c.sel ? 'sel' : '', d > t ? 'future' : '', d < t ? 'past' : ''].filter(Boolean).join(' ');
+      const label = L.fmtDayLong(d) + list.map((o) => ', ' + o.sale.store + ' sale' + (o.keen ? ', keen' : '')).join('');
+      const short = list.length ? list[0].sale.store.split(' ')[0].slice(0, 6) : '';
+      return '<button class="' + cls + '" data-act="selday" data-arg="' + d + '" aria-label="' + esc(label) + '" aria-pressed="' + (d === c.sel) + '">' +
+        '<span class="n">' + L.parseYmd(d).getDate() + '</span><span class="v">' + esc(short) + '</span>' +
+        '<span class="dots">' + (list.length ? '<i class="dot ' + (keen ? 'keen' : 'sale') + '"></i>' : '') + '</span></button>';
+    }).join('');
+    return '<header class="top"><div><p class="eyebrow">Sale days and specials</p><h1 class="title">Calendar</h1></div></header>' + modeSeg +
+      '<section class="card cal bold"><div class="cal-head"><button class="icon-btn" data-act="calmove" data-arg="-1" aria-label="Previous month">' + icon('left') + '</button>' +
+      '<h2>' + L.MONTHS_FULL[c.m] + ' ' + c.y + '</h2><button class="icon-btn" data-act="calmove" data-arg="1" aria-label="Next month">' + icon('right') + '</button></div>' +
+      '<div class="cal-dow" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>' +
+      '<div class="cal-grid">' + cells + '</div>' +
+      '<div class="legend"><span><i class="dot keen"></i>Sale day we\'re keen on</span><span><i class="dot sale"></i>Sale day</span></div>' +
+      (ym === t.slice(0, 7) ? '' : '<p style="margin-top:6px"><button class="link sm" data-act="caltoday">Back to this month</button></p>') + '</section>' +
+      (c.sel && c.sel.slice(0, 7) === ym && (c.picked || saleDays(c.sel, c.sel).length) ? saleDayCard(c.sel) : '') + saleMonthCard(c) + specialsCard() + ozbCard();
+  }
+  /* Home: the specials this week on your watch list. */
+  function onSpecialCard() {
+    const D = dealsCfg();
+    if (!D.watch.length || !S.feed) return '';
+    const hits = L.sortSpecials(specialsNow().filter((x) => L.watchHits(x.n, D.watch).length), D.watch);
+    if (!hits.length) return '';
+    const names = hits.slice(0, 2).map((x) => x.n.split(' ').slice(0, 4).join(' ') + ' at ' + shopLabel(x.s));
+    return '<button class="card row-card hot" data-act="godeals"><span class="row-lead"><span class="news-ic" aria-hidden="true">' + icon('tag') + '</span><span><span class="k">On special this week</span>' +
+      '<span class="row-t">' + esc(names.join(', ') + (hits.length > 2 ? ' and ' + (hits.length - 2) + ' more' : '')) + '</span></span></span>' + icon('arrow') + '</button>';
+  }
+  function saleForm(s, date) {
+    if (s) return { store: s.store, offer: s.offer, where: s.where, k: s.rule.k, n: String(s.rule.n || 2), dow: String(s.rule.dow != null ? s.rule.dow : 6), day: String(s.rule.day || 1), date: s.rule.date || '', keen: s.keen };
+    const d = date || today(), dd = L.parseYmd(d);
+    return { store: '', offer: '', where: '', k: date ? 'once' : 'nth', n: String(Math.min(5, Math.ceil(dd.getDate() / 7))), dow: String(dd.getDay()), day: String(dd.getDate()), date: d, keen: true };
+  }
+  function formRule(F) {
+    if (F.k === 'once') return ISO_DAY.test(F.date || '') ? { k: 'once', date: F.date } : null;
+    if (F.k === 'weekly') return { k: 'weekly', dow: L.clamp(parseInt(F.dow, 10), 0, 6) };
+    if (F.k === 'monthly') return { k: 'monthly', day: L.clamp(parseInt(F.day, 10) || 1, 1, 31) };
+    return { k: 'nth', n: L.clamp(parseInt(F.n, 10) || 1, 1, 5), dow: L.clamp(parseInt(F.dow, 10), 0, 6) };
+  }
+  function saleDialog(d) {
+    const F = d.form, t = today(), rule = formRule(F);
+    const opt = (v, l, cur) => '<option value="' + esc(v) + '"' + (String(cur) === String(v) ? ' selected' : '') + '>' + esc(l) + '</option>';
+    const dowSel = '<select class="input" id="saleDow" data-bind="dialog.form.dow" data-change="salerefresh">' + [1, 2, 3, 4, 5, 6, 0].map((i) => opt(i, L.DAYS_FULL[i], F.dow)).join('') + '</select>';
+    let when = '';
+    if (F.k === 'nth') when = '<div class="row2"><label class="field"><span>Which</span><select class="input" id="saleN" data-bind="dialog.form.n" data-change="salerefresh">' + [1, 2, 3, 4, 5].map((n) => opt(n, ['1st', '2nd', '3rd', '4th', 'Last'][n - 1], F.n)).join('') + '</select></label><label class="field"><span>Day</span>' + dowSel + '</label></div>';
+    else if (F.k === 'monthly') when = '<label class="field"><span>Date each month</span><select class="input" id="saleDay" data-bind="dialog.form.day" data-change="salerefresh">' + Array.from({ length: 31 }, (_, i) => opt(i + 1, L.ordinalDay(i + 1), F.day)).join('') + '</select></label>';
+    else if (F.k === 'weekly') when = '<label class="field"><span>Day</span>' + dowSel + '</label>';
+    else when = '<label class="field"><span>Date</span><input class="input" id="saleDate" type="date" data-bind="dialog.form.date" data-change="salerefresh" value="' + esc(F.date) + '"></label>';
+    const next = rule ? L.saleDates(rule, t, L.addDays(t, 400)).slice(0, 3) : [];
+    return '<h2 id="dlgT">' + (d.id ? 'Edit sale day' : 'Add a sale day') + '</h2>' +
+      '<label class="field"><span>Shop</span><input class="input" id="saleStore" maxlength="40" placeholder="Lucky Mart" autocomplete="off" data-bind="dialog.form.store" value="' + esc(F.store) + '"></label>' +
+      '<label class="field"><span>The deal</span><input class="input" id="saleOffer" maxlength="60" placeholder="20% off storewide" autocomplete="off" data-bind="dialog.form.offer" value="' + esc(F.offer) + '"></label>' +
+      '<label class="field"><span>When</span><select class="input" id="saleKind" data-bind="dialog.form.k" data-change="salerefresh">' +
+        [['nth', 'Same weekday each month'], ['monthly', 'Same date each month'], ['weekly', 'Every week'], ['once', 'Just once']].map((x) => opt(x[0], x[1], F.k)).join('') + '</select></label>' + when +
+      '<p class="hint" aria-live="polite">' + esc(next.length ? 'Next: ' + next.map(L.fmtDay).join(', ') : rule && F.k === 'once' ? 'That date has passed.' : 'Pick a date.') + '</p>' +
+      '<label class="field"><span>Where (optional)</span><input class="input" id="saleWhere" maxlength="80" autocomplete="off" data-bind="dialog.form.where" value="' + esc(F.where) + '"></label>' +
+      '<label class="switch-row"><span>We\'re keen every time</span><input type="checkbox" class="switch" role="switch" data-bind="dialog.form.keen"' + (F.keen ? ' checked' : '') + '></label>' +
+      (d.error ? '<p class="err-text" role="alert">' + esc(d.error) + '</p>' : '') +
+      '<div class="dialog-actions"><button class="btn btn-secondary" data-act="dlgclose">Cancel</button><button class="btn btn-primary" data-act="salesave">' + (d.id ? 'Save' : 'Add sale day') + '</button></div>' +
+      (d.id ? '<p class="dlg-extra"><button class="link sm danger" data-act="saledel">Remove this sale day</button></p>' : '');
   }
 
   /* ---------- notes for the other person ---------- */
@@ -3007,7 +3442,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
         ratio: String(C.card.ratio || 3),
         pointsBal: C.card.pointsBal != null ? C.card.pointsBal.toLocaleString('en-AU') : '', pointsAsOf: C.card.pointsAsOf || ''
       },
-      home: { week: C.home.week !== false, goal: C.home.goal !== false, spot: C.home.spot !== false, recap: C.home.recap !== false, soon: C.home.soon !== false, fact: C.home.fact !== false },
+      home: { week: C.home.week !== false, goal: C.home.goal !== false, spot: C.home.spot !== false, recap: C.home.recap !== false, soon: C.home.soon !== false, fact: C.home.fact !== false, deals: C.home.deals !== false },
       spot: { type: C.spot.type === 'countdown' ? 'countdown' : 'note', text: String(C.spot.text || ''), date: String(C.spot.date || '') },
       budgetSkip: C.budgetSkip.slice(), cardFrom: C.cardFrom, scheme: C.scheme,
       welcome: { note: C.welcome.note || (S.me ? defaultNote(other(S.me)) : '') },
@@ -3056,7 +3491,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
         categories: D.categories.slice(0, 30),
         goal: { name: String(D.goal.name || '').trim().slice(0, 40), target: target.v, saved: saved.v || 0 },
         card: { name: String(D.card.name || '').trim().slice(0, 40), holder: D.card.holder === 'a' ? 'a' : 'b', program: D.card.earns ? L.CARD_PRESETS[D.card.earns].program : cfg().card.program, earns: D.card.earns || null, rates, ratio, rate: null, pointsBal, pointsAsOf },
-        home: { week: !!D.home.week, goal: !!D.home.goal, spot: !!D.home.spot, recap: !!D.home.recap, soon: !!D.home.soon, fact: !!D.home.fact },
+        home: { week: !!D.home.week, goal: !!D.home.goal, spot: !!D.home.spot, recap: !!D.home.recap, soon: !!D.home.soon, fact: !!D.home.fact, deals: !!D.home.deals },
         spot: { type: D.spot.type, text: String(D.spot.text || '').trim().slice(0, 60), date: spotDate },
         budgetSkip: D.budgetSkip.filter((c) => typeof c === 'string').slice(0, 30),
         scheme: SCHEMES[D.scheme] ? D.scheme : 'warm',
@@ -3123,7 +3558,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       '<label class="field"><span>As of</span><input class="input" id="dpasof" type="date" data-bind="draft.card.pointsAsOf" data-change="dirty" value="' + esc(D.card.pointsAsOf) + '"' + ro + '></label></div>' +
       '<p class="hint" style="margin:-6px 0 16px">From a statement or the bank app. Insights adds an estimate for card spends after that date.</p>' +
       '<label class="field" style="margin:0"><span>Bring in card spends from</span><input class="input" id="dcfrom" type="date" data-bind="draft.cardFrom" data-change="dirty" value="' + esc(D.cardFrom) + '"' + ro + '><p class="hint">Westpac imports leave out card spends before this date. Leave it empty to bring in everything.</p></label></section>';
-    out += '<section class="card"><div class="card-head"><h2>Home screen</h2></div>' + sw('week', 'Last 7 days') + sw('goal', 'Our goal') + sw('spot', 'Your spot') + sw('fact', 'Fun fact') + sw('soon', 'Coming up') + sw('recap', 'Insights link') + '</section>';
+    out += '<section class="card"><div class="card-head"><h2>Home screen</h2></div>' + sw('week', 'Last 7 days') + sw('goal', 'Our goal') + sw('spot', 'Your spot') + sw('fact', 'Fun fact') + sw('soon', 'Coming up') + sw('deals', 'Specials on our watch list') + sw('recap', 'Insights link') + '</section>';
     out += '<section class="card"><div class="card-head"><h2>Your spot</h2></div><p class="muted" style="margin-bottom:12px">A space on Home for whatever you like: a note to each other or a countdown.</p>' +
       '<fieldset><legend class="sr">Type</legend><div class="seg">' + segBtn('cspot', 'note', D.spot.type === 'note', 'Note') + segBtn('cspot', 'countdown', D.spot.type === 'countdown', 'Countdown') + '</div></fieldset>' +
       '<label class="field"><span>' + (D.spot.type === 'countdown' ? 'Counting down to' : 'Note') + '</span><input class="input" id="dstext" maxlength="60" placeholder="' + (D.spot.type === 'countdown' ? 'Our holiday' : 'No takeaway this week') + '" data-bind="draft.spot.text" data-change="dirty" value="' + esc(D.spot.text) + '"' + ro + '></label>' +
@@ -3439,6 +3874,8 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       body = swTrimDialog(d);
     } else if (d.type === 'bills') {
       body = billsDialog(d);
+    } else if (d.type === 'sale') {
+      body = saleDialog(d);
     } else if (d.type === 'inscat') {
       body = insCatDialog(d);
     } else if (d.type === 'news') {
@@ -3495,9 +3932,9 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     mark: (arg) => { const i = arg.lastIndexOf('|'); markEntries([arg.slice(0, i)], arg.slice(i + 1), true); },
     shareday: (d) => markEntries(pendingAll().filter((e) => e.date === d).map((e) => e.id), 'shared', false),
     dismissimport: () => { S.importResult = null; render(); },
-    selday: (d) => { S.cal.sel = d; render(); const c = document.getElementById('dayCard'); if (c && c.getBoundingClientRect().top > window.innerHeight - 120) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
+    selday: (d) => { S.cal.sel = d; S.cal.picked = true; render(); const c = document.getElementById('dayCard'); if (c && c.getBoundingClientRect().top > window.innerHeight - 120) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
     pickday: (d) => { initCal(d); go('cal'); },
-    calmove: (n) => { S.enterDir = Number(n) > 0 ? 1 : -1; const t = L.addMonths(S.cal.y, S.cal.m, Number(n)); S.cal.y = t[0]; S.cal.m = t[1]; const first = ymKey(t[0], t[1]) + '-01'; S.cal.sel = today().slice(0, 7) === ymKey(t[0], t[1]) ? today() : first; render(); },
+    calmove: (n) => { S.enterDir = Number(n) > 0 ? 1 : -1; const t = L.addMonths(S.cal.y, S.cal.m, Number(n)); S.cal.y = t[0]; S.cal.m = t[1]; const first = ymKey(t[0], t[1]) + '-01'; S.cal.sel = today().slice(0, 7) === ymKey(t[0], t[1]) ? today() : first; S.cal.picked = false; render(); },
     caltoday: () => { initCal(); render(); },
     settle: () => { const b = balance(); if (b.state === 'square') return; openDialog({ type: 'settle', from: b.from, to: b.to, amount: centsToStr(b.amount) }); },
     tabstart: () => {
@@ -3580,6 +4017,65 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
     swtrimgo: () => doSwTrim(),
     newsok: () => closeDialog(),
     factnext: () => { S.factN++; lsSet('hh.factN', String(S.factN)); const c = document.getElementById('factCard'); if (c) c.outerHTML = factCard(null, true); },
+    calmode: (m) => { S.calMode = m === 'deals' ? 'deals' : 'spend'; if (S.cal) S.cal.picked = false; if (S.calMode === 'deals') loadFeed(); render(); },
+    godeals: () => { if (!S.cal) initCal(); S.calMode = 'deals'; loadFeed(); go('cal'); },
+    feedretry: () => { loadFeed(true); render(); },
+    spstore: (v) => { S.spStore = v || 'all'; S.spAll = false; render(); },
+    spmore: () => { S.spAll = !S.spAll; render(); if (!S.spAll) { const el = document.getElementById('spList'); if (el) el.scrollIntoView({ block: 'nearest' }); } },
+    ozball: () => { S.ozbAll = !S.ozbAll; render(); },
+    watchadd: () => {
+      const w = String(S.watchNew || '').trim().replace(/\s+/g, ' ').slice(0, 30), D = dealsCfg();
+      const el = () => document.getElementById('watchIn');
+      if (!w) { if (el()) el().focus(); return; }
+      S.watchNew = '';
+      if (!D.watch.some((x) => x.toLowerCase() === w.toLowerCase())) {
+        if (D.watch.length >= 30) { toast('That\'s the most words the watch list keeps.'); render(); return; }
+        saveDeals({ watch: D.watch.concat([w]) });
+      }
+      render();
+      if (el()) el().focus();
+    },
+    watchdel: (w) => { const D = dealsCfg(); saveDeals({ watch: D.watch.filter((x) => x !== w) }); render(); },
+    saleidea: (key) => {
+      const x = SALE_IDEAS.filter((i) => i.key === key)[0], D = dealsCfg(), t = today();
+      if (!x || D.sales.some((s) => s.key === key)) return;
+      const sale = { id: uid('sale'), key: x.key, store: x.store, offer: x.offer, where: x.where, note: x.note, link: x.link, rule: clone(x.rule), keen: true, skip: [], on: [] };
+      saveDeals({ sales: D.sales.concat([sale]) }).then((ok) => { if (ok) toast('Added ' + x.store + '. Next one is ' + L.fmtDay(nextSale(sale, t))); });
+      render();
+    },
+    saleadd: (d) => openDialog({ type: 'sale', id: null, form: saleForm(null, ISO_DAY.test(d || '') ? d : null), error: null }),
+    saleopen: (id) => { const s = dealsCfg().sales.filter((x) => x.id === id)[0]; if (s) openDialog({ type: 'sale', id, form: saleForm(s), error: null }); },
+    salesave: () => {
+      const d = S.dialog, F = d && d.form;
+      if (!F) return;
+      const store = String(F.store || '').trim().replace(/\s+/g, ' ').slice(0, 40), rule = formRule(F), D = dealsCfg();
+      if (!store) { d.error = 'Which shop is it at?'; d.focused = false; render(); return; }
+      if (!rule) { d.error = 'Pick the date of the sale.'; render(); return; }
+      const base = d.id ? D.sales.filter((x) => x.id === d.id)[0] : null;
+      if (!base && D.sales.length >= 30) { d.error = 'That\'s the most sale days this can keep.'; render(); return; }
+      const sale = Object.assign({}, base || { id: uid('sale'), key: '', note: '', link: '', skip: [], on: [] },
+        { store, offer: String(F.offer || '').trim().slice(0, 60), where: String(F.where || '').trim().slice(0, 80), rule, keen: !!F.keen });
+      if (base && JSON.stringify(base.rule) !== JSON.stringify(rule)) { sale.skip = []; sale.on = []; }
+      if (base && base.keen !== sale.keen) { sale.skip = []; sale.on = []; }
+      saveDeals({ sales: base ? D.sales.map((x) => (x.id === base.id ? sale : x)) : D.sales.concat([sale]) }).then((ok) => { if (ok) toast(base ? 'Saved ' + store : 'Added ' + store); });
+      S.dialog = null; render();
+    },
+    saledel: () => {
+      const d = S.dialog, D = dealsCfg(), s = d && D.sales.filter((x) => x.id === d.id)[0];
+      if (!s) return;
+      saveDeals({ sales: D.sales.filter((x) => x.id !== s.id) }).then((ok) => { if (ok) toast('Removed ' + s.store); });
+      S.dialog = null; render();
+    },
+    salekeen: (arg) => {
+      const i = arg.lastIndexOf('|'), id = arg.slice(0, i), date = arg.slice(i + 1), D = dealsCfg();
+      saveDeals({ sales: D.sales.map((s) => {
+        if (s.id !== id) return s;
+        const x = Object.assign({}, s, { skip: s.skip.slice(), on: s.on.slice() }), list = s.keen ? x.skip : x.on, j = list.indexOf(date);
+        if (j >= 0) list.splice(j, 1); else list.push(date);
+        return x;
+      }) });
+      render();
+    },
     billsopen: () => openDialog({ type: 'bills', form: { name: '', amount: '', every: 'quarter', from: '' }, error: null }),
     billadd: () => {
       const d = S.dialog, F = d && d.form, C = cfg();
@@ -3688,6 +4184,7 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       }, () => { S.importResult = { error: "That file couldn't be opened. Export it again from Splitwise and try once more." }; render(); });
     },
     swtrimrefresh: () => swTrimRefresh(),
+    salerefresh: () => { if (S.dialog && S.dialog.type === 'sale') S.dialog.error = null; render(); },
     newssave: () => { if (S.newsEdit) saveNote(); },
     photo: (el) => {
       const p = el.getAttribute('data-arg') === 'b' ? 'b' : 'a', f = el.files && el.files[0];
@@ -3718,7 +4215,8 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
       const el = document.getElementById('swResult');
       if (el && S.dialog && S.dialog.type === 'splitwise') el.innerHTML = swResultHtml(swPreview(S.dialog));
     },
-    swtrimrefresh: () => swTrimRefresh()
+    swtrimrefresh: () => swTrimRefresh(),
+    spsearch: () => { S.spAll = false; const el = document.getElementById('spList'); if (el) el.innerHTML = spListHtml(); }
   };
 
   /* ---------- Splitwise ---------- */
