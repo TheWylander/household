@@ -1,8 +1,10 @@
 /* Builds deals.json for the household app from public sources. GitHub runs it free every Wednesday, when the
-   supermarket specials change, and publishes only when something is new.
+   supermarket specials change, and on Saturday morning for Umall's weekend picks, and publishes only when something is new.
      - OzBargain's grocery feeds: deals people post, with when they end.
      - The weekly "Catalogue Half-Price Report" on OzBargain: every Coles and Woolworths half-price item in the NSW catalogue.
      - Harris Farm's online specials: the public product list their Shopify shop serves.
+     - Umall, Sydney's online Asian supermarket (the same range as Asian Grocer Online): its half-price picks, Saturday to
+       Tuesday, and its weekly specials, Wednesday to Friday, from the public product lists of its Shopify shop.
    Nothing about the household is in here. Each phone picks out what matters to it.
    Run: node deals.mjs prev.json out/deals.json   (prev.json is the last deals.json, or {}) */
 import { readFile, writeFile, mkdir, appendFile } from 'node:fs/promises';
@@ -25,7 +27,10 @@ export const HF_LISTS = ['online-specials', 'grocery-specials', 'fruit-and-veg-s
 const KEEP_CATS = /\/cat\/(groceries|alcohol|gift-cards)$/;
 const STATE = /^(NSW|VIC|QLD|SA|WA|TAS|ACT|NT)$/;
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
-const LINK_OK = /^https:\/\/(www\.)?(ozbargain\.com\.au|coles\.com\.au|woolworths\.com\.au|harrisfarm\.com\.au)\//;
+const LINK_OK = /^https:\/\/(www\.)?(ozbargain\.com\.au|coles\.com\.au|woolworths\.com\.au|harrisfarm\.com\.au|umall\.com\.au)\//;
+const UM = 'https://www.umall.com.au';
+/* Umall's lists and when each runs: from (0 Sunday to 6 Saturday), for this many more days. */
+export const UM_LISTS = [{ handle: 'half-price', from: 6, days: 3 }, { handle: 'weekly-special', from: 3, days: 2 }];
 
 const ENT = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', frac12: '½', ndash: '-', mdash: '-', rsquo: "'", lsquo: "'", ldquo: '"', rdquo: '"', hellip: '...' };
 export function decode(s) {
@@ -166,6 +171,59 @@ export function hfItems(products) {
   return out.slice(0, 400);
 }
 
+/* ---------- Umall ---------- */
+const onOrBefore = (s, dow) => addDays(s, -((new Date(s + 'T12:00:00Z').getUTCDay() - dow + 7) % 7));
+/* The run of a Umall list that today falls in, or the last one if it has ended. */
+export function umWindow(today, l) { const from = onOrBefore(today, l.from); return { from, to: addDays(from, l.days) }; }
+/* Umall's product types and tags, to the shop categories the app sorts into aisles. First match wins, so frozen
+   durian is Freezer, not fruit. */
+const UM_CATS = [
+  ['Freezer', /\b(frozen|ice ?cream)\b/],
+  ['Fruit & Veg', /\b(vegetables?|veg|fruits?|leafy|greens|herbs?|mushrooms?|durians?|pears?|grapes?|melons?|mangoes|mango|citrus|kiwifruit)\b/],
+  ['Meat & Seafood', /\b(meat|beef|pork|chicken|lamb|duck|seafood|fish|prawns?|shrimp|crab|squid)\b/],
+  ['Snacks & Confectionery', /\b(snacks?|chips|crackers?|biscuits?|cookies?|chocolates?|candy|candies|confectionery|lollies|jerky)\b/],
+  ['Drinks', /\b(drinks?|beverages?|tea|coffee|juices?|soda|beer|wine|sake|soju)\b/],
+  ['Household', /\b(cleaning|household|kitchen|laundry|tissues?|bowls?|cookware|deodori[sz]ers?)\b/],
+  ['Health & Beauty', /\b(beauty|skin ?care|health|personal care|toothpaste|floss|shampoo|cosmetics?)\b/]
+];
+export function umCat(p) {
+  const hay = [p && p.product_type, ((p && p.tags) || []).join(' '), p && p.title].join(' ').toLowerCase().replace(/[-_/]+/g, ' ');
+  for (const [cat, re] of UM_CATS) if (re.test(hay)) return cat;
+  return 'Pantry';
+}
+export function umItems(products, to) {
+  const out = [], seen = {};
+  (products || []).forEach((p) => {
+    if (!p || !p.title) return;
+    (p.variants || []).slice(0, 3).forEach((v) => {
+      const now = cents(v && v.price), was = cents(v && v.compare_at_price);
+      if (!(now > 0 && was > now)) return;
+      const n = clip(text(p.title) + (v.title && !/^default title$/i.test(v.title) ? ' ' + text(v.title) : ''), 120), k = n.toLowerCase();
+      if (!n || seen[k]) return;
+      seen[k] = true;
+      out.push({ s: 'Umall', n, was, now, off: Math.round((1 - now / was) * 100), cat: umCat(p), last: '', link: p.handle ? safeLink(UM + '/products/' + encodeURIComponent(p.handle)) : '', src: 'um', to });
+    });
+  });
+  return out.slice(0, 300);
+}
+/* A Shopify shop's public product list, up to three pages of 250. */
+async function shopifyProducts(fetchText, url, wait) {
+  const r = await fetchText(url);
+  await pause(wait);
+  if (!r || r.status !== 200) return { status: r ? r.status : 0, products: null };
+  let data = null;
+  try { data = JSON.parse(r.text); } catch (e) { data = null; }
+  if (!data || !Array.isArray(data.products)) return { status: r.status, products: null };
+  let products = data.products;
+  for (let page = 2; page <= 3 && data && Array.isArray(data.products) && data.products.length === 250; page++) {
+    const more = await fetchText(url + '&page=' + page);
+    await pause(wait);
+    try { data = more && more.status === 200 ? JSON.parse(more.text) : null; } catch (e) { data = null; }
+    if (data && Array.isArray(data.products)) products = products.concat(data.products);
+  }
+  return { status: 200, products };
+}
+
 /* ---------- putting it together ---------- */
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function build({ prev, now = new Date(), fetchText, wait = 400, log = () => {} }) {
@@ -234,6 +292,29 @@ export async function build({ prev, now = new Date(), fetchText, wait = 400, log
     if (live(ph) && prevHf.length) hf = { meta: Object.assign({}, ph, { stale: true }), items: prevHf };
   }
   if (hf) { hf.meta.n = hf.items.length; out.sources.harris = hf.meta; out.specials.push(...hf.items); } else out.sources.harris = { ok: false, tried };
+
+  /* Umall: whichever of its lists is running today. Each special carries its own end day. */
+  const um = [], umTried = [], seenUm = {};
+  let umOk = false, umFrom = '', umTo = '', umList = '';
+  for (const l of UM_LISTS) {
+    const w = umWindow(today, l);
+    if (w.to < today) continue;
+    const got = await shopifyProducts(fetchText, UM + '/collections/' + l.handle + '/products.json?limit=250', wait);
+    umTried.push([l.handle, got.status]);
+    if (!got.products) continue;
+    umOk = true;
+    umItems(got.products, w.to).forEach((x) => { const k = x.n.toLowerCase(); if (!seenUm[k]) { seenUm[k] = true; um.push(x); } });
+    if (!umFrom || w.from < umFrom) umFrom = w.from;
+    if (w.to > umTo) umTo = w.to;
+    umList = umList ? umList + ', ' + l.handle : l.handle;
+  }
+  const prevUm = (Array.isArray(P.specials) ? P.specials : []).filter((x) => x.src === 'um' && x.to && x.to >= today);
+  if (umOk) { out.sources.umall = { ok: true, lists: umList, from: umFrom, to: umTo, at, n: um.length }; out.specials.push(...um); }
+  else if (prevUm.length) {
+    log('Umall specials not read, keeping what still runs from last time');
+    out.sources.umall = Object.assign({}, PS.umall || {}, { ok: true, stale: true, n: prevUm.length });
+    out.specials.push(...prevUm);
+  } else { log('Umall specials not read'); out.sources.umall = { ok: false, tried: umTried }; }
   return out;
 }
 
@@ -243,6 +324,7 @@ export function fingerprint(out) {
   return JSON.stringify({
     report: s.report && s.report.ok ? [s.report.id, s.report.to] : null,
     harris: s.harris && s.harris.ok ? [s.harris.from, s.harris.to] : null,
+    umall: s.umall && s.umall.ok ? [s.umall.from, s.umall.to] : null,
     specials: (Array.isArray(o.specials) ? o.specials : []).map((x) => [x.s, x.n, x.now, x.was]),
     deals: (Array.isArray(o.deals) ? o.deals : []).map((d) => d.id + '|' + d.to).sort()
   });
@@ -272,7 +354,8 @@ async function main() {
   if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, 'changed=' + changed + '\n');
   const s = out.sources;
   console.log((changed ? 'New deals. ' : 'Nothing new, so nothing published. ') + 'OzBargain deals: ' + out.deals.length + ' | half-price list: ' + (s.report.n || 0) + (s.report.stale ? ' (kept from last run)' : '') +
-    ' | Harris Farm: ' + (s.harris.n || 0) + (s.harris.handle ? ' from /collections/' + s.harris.handle : '') + (s.harris.stale ? ' (kept from last run)' : ''));
+    ' | Harris Farm: ' + (s.harris.n || 0) + (s.harris.handle ? ' from /collections/' + s.harris.handle : '') + (s.harris.stale ? ' (kept from last run)' : '') +
+    ' | Umall: ' + (s.umall.n || 0) + (s.umall.lists ? ' from ' + s.umall.lists : '') + (s.umall.stale ? ' (kept from last run)' : ''));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

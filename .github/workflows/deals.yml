@@ -1,5 +1,6 @@
 # Collects this week's grocery deals into deals.json on the "deals" branch, where the app reads them.
-# Runs every Wednesday, when supermarket specials change, and publishes only when something is new.
+# Runs every Wednesday, when supermarket specials change, and on Saturday morning for Umall's weekend picks,
+# and publishes only when something is new.
 # Free on GitHub for public repos. Nothing secret is needed: every source is public, and the household's
 # watch list and picks stay in Firebase.
 name: Grocery deals
@@ -8,6 +9,7 @@ on:
   schedule:
     - cron: '7 20 * * 2'    # Wednesday about 7am in Sydney (6am in winter)
     - cron: '7 7 * * 3'     # Wednesday about 6pm (5pm in winter), in case the half-price list is posted late
+    - cron: '7 20 * * 5'    # Saturday about 7am (6am in winter), for Umall's weekend half-price picks, before the 7:40am pop-ups
   workflow_dispatch:
   push:
     branches: [main]
