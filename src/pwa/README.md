@@ -10,7 +10,7 @@ What's in this folder:
 1. Go to console.firebase.google.com and create a project. You can turn Analytics off.
 2. Go to **Build → Authentication → Get started**, choose **Email/Password**, switch it on and save.
 3. Go to **Build → Firestore Database → Create database**. Pick a location near you and **Production mode**.
-4. In **Firestore Database → Rules**, replace everything with `firestore.rules`. Put your two email addresses in the list, in lower case. Then tap **Publish**.
+4. In **Firestore Database → Rules**, replace everything with `firestore.rules`. Check your two email addresses are in the list, in lower case, and that `isBot` has the bot email for phone notifications (your email with `+bot` before the @). Then tap **Publish**.
 5. Open **Project settings** (the gear icon). Under **Your apps**, add a **Web** app, then copy its config values into `site/firebase-config.js`.
 
 ## 2. Put it online (free)

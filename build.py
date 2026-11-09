@@ -146,6 +146,9 @@ sw = sw.replace('__VERSION__', version).replace('__FILES__', json.dumps(['./'] +
 emails = [e.strip().lower() for e in (cfg.get('emails') or []) if e.strip()]
 rules = (src / 'pwa' / 'firestore.rules').read_text()
 rules = rules.replace('__EMAILS__', ', '.join("'%s'" % e for e in emails) if len(emails) == 2 else "'you@example.com', 'partner@example.com'")
+# The notification job's own login: the first email with +bot before the @, unless pwa-config.json names one.
+bot = (cfg.get('botEmail') or (emails[0].replace('@', '+bot@', 1) if len(emails) == 2 else 'you+bot@example.com')).strip().lower()
+rules = rules.replace('__BOT_EMAIL__', "'%s'" % bot)
 (pwa / 'firestore.rules').write_text(rules)
 shutil.copy(src / 'pwa' / 'README.md', pwa / 'README.md')
 

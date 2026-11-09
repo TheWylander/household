@@ -7,8 +7,18 @@ service cloud.firestore {
         && request.auth.token.email_verified == true
         && request.auth.token.email.lower() in [__EMAILS__];
     }
+    // The GitHub job that sends phone notifications signs in as this bot user. It can only read the sale days,
+    // watch list and phones, and note what it sent.
+    function isBot() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'password'
+        && request.auth.token.email.lower() == __BOT_EMAIL__;
+    }
     match /hh/{doc} {
       allow read, write: if isUs();
+      allow get: if isBot() && doc in ['deals', 'push'];
+      allow update: if isBot() && doc == 'push'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['subs', 'sent', 'last']);
     }
     match /months/{month} {
       allow read, write: if isUs();

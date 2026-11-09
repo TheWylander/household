@@ -2152,8 +2152,8 @@
   /* ---------- phone notifications ---------- */
   /* Pop-ups on your phones, even with the app closed: the evening before and the morning of a sale day you're keen on,
      and on Wednesdays when something on the watch list is on special. Each phone subscribes here with Web Push. A free
-     GitHub job sends them; it reads this household's data with a Firebase key kept in GitHub's encrypted secrets, and
-     each pop-up is encrypted for the phone it goes to. The first phone to turn them on makes the Web Push key pair and
+     GitHub job sends them; it signs in as its own bot user, whose login is kept in GitHub's encrypted secrets and which the
+     Firestore rules limit to sale days, the watch list and phones. Each pop-up is encrypted for the phone it goes to. The first phone to turn them on makes the Web Push key pair and
      keeps it in hh/push, which only your two logins and that job can read. */
   const PUSH_BASE = { vapid: null, subs: {}, prefs: {}, sent: {}, last: null };
   const b64u = (bytes) => btoa(String.fromCharCode.apply(null, Array.from(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -2260,10 +2260,11 @@
     }
     if (P.last) out += '<p class="hint">Last checked ' + esc(agoLabel(P.last.at)) + '.</p>';
     else if (isEditor()) {
-      out += '<div class="push-setup"><p class="k">One-time setup</p><p>A free job in your GitHub repo sends the pop-ups. It needs a key to read your sale days and watch list:</p><ol>' +
-        '<li>In the Firebase console, open Project settings, then Service accounts, and tap Generate new private key.</li>' +
-        '<li>On GitHub, open your household repo, then Settings, Secrets and variables, Actions, and New repository secret. Name it FIREBASE_SERVICE_ACCOUNT and paste in everything in the key file.</li>' +
-        '<li>Delete the downloaded key file.</li></ol><p class="hint">To test it, open Actions on GitHub, then Phone notifications, then Run workflow.</p></div>';
+      out += '<div class="push-setup"><p class="k">One-time setup</p><p>A free job in your GitHub repo sends the pop-ups. It signs in as its own bot user, which can only see your sale days, watch list and phones:</p><ol>' +
+        '<li>In the Firebase console, open Authentication, then Users, and tap Add user. Use the bot email from your latest firestore.rules (your email with +bot before the @) and a long password from your password manager.</li>' +
+        '<li>Open Firestore Database, then Rules. Paste in that firestore.rules, which lets the bot in, and tap Publish.</li>' +
+        '<li>On GitHub, open your household repo, then Settings, Secrets and variables, Actions. Add two repository secrets, BOT_EMAIL and BOT_PASSWORD, with that email and password.</li></ol>' +
+        '<p class="hint">To test it, open Actions on GitHub, then Phone notifications, then Run workflow.</p></div>';
     } else out += '<p class="hint">' + esc(nm(editorOf())) + ' is finishing the setup for these.</p>';
     return out + '</section>';
   }

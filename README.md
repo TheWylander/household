@@ -24,8 +24,16 @@ The Calendar's Deals view reads `deals.json` from the `deals` branch. A GitHub A
 
 ## Phone notifications
 
-Each phone turns them on in Settings (on iPhone, from the Home Screen app, iOS 16.4 or later). The first phone makes the Web Push key pair and stores it with the subscriptions in `hh/push`. The `Phone notifications` workflow (`.github/workflows/notify.yml`) runs each morning and evening: the evening before and the morning of a sale day marked Keen, and Wednesday's watch-list specials. It needs one repository secret, `FIREBASE_SERVICE_ACCOUNT` (Firebase console, Project settings, Service accounts, Generate new private key), and does nothing until it exists. That key can read and write the whole Firebase project, so keep it only in GitHub's encrypted secrets and delete the downloaded file.
+Each phone turns them on in Settings (on iPhone, from the Home Screen app, iOS 16.4 or later). The first phone makes the Web Push key pair and stores it with the subscriptions in `hh/push`. The `Phone notifications` workflow (`.github/workflows/notify.yml`) runs each morning and evening: the evening before and the morning of a sale day marked Keen, and Wednesday's watch-list specials.
+
+It signs in to Firebase as its own bot user through Firebase's REST APIs, so it needs no Google Cloud service account key (Google Workspace organisations block those by default). One-time setup:
+
+1. Firebase console, Authentication, Users, Add user: the bot email and a long random password. The bot email is the first sign-in email with `+bot` before the @, or `botEmail` in `pwa-config.json`.
+2. Publish the rules that `python3 build.py` writes to `pwa/firestore.rules`. Their `isBot()` lets that user read `hh/deals` and `hh/push`, and change only `subs`, `sent` and `last` in `hh/push`.
+3. Add two repository secrets, `BOT_EMAIL` and `BOT_PASSWORD`.
+
+It does nothing until both secrets exist. Its run log is public, so it says how many pop-ups went out, never what they said.
 
 ## Where the data lives
 
-Firebase (Firestore and email sign-in). The Firestore rules are set in the Firebase console and only let the two verified emails in. `config/firebase.json` is the web config the live site already serves, so it isn't secret.
+Firebase (Firestore and email sign-in). The Firestore rules are set in the Firebase console and only let the two verified emails in, plus the notification bot, which can read sale days, the watch list and phones. `config/firebase.json` is the web config the live site already serves, so it isn't secret.

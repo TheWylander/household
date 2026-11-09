@@ -1,6 +1,8 @@
 # Sends the household app's phone notifications: sale days you're keen on (the evening before and the morning of)
-# and specials on the watch list. Free on GitHub for public repos. It needs one secret, FIREBASE_SERVICE_ACCOUNT,
-# and does nothing until it's there. Run it by hand to send a test to phones that have just turned notifications on.
+# and specials on the watch list. Free on GitHub for public repos. It signs in to Firebase as its own bot user, whose
+# login is in two secrets, BOT_EMAIL and BOT_PASSWORD, and does nothing until they're there. The Firestore rules only
+# let that user read the sale days, watch list and phones, and note what it sent. No Google Cloud key is needed.
+# Run it by hand to send a test to phones that have just turned notifications on.
 name: Phone notifications
 
 on:
@@ -21,16 +23,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
-      - name: Check the key is there
+      - name: Check the bot login is there
         id: key
         env:
-          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          EMAIL: ${{ secrets.BOT_EMAIL }}
+          PASSWORD: ${{ secrets.BOT_PASSWORD }}
         run: |
-          if [ -n "$SA" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "::notice::Phone notifications aren't set up yet. Add the FIREBASE_SERVICE_ACCOUNT secret."; fi
+          if [ -n "$EMAIL" ] && [ -n "$PASSWORD" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "::notice::Phone notifications aren't set up yet. Add the BOT_EMAIL and BOT_PASSWORD secrets."; fi
       - uses: actions/checkout@v4
         if: steps.key.outputs.ok == 'true'
         with:
-          sparse-checkout: .github
+          sparse-checkout: .github   # files at the top come too, including firebase-config.js (the app's public settings)
       - uses: actions/setup-node@v4
         if: steps.key.outputs.ok == 'true'
         with:
@@ -42,9 +45,10 @@ jobs:
       - name: Install
         if: steps.key.outputs.ok == 'true'
         working-directory: .github/notify
-        run: npm init -y > /dev/null && npm install --no-audit --no-fund firebase-admin@14 web-push@3.6.7
+        run: npm init -y > /dev/null && npm install --no-audit --no-fund web-push@3.6.7
       - name: Send
         if: steps.key.outputs.ok == 'true'
         env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          BOT_EMAIL: ${{ secrets.BOT_EMAIL }}
+          BOT_PASSWORD: ${{ secrets.BOT_PASSWORD }}
         run: node .github/notify/notify.mjs deals.json

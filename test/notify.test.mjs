@@ -1,6 +1,6 @@
 /* What the notification job sends, and to whom, without Firebase or a push service. node test/notify.test.mjs */
 import assert from 'node:assert';
-import { plan, run, sydneyNow, weekKey, weekHits, oldKeys } from '../src/github/notify.mjs';
+import { plan, run, sydneyNow, weekKey, weekHits, oldKeys, webConfig, fromFs, toFs, fieldPath, toUpdate, job, runSummary } from '../src/github/notify.mjs';
 
 let passed = 0;
 async function t(name, fn) {
@@ -103,6 +103,116 @@ await t('sending: what gets written back', async () => {
   const stale = await run({ push: push(), deals: { sales: [], watch: [] }, feed: {}, now: FRI_EVENING, send: async () => ({ ok: false, status: 403 }) });
   assert.deepStrictEqual(stale.write.subs, { p1: { stale: true } }, 'a key mismatch marks the phone to sign up again');
   assert.deepStrictEqual(stale.write.sent, {});
+});
+
+await t('Firestore values go both ways', () => {
+  const v = { a: 1, b: 2.5, c: 'x', d: true, e: null, f: [1, 'two', { g: false }], h: {}, i: [] };
+  assert.deepStrictEqual(fromFs(toFs(v)), v);
+  assert.deepStrictEqual(toFs(1731500000000), { integerValue: '1731500000000' }, 'whole numbers are integers, as the app writes them');
+  assert.deepStrictEqual(fromFs({ mapValue: {} }), {}, 'an empty map comes back without fields');
+  assert.deepStrictEqual(fromFs({ arrayValue: {} }), []);
+  assert.deepStrictEqual(toFs({ a: undefined, b: 1 }), { mapValue: { fields: { b: { integerValue: '1' } } } });
+});
+
+await t('field paths put odd keys in backticks', () => {
+  assert.strictEqual(fieldPath('subs', 'p1a2b3c4d5e6f', 'stale'), 'subs.p1a2b3c4d5e6f.stale');
+  assert.strictEqual(fieldPath('sent', 'sale:s1|2026-11-14:eve'), 'sent.`sale:s1|2026-11-14:eve`');
+  assert.strictEqual(fieldPath('sent', 'a`b\\c'), 'sent.`a\\`b\\\\c`');
+  const u = toUpdate({ subs: { p1: { welcomed: true }, p2: null }, sent: { 'sp:2026-11-11': ['Weet-Bix'] }, drop: ['sp:2026-11-11', 'sp:2026-09-02'], last: { at: 'x', sent: 1, failed: 0 } });
+  assert.deepStrictEqual(u.mask, ['last', 'subs.p1.welcomed', 'subs.p2', 'sent.`sp:2026-11-11`', 'sent.`sp:2026-09-02`'], 'a key being written is never also cleared');
+  assert.deepStrictEqual(Object.keys(u.fields).sort(), ['last', 'sent', 'subs']);
+});
+
+await t("the app's public Firebase settings", () => {
+  const c = webConfig('window.HH_FIREBASE = {\n  apiKey: "AIzaTEST",\n  authDomain: "demo.firebaseapp.com",\n  projectId: "demo-household",\n};');
+  assert.deepStrictEqual(c, { apiKey: 'AIzaTEST', projectId: 'demo-household' });
+  assert.deepStrictEqual(webConfig(''), { apiKey: '', projectId: '' });
+});
+
+/* A pretend Firebase: email sign-in, and Firestore with the bot's rules. */
+const BOT = 'robin+bot@example.com';
+function fakeFirebase(docs, { rules = true } = {}) {
+  const seen = { referer: [], auth: [], commits: 0 };
+  const parse = (p) => { const out = []; let i = 0; while (i < p.length) { let s = ''; if (p[i] === '`') { i++; while (p[i] !== '`') { if (p[i] === '\\') i++; s += p[i++]; } i++; } else { while (i < p.length && p[i] !== '.') s += p[i++]; } out.push(s); if (p[i] === '.') i++; } return out; };
+  const json = (status, body) => ({ ok: status < 300, status, json: async () => body });
+  const denied = () => json(403, { error: { code: 403, message: 'Missing or insufficient permissions.', status: 'PERMISSION_DENIED' } });
+  const fetch = async (url, init = {}) => {
+    const h = init.headers || {};
+    if (url.startsWith('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=AIzaTEST')) {
+      seen.referer.push(h.referer);
+      const b = JSON.parse(init.body);
+      return b.email === BOT && b.password === 'long-pass' ? json(200, { idToken: 'bot-token', localId: 'u1' }) : json(400, { error: { code: 400, message: 'INVALID_LOGIN_CREDENTIALS' } });
+    }
+    const base = 'https://firestore.googleapis.com/v1/projects/demo-household/databases/(default)/documents';
+    if (!url.startsWith(base)) return json(404, {});
+    seen.auth.push(h.authorization);
+    if (h.authorization !== 'Bearer bot-token') return json(401, { error: { status: 'UNAUTHENTICATED' } });
+    if (url === base + ':commit') {
+      seen.commits++;
+      const w = JSON.parse(init.body).writes[0], path = w.update.name.split('/documents/')[1];
+      if (!rules || path !== 'hh/push') return denied();
+      if (!docs[path]) return json(404, { error: { status: 'NOT_FOUND' } });
+      const before = JSON.stringify(docs[path]), next = JSON.parse(before), data = fromFs({ mapValue: { fields: w.update.fields } });
+      w.updateMask.fieldPaths.forEach((fp) => {
+        const keys = parse(fp); let from = data, to = next;
+        for (let i = 0; i < keys.length - 1; i++) { from = from && from[keys[i]]; to = to[keys[i]] = to[keys[i]] && typeof to[keys[i]] === 'object' ? to[keys[i]] : {}; }
+        const k = keys[keys.length - 1];
+        if (from && k in from) to[k] = from[k]; else delete to[k];
+      });
+      const changed = Object.keys(Object.assign({}, docs[path], next)).filter((k) => JSON.stringify(docs[path][k]) !== JSON.stringify(next[k]));
+      if (changed.some((k) => ['subs', 'sent', 'last'].indexOf(k) < 0)) return denied();
+      docs[path] = next;
+      return json(200, { writeResults: [{}] });
+    }
+    const path = url.slice(base.length + 1);
+    if (!rules || ['hh/deals', 'hh/push'].indexOf(path) < 0) return denied();
+    return docs[path] ? json(200, { name: path, fields: toFs(docs[path]).mapValue.fields }) : json(404, { error: { status: 'NOT_FOUND' } });
+  };
+  return { fetch, seen };
+}
+const config = { apiKey: 'AIzaTEST', projectId: 'demo-household' };
+
+await t('a run end to end, signed in as the bot', async () => {
+  const pp = push();
+  pp.sent = { 'sale:s1|2026-08-01:eve': 1 };
+  const docs = { 'hh/push': pp, 'hh/deals': deals(), 'hh/settings': { names: { a: 'Robin' } } }, fb = fakeFirebase(docs);
+  const send = async (s) => (s.id === 'p2' ? { ok: false, status: 410 } : { ok: true });
+  const r = await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb.fetch, send, referer: 'https://robin.github.io/household/' });
+  const after = docs['hh/push'];
+  assert.deepStrictEqual(fb.seen.referer, ['https://robin.github.io/household/'], 'signs in from the app site, in case the web key is locked to it');
+  assert.ok(fb.seen.auth.every((a) => a === 'Bearer bot-token'), 'every Firestore call uses the bot login');
+  assert.strictEqual(after.subs.p1.welcomed, true);
+  assert.strictEqual(after.subs.p1.endpoint, 'https://web.push.apple.com/1', 'the rest of the phone is kept');
+  assert.ok(!('p2' in after.subs), 'a phone that has gone is removed');
+  assert.ok(after.subs.p3 && 'p4' in after.subs, 'other phones are left alone');
+  assert.deepStrictEqual(Object.keys(after.sent).sort(), ['sale:s1|2026-11-14:eve', 'sp:2026-11-11'], 'old markers cleared, new ones noted');
+  assert.deepStrictEqual(after.sent['sp:2026-11-11'], ['Sanitarium Weet-Bix 575g', '20% off Everything In-Store']);
+  assert.deepStrictEqual(after.vapid, { pub: 'KEY', d: 'secret' });
+  assert.deepStrictEqual(after.prefs, { b: { specials: false } });
+  assert.deepStrictEqual(after.last, { at: FRI_EVENING.toISOString(), sent: 3, failed: 1 });
+  assert.strictEqual(runSummary(r), "Sent 3 pop-ups (a welcome, a sale day reminder, watch-list specials), 1 couldn't be sent.");
+  assert.ok(!/Lucky|Weet/.test(runSummary(r)), 'the public log never says what the pop-ups said');
+  const again = await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb.fetch, send });
+  assert.strictEqual(again.ok, 0, 'nothing is sent twice');
+});
+
+await t('clear errors for a wrong login or old rules', async () => {
+  const send = async () => ({ ok: true });
+  await assert.rejects(job({ email: BOT, password: 'nope', config, feed, now: FRI_EVENING, fetch: fakeFirebase({ 'hh/push': push() }).fetch, send }), /BOT_EMAIL and BOT_PASSWORD/);
+  await assert.rejects(job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fakeFirebase({ 'hh/push': push() }, { rules: false }).fetch, send }), /new Firestore rules/);
+  const offline = async () => { throw new Error('getaddrinfo ENOTFOUND'); };
+  await assert.rejects(job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: offline, send }), /sign in failed \(no answer: getaddrinfo/);
+});
+
+await t('before any phone is on, it only notes that it ran', async () => {
+  const docs = { 'hh/push': { prefs: { a: { sale: true } } } }, fb = fakeFirebase(docs);
+  const r = await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb.fetch, send: async () => assert.fail('nothing to send') });
+  assert.strictEqual(r, null);
+  assert.deepStrictEqual(docs['hh/push'], { prefs: { a: { sale: true } }, last: { at: FRI_EVENING.toISOString(), sent: 0, failed: 0 } });
+  assert.strictEqual(runSummary(r), 'No phone has turned notifications on yet.');
+  const none = fakeFirebase({});
+  assert.strictEqual(await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: none.fetch, send: async () => ({ ok: true }) }), null);
+  assert.strictEqual(none.seen.commits, 0, "with no phones document yet, it doesn't try to make one");
 });
 
 console.log(passed + ' groups passed');

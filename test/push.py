@@ -65,7 +65,7 @@ try:
         act(a, 'go', 'settings')
         card = a.locator('#pushCard').inner_text()
         check('Turn on for this phone' in card and 'Robin: not yet' in card and 'Jules: not yet' in card, 'Settings has phone notifications, off for both')
-        check('One-time setup' in card and 'FIREBASE_SERVICE_ACCOUNT' in card, 'whoever set the app up sees the one-time GitHub key steps')
+        check('One-time setup' in card and 'BOT_PASSWORD' in card and 'Service accounts' not in card, 'whoever set the app up sees the one-time bot login steps')
         a.locator('#pushCard').screenshot(path=str(ROOT / 'shots' / 'p09-push-setup.png'))
         act(a, 'pushon'); a.wait_for_timeout(1500)
         d = db(a)['hh/push']
