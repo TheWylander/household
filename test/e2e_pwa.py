@@ -6,7 +6,10 @@ import re
 import subprocess
 import sys
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
+
+import deals_fixture
 
 from playwright.sync_api import sync_playwright
 
@@ -150,6 +153,10 @@ try:
         ctx.route('**/firebase-config.js', lambda r: r.fulfill(status=200, content_type='text/javascript', body=TEST_CONFIG))
         ctx.route('**/firebase-*-compat.js', lambda r: r.fulfill(status=200, content_type='text/javascript', body='/* test double */'))
         fonts(ctx)
+        TODAY = datetime.now(ZoneInfo('Australia/Sydney')).date()
+        ctx.add_init_script("window.HH_DEALS_URL = '%s';" % deals_fixture.URL)
+        ctx.route(deals_fixture.URL, lambda r: r.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'},
+                                                         body=json.dumps(deals_fixture.feed(TODAY.isoformat()))))
 
         a = watch(ctx.new_page(), 'robin')
         a.goto(BASE); a.wait_for_timeout(300)
@@ -245,6 +252,92 @@ try:
         check('All square' in text(b), 'settled on Jules\'s phone')
         a.wait_for_timeout(600)
         check('All square' in text(a), "Robin's phone updates live")
+
+        # ---------- deals: sale days, specials and the watch list ----------
+        nxt = deals_fixture.next_second_saturday(TODAY)
+        this_sat = deals_fixture.second_saturday(TODAY.year, TODAY.month)
+        act(a, 'go', 'cal'); act(a, 'calmode', 'deals'); a.wait_for_timeout(500)
+        t = text(a)
+        check('Sale days in' in t and 'Lucky Mart' in t and 'Specials this week' in t, 'Calendar has a Deals view with the Lucky Mart idea and specials')
+        chips = a.locator('.store-chips').inner_text()
+        check('Coles' in chips and 'Woolies' in chips and 'Harris Farm' in chips, 'specials from Coles, Woolies and Harris Farm: ' + chips.replace('\n', ' '))
+        check(a.evaluate('window.__xss') is None and a.locator('.specials img').count() == 0 and '<img src=x' in t, 'text from the deals file shows as text and never runs')
+        check(a.locator('.specials a[href^="javascript"]').count() == 0, 'only links to the stores and OzBargain')
+        shot(a, 'p06-deals', full=True)
+        act(a, 'saleidea', 'luckymart'); a.wait_for_timeout(400)
+        sale = a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals']")['sales'][0]
+        check(sale['store'] == 'Lucky Mart' and sale['rule'] == {'k': 'nth', 'n': 2, 'dow': 6} and sale['keen'] is True, 'Lucky Mart saved as the 2nd Saturday of every month, keen')
+        cell = a.locator(f'.cal-day[data-arg="{this_sat.isoformat()}"]')
+        check('sale' in (cell.get_attribute('class') or '') and 'Lucky' in cell.inner_text(), f'the calendar marks {this_sat} for Lucky Mart')
+        a.fill('#watchIn', 'weetbix'); a.press('#watchIn', 'Enter'); a.wait_for_timeout(300)
+        check(a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals'].watch") == ['weetbix'] and a.evaluate('document.activeElement.id') == 'watchIn', 'watch word saved, ready for the next one')
+        first = a.locator('#spList .sp-row').first.inner_text()
+        check('Weet-Bix' in first and 'On our list' in first, 'a special on the watch list goes to the top')
+        a.locator('#spQ').press_sequentially('coffee'); a.wait_for_timeout(200)
+        rows = a.locator('#spList .sp-row')
+        check(rows.count() == 1 and 'Vittoria' in rows.first.inner_text() and a.evaluate('document.activeElement.id') == 'spQ', 'search filters as you type and keeps the keyboard up')
+        a.fill('#spQ', ''); a.dispatch_event('#spQ', 'input'); a.wait_for_timeout(200)
+        act(a, 'spstore', 'Harris Farm')
+        hf_rows = a.locator('#spList .sp-row').all_inner_texts()
+        check(len(hf_rows) == 2 and all('Harris Farm' in r for r in hf_rows), 'pick a shop')
+        act(a, 'spstore', 'all')
+        check(a.locator('#spList .sp-row').count() == 12 and a.locator('[data-act="spmore"]').count() == 1, 'long lists start with 12')
+        act(a, 'spmore')
+        check(a.locator('#spList .sp-row').count() == 20, 'Show all')
+        ozb = a.locator('.ozb-list').inner_text()
+        check('Tony' in ozb and 'Iceberg' in ozb and 'Sushi Rice' not in ozb and '191 More' not in ozb and 'Ended last week' not in ozb, 'OzBargain deals for your shops, without the half-price post or ended deals')
+        act(a, 'ozball')
+        check('Sushi Rice' in a.locator('.ozb-list').inner_text(), 'see every grocery deal')
+        act(a, 'go', 'home'); a.wait_for_timeout(300)
+        t = text(a)
+        check('On special this week' in t and 'Sanitarium Weet-Bix 575g at Coles' in t, 'Home flags a special on the watch list')
+        within = (nxt - TODAY).days <= 14
+        check(('Lucky Mart sale' in a.locator('section.soon').inner_text()) == within, f'Coming up shows Lucky Mart when it is within two weeks ({nxt})')
+        shot(a, 'p07-home-deals', full=True)
+        act(a, 'godeals'); a.wait_for_timeout(300)
+        if nxt.month != TODAY.month:
+            act(a, 'calmove', '1')
+        a.locator(f'.keen-btn[data-arg$="|{nxt.isoformat()}"]').first.click(); a.wait_for_timeout(300)
+        sale = a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals']")['sales'][0]
+        check(sale['skip'] == [nxt.isoformat()] and a.locator(f'.keen-btn[data-arg$="|{nxt.isoformat()}"]').first.get_attribute('aria-pressed') == 'false', 'not keen on one month')
+        act(a, 'go', 'home'); a.wait_for_timeout(200)
+        check('Lucky Mart sale' not in a.locator('section.soon').inner_text(), 'and it leaves Coming up')
+        act(a, 'godeals'); a.wait_for_timeout(200)
+        if nxt.month != TODAY.month:
+            act(a, 'calmove', '1')
+        a.locator(f'.keen-btn[data-arg$="|{nxt.isoformat()}"]').first.click(); a.wait_for_timeout(300)
+        check(a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals']")['sales'][0]['skip'] == [], 'keen again')
+        act(a, 'calmode', 'spend')
+
+        b.wait_for_timeout(300)
+        act(b, 'go', 'cal'); act(b, 'calmode', 'deals'); b.wait_for_timeout(400)
+        check('Lucky Mart' in b.locator('#saleMonth').inner_text() and 'weetbix' in b.locator('.watch').inner_text(), "Jules's phone has the sale day and the watch list")
+        act(b, 'saleadd')
+        act(b, 'salesave')
+        check('Which shop is it at?' in b.locator('.dialog').inner_text(), 'a sale day needs a shop')
+        b.fill('#saleStore', 'Tong Li'); b.fill('#saleOffer', '10% off')
+        b.select_option('#saleKind', 'monthly'); b.wait_for_timeout(200)
+        b.select_option('#saleDay', '15'); b.wait_for_timeout(200)
+        check('Next: ' in b.locator('.dialog').inner_text() and b.input_value('#saleStore') == 'Tong Li', 'the dialog shows the next dates and keeps what was typed')
+        shot(b, 'p08-sale-dialog')
+        act(b, 'salesave'); b.wait_for_timeout(400)
+        sales = b.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals'].sales")
+        check(len(sales) == 2 and sales[1]['store'] == 'Tong Li' and sales[1]['rule'] == {'k': 'monthly', 'day': 15}, 'a sale day of your own, on the 15th of each month')
+        b.locator(f'[data-act="saleopen"][data-arg="{sales[1]["id"]}"]').first.click(); b.wait_for_timeout(200)
+        b.select_option('#saleKind', 'once'); b.wait_for_timeout(200)
+        once = (TODAY + timedelta(days=3)).isoformat()
+        b.fill('#saleDate', once); b.wait_for_timeout(200)
+        act(b, 'salesave'); b.wait_for_timeout(400)
+        sales = b.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals'].sales")
+        check(sales[1]['rule'] == {'k': 'once', 'date': once}, 'changed to a one-off sale')
+        if b.locator('[data-act="caltoday"]').count():
+            act(b, 'caltoday')
+        if b.locator(f'[data-act="saleopen"][data-arg="{sales[1]["id"]}"]').count() == 0:
+            act(b, 'calmove', '1')
+        b.locator(f'[data-act="saleopen"][data-arg="{sales[1]["id"]}"]').first.click(); b.wait_for_timeout(200)
+        act(b, 'saledel'); b.wait_for_timeout(400)
+        check(len(b.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals'].sales")) == 1, 'removed')
+        act(b, 'calmode', 'spend'); act(b, 'go', 'home')
 
         # ---------- a login that isn't one of the two ----------
         c = watch(ctx.new_page(), 'stranger')

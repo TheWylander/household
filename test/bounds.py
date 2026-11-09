@@ -3,6 +3,10 @@
 Runs the home-screen web app against the Firebase test double and visits each screen and dialog.
 (iOS sizes date fields its own way, so the stylesheet also sets them to shrink; this test covers the rest.)"""
 import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+import deals_fixture
 import pathlib
 import subprocess
 import sys
@@ -67,6 +71,9 @@ try:
             ctx.route('**/firebase-config.js', lambda r: r.fulfill(status=200, content_type='text/javascript', body=TEST_CONFIG))
             ctx.route('**/firebase-*-compat.js', lambda r: r.fulfill(status=200, content_type='text/javascript', body='/* test double */'))
             ctx.route('https://fonts.googleapis.com/**', lambda r: r.abort())
+            ctx.add_init_script("window.HH_DEALS_URL = '%s';" % deals_fixture.URL)
+            ctx.route(deals_fixture.URL, lambda r: r.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'},
+                                                             body=json.dumps(deals_fixture.feed(datetime.now(ZoneInfo('Australia/Sydney')).date().isoformat()))))
             a = ctx.new_page()
             a.on('pageerror', lambda e: problems.append(f'pageerror {e}'))
             a.goto(BASE); a.wait_for_timeout(500)
@@ -115,6 +122,19 @@ try:
             check('Strata levy for the building' in a.locator('section.soon').inner_text(), f'{width}px: an added bill shows in Coming up')
             audit(a, 'home with Coming up', width)
             act(a, 'go', 'cal'); audit(a, 'calendar', width)
+            act(a, 'calmode', 'deals'); a.wait_for_timeout(400); audit(a, 'deals', width)
+            act(a, 'saleidea', 'luckymart'); a.wait_for_timeout(200)
+            a.fill('#watchIn', 'weetbix'); a.press('#watchIn', 'Enter'); a.wait_for_timeout(200)
+            a.fill('#watchIn', 'a long watch word here'); a.press('#watchIn', 'Enter'); a.wait_for_timeout(200)
+            act(a, 'spmore'); act(a, 'ozball'); audit(a, 'deals with a sale day, a watch list and every special', width)
+            a.locator('.cal-day.sale').first.click(); a.wait_for_timeout(200); audit(a, 'deals with a sale day picked', width)
+            act(a, 'saleadd'); audit(a, 'sale day dialog', width)
+            a.select_option('#saleKind', 'once'); a.wait_for_timeout(200); audit(a, 'sale day dialog, one day', width)
+            a.locator('.dialog [data-act="dlgclose"]').click(); a.wait_for_timeout(200)
+            a.locator('[data-act="saleopen"]').first.click(); a.wait_for_timeout(200); audit(a, 'editing a sale day', width)
+            a.locator('.dialog [data-act="dlgclose"]').click(); a.wait_for_timeout(200)
+            act(a, 'calmode', 'spend')
+            act(a, 'go', 'home'); a.wait_for_timeout(200); audit(a, 'home with a special and a sale day', width)
             act(a, 'go', 'inbox'); audit(a, 'inbox', width)
             act(a, 'go', 'insights'); audit(a, 'insights, month', width)
             act(a, 'insmode', 'year'); audit(a, 'insights, year', width)

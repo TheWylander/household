@@ -180,4 +180,58 @@ t('weekly dates for rent', () => {
   assert.deepStrictEqual(L.weeklyDates('2026-11-01', 3, '2026-11-19'), ['2026-11-04', '2026-11-11', '2026-11-18']);
 });
 
+t('sale days repeat by rule', () => {
+  assert.strictEqual(L.nthWeekday(2026, 10, 2, 6), '2026-11-14', '2nd Saturday of November 2026');
+  assert.strictEqual(L.nthWeekday(2026, 11, 2, 6), '2026-12-12');
+  assert.strictEqual(L.nthWeekday(2027, 0, 2, 6), '2027-01-09');
+  assert.strictEqual(L.nthWeekday(2026, 10, 5, 5), '2026-11-27', 'last Friday');
+  assert.strictEqual(L.nthWeekday(2026, 10, 1, 0), '2026-11-01', 'a month that starts on the day');
+  const lucky = { k: 'nth', n: 2, dow: 6 };
+  assert.deepStrictEqual(L.saleDates(lucky, '2026-11-01', '2027-01-31'), ['2026-11-14', '2026-12-12', '2027-01-09']);
+  assert.deepStrictEqual(L.saleDates(Object.assign({ start: '2026-11-15' }, lucky), '2026-11-01', '2027-01-31'), ['2026-12-12', '2027-01-09'], 'not before it was added');
+  assert.deepStrictEqual(L.saleDates(Object.assign({ until: '2026-12-31' }, lucky), '2026-11-01', '2027-01-31'), ['2026-11-14', '2026-12-12']);
+  assert.deepStrictEqual(L.saleDates({ k: 'monthly', day: 31 }, '2027-01-01', '2027-03-31'), ['2027-01-31', '2027-02-28', '2027-03-31'], 'short months use their last day');
+  assert.deepStrictEqual(L.saleDates({ k: 'weekly', dow: 3 }, '2026-11-09', '2026-11-22'), ['2026-11-11', '2026-11-18']);
+  assert.deepStrictEqual(L.saleDates({ k: 'once', date: '2026-11-28' }, '2026-11-01', '2026-11-30'), ['2026-11-28']);
+  assert.deepStrictEqual(L.saleDates({ k: 'once', date: '2026-12-28' }, '2026-11-01', '2026-11-30'), []);
+  assert.deepStrictEqual(L.saleDates({ k: 'nope' }, '2026-11-01', '2026-11-30'), []);
+  assert.deepStrictEqual(L.saleDates(lucky, '2026-11-30', '2026-11-01'), []);
+  assert.strictEqual(L.saleRuleLabel(lucky), '2nd Saturday of every month');
+  assert.strictEqual(L.saleRuleLabel({ k: 'nth', n: 5, dow: 5 }), 'Last Friday of every month');
+  assert.strictEqual(L.saleRuleLabel({ k: 'weekly', dow: 3 }), 'Every Wednesday');
+  assert.strictEqual(L.saleRuleLabel({ k: 'monthly', day: 22 }), 'The 22nd of every month');
+  assert.strictEqual(L.saleRuleLabel({ k: 'monthly', day: 11 }), 'The 11th of every month');
+  assert.strictEqual(L.saleRuleLabel({ k: 'once', date: '2026-11-28' }), 'One day only');
+});
+
+t('specials: stores, watch words and order', () => {
+  assert.strictEqual(L.storeName('WW'), 'Woolworths');
+  assert.strictEqual(L.storeName('Woolies'), 'Woolworths');
+  assert.strictEqual(L.storeName('WOOLWORTHS 1234 MACQUARIE PARK'), 'Woolworths');
+  assert.strictEqual(L.storeName('CL'), 'Coles');
+  assert.strictEqual(L.storeName('Harris Farm Markets'), 'Harris Farm');
+  assert.strictEqual(L.storeName('Some Deli'), 'Some Deli');
+  assert.deepStrictEqual(L.watchHits('Sanitarium Weet-Bix 575g', ['weetbix', 'milk']), ['weetbix']);
+  assert.deepStrictEqual(L.watchHits('Buttermilk Pancake Mix', ['milk']), [], 'milk is not buttermilk');
+  assert.deepStrictEqual(L.watchHits('Pauls Full Cream Milk 2L', ['Milk']), ['Milk']);
+  assert.deepStrictEqual(L.watchHits("Arnott's Tim Tam Original 200g", ['tim tams']), ['tim tams'], 'plural s');
+  assert.deepStrictEqual(L.watchHits('Vittoria Espresso Coffee Beans 1kg', ['coffee beans', 'tea']), ['coffee beans']);
+  assert.deepStrictEqual(L.watchHits('Anything', ['', '  ']), []);
+  assert.strictEqual(L.weeksSince('11 weeks ago @ WW'), 11);
+  assert.strictEqual(L.weeksSince('Never'), 99);
+  assert.ok(Math.abs(L.weeksSince('3 months ago @ CL') - 12.9) < 1e-9);
+  assert.strictEqual(L.weeksSince(''), 0);
+  const list = [
+    { n: 'Muffins', off: 50, last: '1 week ago @ WW' },
+    { n: 'Nappies', off: 50, last: '6 weeks ago @ CL' },
+    { n: 'Weet-Bix 575g', off: 50, last: '11 weeks ago @ WW' },
+    { n: 'Coffee pods', off: 40, last: '' },
+    { n: 'Chocolate', off: 55, last: '' }
+  ];
+  assert.deepStrictEqual(L.sortSpecials(list, ['coffee']).map((x) => x.n), ['Coffee pods', 'Chocolate', 'Weet-Bix 575g', 'Nappies', 'Muffins']);
+  assert.deepStrictEqual(L.specialsWeek('2026-11-09'), { from: '2026-11-04', to: '2026-11-10' }, 'Monday is in the week from last Wednesday');
+  assert.deepStrictEqual(L.specialsWeek('2026-11-11'), { from: '2026-11-11', to: '2026-11-17' }, 'Wednesday starts a new week');
+  assert.deepStrictEqual(L.specialsWeek('2026-11-10'), { from: '2026-11-04', to: '2026-11-10' });
+});
+
 console.log(passed + ' groups passed');

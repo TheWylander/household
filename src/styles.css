@@ -526,3 +526,59 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
 .hbar-btn:active { transform: scale(.985); }
 [data-swipe] { touch-action: pan-y; }
 @media (prefers-reduced-motion: reduce) { .enter .main > *, .enter .meter span, .enter .hbar-fill, .enter .col-fill, .enter .pc-line { animation: none !important; } }
+
+/* ---------- deals ---------- */
+.cal-mode { margin: 0 0 16px; }
+.dot.sale { border: 2px solid var(--ink); background: var(--card); }
+.dot.keen { background: var(--marigold); box-shadow: 0 0 0 1.5px var(--ink); }
+.cal-day.sale .v { color: var(--ink); max-width: 100%; overflow: hidden; text-overflow: clip; }
+.cal-day.keen { background: var(--marigold-soft); }
+.cal-day.keen.sel { background: var(--marigold-soft); }
+.cal-day.past.sale .v { color: var(--ink2); }
+.sale-list { margin: 0; padding: 0; list-style: none; }
+.sale-row { display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px dashed var(--line); }
+.sale-row:first-child { border-top: 0; }
+.sale-main { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; min-height: 48px; padding: 4px 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.sale-main .k { overflow-wrap: anywhere; }
+.keen-btn { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 12px; border-radius: 999px; border: 2px solid var(--ink); background: var(--card); color: var(--ink); font: inherit; font-size: 14px; font-weight: 800; cursor: pointer; }
+.keen-btn[aria-pressed="true"] { background: var(--marigold); }
+.keen-btn .ic { width: 15px; height: 15px; }
+.keen-btn:active { transform: translateY(2px); }
+.idea { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 12px; border: 2px dashed var(--line); border-radius: 14px; }
+.idea p { flex: 1; min-width: 0; margin: 0; font-size: 15px; }
+.idea .btn { flex: none; }
+.soon-tag { display: inline-block; padding: 1px 9px; border: 2px solid var(--ink); border-radius: 999px; background: var(--marigold); font-size: 13px; font-weight: 800; }
+.row-card.hot { background: var(--marigold-soft); border-color: var(--ink); }
+.row-card .row-lead .news-ic { margin-right: 2px; }
+.watch { margin: 4px 0 14px; padding: 12px; border-radius: 14px; background: var(--track); }
+.watch .chips { margin-top: 8px; }
+.watch .hint { margin: 4px 0 0; }
+.chip.sm { min-height: 40px; padding: 0 12px; font-size: 14px; }
+.chip.sm .ic { width: 14px; height: 14px; }
+.chip .n { font-weight: 600; color: var(--ink2); font-variant-numeric: tabular-nums; }
+.chip[aria-pressed="true"] .n { color: inherit; }
+.watch-add { display: flex; gap: 8px; margin-top: 10px; }
+.watch-add .input { flex: 1; min-width: 0; }
+.store-chips { margin: 0 0 10px; }
+.sp-when { margin: -6px 0 10px; }
+.sp-search { margin-bottom: 4px; }
+.sp-list, .ozb-list { margin: 6px 0 0; padding: 0; list-style: none; }
+.sp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 10px 0; border-top: 1px dashed var(--line); }
+.sp-row:first-child { border-top: 0; }
+.sp-main { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.sp-n { font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.sp-main .k { overflow-wrap: anywhere; }
+.sp-price { display: flex; flex-direction: column; align-items: flex-end; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sp-now { font-weight: 800; }
+.sp-was { font-size: 13px; color: var(--ink2); }
+.sp-off { margin-top: 3px; padding: 1px 7px; border-radius: 8px; background: var(--marigold-soft); font-size: 12px; font-weight: 800; }
+.tag.hit { margin-top: 4px; background: var(--marigold); border-color: var(--ink); color: var(--ink); }
+.sp-none { margin: 10px 0; }
+.sp-more { margin-top: 10px; }
+.sp-src { margin-top: 12px; }
+.ozb-row { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-top: 1px dashed var(--line); }
+.ozb-row:first-child { border-top: 0; }
+.ozb-t { font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+.dlg-extra { margin: 12px 0 0; text-align: center; }
+@media (max-width: 360px) { .sale-row { grid-template-columns: 64px minmax(0, 1fr) auto; } .sale-row .soon-when { font-size: 13px; } .keen-btn { padding: 0 10px; } }

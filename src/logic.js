@@ -470,8 +470,96 @@
     return head.map(csvCell).join(',') + '\n' + rows.join('\n') + '\n';
   }
 
+  /* ---------- deals ---------- */
+  var ORD = ['1st', '2nd', '3rd', '4th', 'Last'];
+  /* The date of the nth weekday (0 = Sunday) in a month. n = 5 means the last one. */
+  function nthWeekday(y, m, n, dow) {
+    var d;
+    if (n >= 5) { d = new Date(y, m + 1, 0); while (d.getDay() !== dow) d.setDate(d.getDate() - 1); return ymd(d); }
+    d = new Date(y, m, 1);
+    while (d.getDay() !== dow) d.setDate(d.getDate() + 1);
+    d.setDate(d.getDate() + 7 * (Math.max(1, n) - 1));
+    return d.getMonth() === m ? ymd(d) : null;
+  }
+  /* Every date a sale day falls on from one date to another, inclusive. A rule is once on a date, every week on a
+     weekday, every month on a date (the last day in shorter months), or every month on the nth weekday. */
+  function saleDates(rule, from, to) {
+    var re = /^\d{4}-\d{2}-\d{2}$/, out = [];
+    if (!rule || !re.test(from || '') || !re.test(to || '') || from > to) return out;
+    var lo = re.test(rule.start || '') && rule.start > from ? rule.start : from;
+    var hi = re.test(rule.until || '') && rule.until < to ? rule.until : to;
+    if (lo > hi) return out;
+    if (rule.k === 'once') return re.test(rule.date || '') && rule.date >= lo && rule.date <= hi ? [rule.date] : out;
+    if (rule.k === 'weekly') return weeklyDates(lo, clamp(rule.dow, 0, 6), hi);
+    if (rule.k !== 'nth' && rule.k !== 'monthly') return out;
+    var a = parseYmd(lo), y = a.getFullYear(), m = a.getMonth(), g = 0, d, nx;
+    while (g++ < 240 && ymd(new Date(y, m, 1)) <= hi) {
+      d = rule.k === 'nth' ? nthWeekday(y, m, clamp(rule.n, 1, 5), clamp(rule.dow, 0, 6))
+        : ymd(new Date(y, m, Math.min(clamp(rule.day, 1, 31), daysInMonth(y, m))));
+      if (d && d >= lo && d <= hi) out.push(d);
+      nx = addMonths(y, m, 1); y = nx[0]; m = nx[1];
+    }
+    return out;
+  }
+  function ordinalDay(n) { var s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
+  function saleRuleLabel(rule) {
+    if (!rule) return '';
+    if (rule.k === 'once') return 'One day only';
+    if (rule.k === 'weekly') return 'Every ' + DAYS_FULL[clamp(rule.dow, 0, 6)];
+    if (rule.k === 'monthly') return 'The ' + ordinalDay(clamp(rule.day, 1, 31)) + ' of every month';
+    if (rule.k === 'nth') return ORD[clamp(rule.n, 1, 5) - 1] + ' ' + DAYS_FULL[clamp(rule.dow, 0, 6)] + ' of every month';
+    return '';
+  }
+  /* One name per store, so "WW", "Woolies" and "WOOLWORTHS 1234 MACQUARIE" all count as Woolworths. */
+  var STORES = [
+    ['Coles', /\bcoles\b|^cl$/i], ['Woolworths', /\bwoolworths\b|\bwoolies\b|^ww$/i], ['Harris Farm', /\bharris ?farm/i],
+    ['ALDI', /\baldi\b/i], ['Costco', /\bcostco\b/i], ['IGA', /\biga\b/i], ['Lucky Mart', /\blucky ?mart\b/i]
+  ];
+  function storeName(s) {
+    s = String(s || '').trim();
+    for (var i = 0; i < STORES.length; i++) if (STORES[i][1].test(s)) return STORES[i][0];
+    return s;
+  }
+  /* Which watch words a special's name matches. A word matches at the start of a word in the name, ignoring case,
+     punctuation and a plural s, so "tim tams" finds "Tim Tam Original". Longer single words also match run together,
+     so "weetbix" finds "Weet-Bix". */
+  var squash = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ''); };
+  function watchHits(name, words) {
+    var n = ' ' + String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() + ' ', flat = squash(name), out = [];
+    (words || []).forEach(function (w) {
+      var k = String(w || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      if (k.length > 3) k = k.replace(/s$/, '');
+      if (!k) return;
+      if (n.indexOf(' ' + k) >= 0 || (k.indexOf(' ') < 0 && k.length >= 6 && flat.indexOf(squash(k)) >= 0)) out.push(w);
+    });
+    return out;
+  }
+  /* How long since an item was last this cheap, in weeks, from text like "11 weeks ago @ WW". Never counts as long ago. */
+  function weeksSince(s) {
+    s = String(s || '');
+    if (/never|first/i.test(s)) return 99;
+    var m = /(\d+)\s*(day|week|wk|month|year)/i.exec(s);
+    if (!m) return 0;
+    var n = Number(m[1]), u = m[2].toLowerCase();
+    return u === 'day' ? n / 7 : u === 'month' ? n * 4.3 : u === 'year' ? n * 52 : n;
+  }
+  /* Specials in the order worth looking at: ones on your watch list first, then the biggest saving by percent,
+     then the ones that haven't been this cheap for longest. */
+  function sortSpecials(list, words) {
+    return (list || []).map(function (x, i) { return { x: x, i: i, hit: watchHits(x.n, words).length ? 1 : 0 }; })
+      .sort(function (a, b) { return (b.hit - a.hit) || ((b.x.off || 0) - (a.x.off || 0)) || (weeksSince(b.x.last) - weeksSince(a.x.last)) || (a.i - b.i); })
+      .map(function (o) { return o.x; });
+  }
+  /* The Wednesday-to-Tuesday week that supermarket specials run in, for a date. */
+  function specialsWeek(s) {
+    var back = (parseYmd(s).getDay() + 4) % 7, from = addDays(s, -back);
+    return { from: from, to: addDays(from, 6) };
+  }
+
   var L = {
     MONTHS: MONTHS, MONTHS_FULL: MONTHS_FULL, DAYS: DAYS, DAYS_FULL: DAYS_FULL,
+    nthWeekday: nthWeekday, saleDates: saleDates, saleRuleLabel: saleRuleLabel, ordinalDay: ordinalDay, storeName: storeName,
+    watchHits: watchHits, weeksSince: weeksSince, sortSpecials: sortSpecials, specialsWeek: specialsWeek,
     pad: pad, ymd: ymd, parseYmd: parseYmd, addDays: addDays, addMonths: addMonths, daysInMonth: daysInMonth,
     daysBetweenInclusive: daysBetweenInclusive, clamp: clamp,
     toCents: toCents, fmt: fmt, fmtRound: fmtRound, fmtShort: fmtShort, parseMoneyInput: parseMoneyInput, parseExpr: parseExpr,
