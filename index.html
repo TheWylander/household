@@ -2518,14 +2518,15 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     const go = (i) => aiModel(AI_MODELS[i], receiptSchema()).then((model) => model.generateContent([RECEIPT_PROMPT, { inlineData: { mimeType: 'image/jpeg', data } }]))
       .then((r) => JSON.parse(r.response.text()), (e) => {
         const st = e && e.customErrorData && e.customErrorData.status;
-        if (i + 1 < AI_MODELS.length && (st === 404 || /not found|is not supported/i.test(String((e && e.message) || '')))) return go(i + 1);
+        const m = String((e && e.message) || '');
+        if (i + 1 < AI_MODELS.length && !/genai config/i.test(m) && (st === 404 || /not found|is not supported/i.test(m))) return go(i + 1);
         throw e;
       });
     return go(0);
   }
   function receiptError(e) {
     const code = e && e.code, st = e && e.customErrorData && e.customErrorData.status, msg = String((e && e.message) || '');
-    if (code === 'api-not-enabled' || /api-not-enabled|has not been used|is disabled/i.test(msg)) return 'Receipt reading isn\'t switched on yet. In the Firebase console, open AI Logic, tap Get started, and choose the Gemini Developer API.';
+    if (code === 'api-not-enabled' || /api-not-enabled|has not been used|is disabled|genai config not found/i.test(msg)) return 'Receipt reading isn\'t set up yet. In the Firebase console, open AI Logic, tap Get started, choose the Gemini Developer API and finish every step. If you just did, give it 10 minutes.';
     if (/are blocked|API_KEY_SERVICE_BLOCKED/i.test(msg)) return 'The app\'s Firebase key isn\'t allowed to use Gemini yet. In the Google Cloud console, open Credentials, edit the Browser key, and add the Firebase AI Logic API.';
     if (st === 429 || /quota|exhausted/i.test(msg)) return 'Gemini\'s free limit is used up for now. Type this one in, or try again later.';
     if (e && e.photo) return 'That photo couldn\'t be opened. Try another one.';
