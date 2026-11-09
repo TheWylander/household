@@ -1,7 +1,8 @@
-/* Sends the household app's phone notifications. GitHub runs it each morning and evening for free.
+/* Sends the household app's phone notifications. GitHub runs it each morning and evening for free, and the app
+   starts it the moment one of us adds a spend (with NOTIFY_MODE=spends).
    It signs in to Firebase as its own bot user, whose email and password are in two GitHub secrets, BOT_EMAIL and
-   BOT_PASSWORD. The Firestore rules only let that user read the sale days, watch list and phones in hh/deals and
-   hh/push, and note what it sent. Without the secrets, it stops quietly. Each pop-up is encrypted for the phone it goes to.
+   BOT_PASSWORD. The Firestore rules only let that user read the sale days, watch list, phones and new-spend notes in
+   hh/deals and hh/push, and note what it sent. Without the secrets, it stops quietly. Each pop-up is encrypted for the phone it goes to.
    Run from the top of the repo: node .github/notify/notify.mjs deals.json */
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -31,7 +32,8 @@ export function weekKey(feed, day) {
 /* This week's specials and OzBargain deals that match the watch list. A deal matches on its shop too. */
 export function weekHits(feed, watch, day) {
   if (!feed || !Array.isArray(watch) || !watch.length) return [];
-  const s = feed.sources || {}, live = (k) => !!(s[k] && s[k].to && s[k].to >= day);
+  /* A list counts once it has started: next week's half-price list is posted days early. */
+  const s = feed.sources || {}, live = (k) => !!(s[k] && s[k].to && s[k].to >= day && (!s[k].from || s[k].from <= day));
   const running = (x) => (x.src === 'um' ? !!x.to && x.to >= day : live(x.src === 'hf' ? 'harris' : 'report'));
   const specials = L.sortSpecials((feed.specials || []).filter((x) => x && x.n && running(x) && L.watchHits(x.n, watch).length), watch)
     .map((x) => ({ n: x.n, s: L.storeName(x.s), now: x.now }));
@@ -53,8 +55,35 @@ export function specialsPop(groups, more) {
   return { title: '🏷️ ' + title, body };
 }
 
-/* Everything to send on this run, and which phones it goes to. */
-export function plan({ push, deals, feed, now }) {
+/* Several new spends from one person in a single pop-up: the total, up to three lines, and your share. */
+export function spendsPop(list) {
+  if (list.length === 1) return { title: list[0].t, body: list[0].b || '' };
+  const name = list[list.length - 1].n, total = list.reduce((a, e) => a + (e.c > 0 ? e.c : 0), 0), share = list.reduce((a, e) => a + (e.sh > 0 ? e.sh : 0), 0);
+  const line = (e) => e.l || String(e.t || '').replace(/^\W+/u, '');
+  const lines = (list.length > 3 ? list.slice(0, 2).map(line).concat(['+ ' + (list.length - 2) + ' more in the app']) : list.map(line))
+    .concat(list.every((e) => typeof e.sh === 'number') ? ['Your share: ' + L.fmt(share)] : []);
+  return { title: '💸 ' + (name ? name + ' added ' : '') + list.length + ' spends' + (total > 0 ? ', ' + L.fmt(total) : ''), body: lines.join('\n') };
+}
+const EV_FRESH = 36 * 3600e3, TEST_FRESH = 15 * 60e3;
+/* New spends. Each phone keeps a short list of what its person added in hh/push (events.a and events.b); the job
+   sends them to the other person's phones. A test pop-up from the setup goes to the person's own phones. */
+export function spendEvents(P, sent, now) {
+  const out = [], at = now.getTime();
+  ['a', 'b'].forEach((by) => {
+    (P.events && Array.isArray(P.events[by]) ? P.events[by] : []).forEach((e) => {
+      if (!e || typeof e !== 'object' || !e.id || !e.t || typeof e.at !== 'number') return;
+      const age = at - e.at;
+      if (age > (e.self ? TEST_FRESH : EV_FRESH) || age < -10 * 60e3) return;
+      const key = 'ev:' + sydneyNow(new Date(e.at)).day + ':' + String(e.id).slice(0, 40);
+      if (!sent[key]) out.push({ by, e, key });
+    });
+  });
+  return out.sort((x, y) => x.e.at - y.e.at);
+}
+
+/* Everything to send on this run, and which phones it goes to. The app starts a run in "spends" mode the moment a
+   spend is added; that run leaves sale days and specials to the morning and evening runs. */
+export function plan({ push, deals, feed, now, mode = 'all' }) {
   const P = push || {}, D = deals || {}, sent = P.sent || {}, pub = P.vapid && P.vapid.pub, out = [];
   const { day, hour } = sydneyNow(now);
   const subs = Object.keys(P.subs || {}).map((id) => Object.assign({ id }, P.subs[id]))
@@ -63,8 +92,22 @@ export function plan({ push, deals, feed, now }) {
 
   subs.filter((s) => !s.welcomed).forEach((s) => out.push({
     key: 'welcome:' + s.id, to: [s.id], welcome: true, title: '🔔 Notifications are on',
-    body: "📅 The evening before a sale day we're keen on\n🛒 Again that morning\n🏷️ Wednesdays, when our watch list is on special", url: './'
+    body: "💸 When the other of us adds a spend\n📅 The evening before a sale day we're keen on\n🛒 Again that morning\n🏷️ When our watch list is on special", url: './'
   }));
+
+  /* New spends, as one pop-up per person; with nobody to tell, they're only marked as done. */
+  const evs = spendEvents(P, sent, now);
+  ['a', 'b'].forEach((by) => {
+    const mine = evs.filter((x) => x.by === by && !x.e.self);
+    if (!mine.length) return;
+    const to = subs.filter((x) => x.who !== by && wants(x.who, 'spends')).map((x) => x.id), keys = mine.map((x) => x.key);
+    out.push(Object.assign({ key: keys[0], keys, to, spend: true, quiet: !to.length, url: './' }, spendsPop(mine.map((x) => x.e))));
+  });
+  evs.filter((x) => x.e.self).forEach((x) => {
+    const to = subs.filter((s) => s.who === x.by).map((s) => s.id);
+    out.push({ key: x.key, keys: [x.key], to, test: true, quiet: !to.length, title: x.e.t, body: x.e.b || '', url: './' });
+  });
+  if (mode === 'spends') return { day, hour, subs, out };
 
   /* Sale days: the evening before, and the morning of. */
   const evening = hour >= 12, date = evening ? L.addDays(day, 1) : day;
@@ -89,17 +132,18 @@ export function plan({ push, deals, feed, now }) {
   return { day, hour, subs, out };
 }
 
-/* Markers older than 60 days are cleared, so the record stays small. */
+/* Markers older than 60 days are cleared, so the record stays small; a spend's marker goes after a week. */
 export function oldKeys(sent, day) {
-  const cut = L.addDays(day, -60);
-  return Object.keys(sent || {}).filter((k) => { const m = /(\d{4}-\d{2}-\d{2})/.exec(k); return m && m[1] < cut; });
+  const cut = L.addDays(day, -60), evCut = L.addDays(day, -7);
+  return Object.keys(sent || {}).filter((k) => { const m = /(\d{4}-\d{2}-\d{2})/.exec(k); return m && m[1] < (/^ev:/.test(k) ? evCut : cut); });
 }
 
 /* Sends the plan and works out what to write back: what was sent, phones that welcomed, ones that are gone. */
-export async function run({ push, deals, feed, now = new Date(), send, log = () => {} }) {
-  const p = plan({ push, deals, feed, now }), subs = {}, sent = {};
+export async function run({ push, deals, feed, now = new Date(), mode = 'all', send, log = () => {} }) {
+  const p = plan({ push, deals, feed, now, mode }), subs = {}, sent = {};
   let ok = 0, failed = 0;
   for (const n of p.out) {
+    if (n.quiet) { n.keys.forEach((k) => { sent[k] = Date.now(); }); continue; }
     let any = false;
     for (const id of n.to) {
       if (subs[id] === null) continue;
@@ -114,6 +158,7 @@ export async function run({ push, deals, feed, now = new Date(), send, log = () 
     }
     if (!any) continue;
     if (n.welcome) { if (subs[n.to[0]] !== null) subs[n.to[0]] = Object.assign(subs[n.to[0]] || {}, { welcomed: true }); }
+    else if (n.keys) n.keys.forEach((k) => { sent[k] = Date.now(); });
     else sent[n.key] = n.names || Date.now();
   }
   return { plan: p, ok, failed, write: { subs, sent, drop: oldKeys(push.sent, p.day), last: { at: now.toISOString(), sent: ok, failed } } };
@@ -217,16 +262,17 @@ export function firebase({ apiKey, projectId, referer, fetch: f = globalThis.fet
   };
 }
 
-/* One run: sign in, read the sale days, watch list and phones, send, and note what was sent. */
-export async function job({ email, password, config, feed, now = new Date(), fetch: f, send, referer, log = () => {} }) {
+/* One run: sign in, read the sale days, watch list and phones, send, and note what was sent. A run for new spends
+   doesn't need the sale days or watch list, so it reads only hh/push. */
+export async function job({ email, password, config, feed, now = new Date(), mode = 'all', fetch: f, send, referer, log = () => {} }) {
   const fb = firebase({ apiKey: config.apiKey, projectId: config.projectId, referer, fetch: f });
   await fb.signIn(email, password);
-  const [push, deals] = await Promise.all([fb.get('hh/push'), fb.get('hh/deals')]);
+  const [push, deals] = await Promise.all([fb.get('hh/push'), mode === 'spends' ? null : fb.get('hh/deals')]);
   if (!push || !push.vapid || !push.vapid.pub || !push.vapid.d) {
     if (push) await fb.update('hh/push', { last: { at: now.toISOString(), sent: 0, failed: 0 } });
     return null;
   }
-  const r = await run({ push, deals: deals || {}, feed, now, send, log });
+  const r = await run({ push, deals: deals || {}, feed, now, mode, send, log });
   await fb.update('hh/push', r.write);
   return r;
 }
@@ -234,7 +280,7 @@ export async function job({ email, password, config, feed, now = new Date(), fet
 /* The run log on GitHub is public, so it says what kind of pop-ups went out, never what they said. */
 export function runSummary(r) {
   if (!r) return 'No phone has turned notifications on yet.';
-  const kinds = r.plan.out.map((n) => (n.welcome ? 'a welcome' : /^sale:/.test(n.key) ? 'a sale day reminder' : 'watch-list specials'));
+  const kinds = r.plan.out.filter((n) => !n.quiet).map((n) => (n.welcome ? 'a welcome' : n.test ? 'a test' : n.spend ? (n.keys.length === 1 ? 'a new spend' : 'new spends') : /^sale:/.test(n.key) ? 'a sale day reminder' : 'watch-list specials'));
   const what = kinds.filter((k, i) => kinds.indexOf(k) === i);
   return 'Sent ' + r.ok + (r.ok === 1 ? ' pop-up' : ' pop-ups') + (what.length ? ' (' + what.join(', ') + ')' : '') + (r.failed ? ', ' + r.failed + " couldn't be sent" : '') + '.';
 }
@@ -258,8 +304,9 @@ async function main() {
       return { ok: false, status: e && e.statusCode ? e.statusCode : 0 };
     }
   };
+  const mode = process.env.NOTIFY_MODE === 'spends' ? 'spends' : 'all';
   try {
-    const r = await job({ email, password, config, feed, now: new Date(), send, referer: site, log: (m) => console.log('::warning::' + m) });
+    const r = await job({ email, password, config, feed, now: new Date(), mode, send, referer: site, log: (m) => console.log('::warning::' + m) });
     console.log('::notice::' + runSummary(r));
   } catch (e) {
     console.log('::error::' + (e && e.message ? e.message : e));

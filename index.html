@@ -641,6 +641,10 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
 .push-setup p { margin: 0 0 6px; }
 .push-setup ol { margin: 6px 0 6px; padding-left: 20px; }
 .push-setup li { margin: 4px 0; overflow-wrap: anywhere; }
+.push-instant { margin-top: 12px; padding-top: 10px; border-top: 2px dashed var(--dash); }
+.push-instant .push-on { margin-top: 2px; }
+.push-instant .err-text { margin: 2px 0 0; }
+.setup-steps a { color: inherit; font-weight: 800; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
 
 /* ---------- deals, rearranged ---------- */
 .hscroll { flex-wrap: nowrap; overflow-x: auto; margin-right: -16px; padding-right: 16px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
@@ -1438,7 +1442,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       ['camera', 'Capture a receipt.', "Tap the plus and choose Capture a receipt. The app reads the shop, total and every item. Tap anything that's just one person's, and it adds the spends."],
       ['gear', 'Upload.', 'Bringing in the Westpac statement and Splitwise files has moved to Settings, under Upload. Spends to check still show on Home.'],
       ['cart', 'Weekend shopping list.', "Tap + on any special, or on a match from the watch list, to add it to our list for the weekend shop or put it on the watch list. The list is under the trolley at the top of Deals: tick things off as you go, and add your own."],
-      ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up the evening before a sale day we're keen on, and on Wednesdays when something on the watch list is on special."]
+      ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up when the other of us adds a spend, the evening before a sale day we're keen on, and when something on the watch list is on special."]
     ] }
   ];
 
@@ -1458,7 +1462,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     photos: null, photoBusy: null, photoErr: null, newsShown: false, newsDoc: null, newsEdit: null, newsId: null, factN: 0,
     enterKey: null, enterAt: 0, enterDir: 0, enterDirNow: 0, countsShown: {},
     pushDoc: null, pushBusy: false, pushNote: null,
-    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, spStore: 'all', spAisle: 'all', spWatch: false, spQuery: '', spAll: false, ozbAll: false, watchNew: '', listNew: '', aiDoc: null, aiTokNew: '',
+    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, spStore: 'all', spAisle: 'all', spWatch: false, spQuery: '', spAll: false, ozbAll: false, watchNew: '', listNew: '', aiDoc: null, aiTokNew: '', ghTokNew: '',
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -2470,7 +2474,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       ? putEntries(newYm, { [e.id]: e }).then((ok) => (ok ? putEntries(oldYm, { [e.id]: null }) : false))
       : putEntries(newYm, { [e.id]: e });
     if (base.source === 'import' && base.key && C.remember && A.category && A.category !== base.category && C.categories.indexOf(A.category) >= 0) saveRule(base.key, null, A.category);
-    done.then((ok) => { if (ok) toast((A.id ? 'Updated ' : 'Saved ') + L.fmt(e.amount) + ' on ' + L.fmtDay(e.date)); });
+    done.then((ok) => { if (!ok) return; toast((A.id ? 'Updated ' : 'Saved ') + L.fmt(e.amount) + ' on ' + L.fmtDay(e.date)); if (!A.id) spendPop([e], e.title); });
     const back = A.from || 'home';
     S.add = null;
     if (back === 'cal') initCal(e.date);
@@ -2533,6 +2537,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       if (!ok) return;
       enqueue('hh/tab', (ref) => doSet(ref, { open: false, date: null, startedAt: null, items: {} }));
       toast('Saved the tab: ' + L.fmt(total) + ' on ' + L.fmtDay(date));
+      spendPop([e], e.title);
     });
     S.dialog = null; S.tabForm = { amount: '', label: '', payer: null };
     initCal(date); S.view = 'cal'; render(); window.scrollTo(0, 0);
@@ -2747,7 +2752,11 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     if (s.theirs > 0) mk(s.theirs, f.items.filter((x) => x.who === s.other), (shop + ', just ' + nm(s.other)).slice(0, 80), s.other === 'a' ? 100 : 0);
     const map = {};
     made.forEach((e) => { map[e.id] = e; });
-    putEntries(f.date.slice(0, 7), map).then((ok) => { if (ok) toast(made.length === 1 ? 'Saved ' + L.fmt(made[0].amount) + ' from ' + shop : 'Saved ' + made.length + ' spends from ' + shop); });
+    putEntries(f.date.slice(0, 7), map).then((ok) => {
+      if (!ok) return;
+      toast(made.length === 1 ? 'Saved ' + L.fmt(made[0].amount) + ' from ' + shop : 'Saved ' + made.length + ' spends from ' + shop);
+      spendPop(made, shop);
+    });
     S.dialog = null;
     if (S.view === 'add') { const back = (S.add && S.add.from) || 'home'; S.add = null; S.view = back; }
     render();
@@ -3554,6 +3563,12 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     const F = S.feed, src = F && F.sources[x.src === 'hf' ? 'harris' : 'report'];
     return (src && ISO_DAY.test(src.to || '') && src.to) || '';
   }
+  /* When a special's list starts, if that's after today: next week's half-price list is sometimes all there is. */
+  function specialStart(x) {
+    if (x.src === 'um') return '';
+    const F = S.feed, src = F && F.sources[x.src === 'hf' ? 'harris' : 'report'], f = src && ISO_DAY.test(src.from || '') ? src.from : '';
+    return f > today() ? f : '';
+  }
   /* A starting word for the watch list from a product name: the first few words, without the size. */
   function watchWord(n) {
     const w = String(n || '').replace(/\b\d+(\.\d+)?\s*(g|kg|ml|l|lt|pk|pack|ea|each)\b/gi, ' ').replace(/\b\d+\s*x\s*\d+\w*/gi, ' ').replace(/[^\w'&-]+/g, ' ').trim().split(/\s+/).filter(Boolean);
@@ -3601,9 +3616,9 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       '<div class="dialog-actions">' + (ticked && !S.readOnly ? '<button class="btn btn-secondary" data-act="listclear">Clear ' + ticked + ' ticked</button>' : '') + '<button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
   }
   function spRow(x, words) {
-    const hit = L.watchHits(x.n, words).length > 0, w = rareWeeks(x);
+    const hit = L.watchHits(x.n, words).length > 0, w = rareWeeks(x), st = specialStart(x);
     const name = x.link ? '<a class="sp-n" href="' + esc(x.link) + '" target="_blank" rel="noopener">' + esc(x.n) + '</a>' : '<span class="sp-n">' + esc(x.n) + '</span>';
-    return '<li class="sp-row' + (hit ? ' hit' : '') + (S.readOnly ? '' : ' has-add') + '"><span class="sp-main">' + name + '<span class="k">' + esc([shopLabel(x.s), x.cat].filter(Boolean).join(' · ')) + '</span>' +
+    return '<li class="sp-row' + (hit ? ' hit' : '') + (S.readOnly ? '' : ' has-add') + '"><span class="sp-main">' + name + '<span class="k">' + esc([shopLabel(x.s), x.cat, st ? 'from ' + L.fmtDay(st) : ''].filter(Boolean).join(' · ')) + '</span>' +
       (hit || w >= 8 ? '<span class="sp-tags">' + (hit ? '<span class="tag hit">On our list</span>' : '') + (w >= 8 ? '<span class="tag rare">' + esc(rareLabel(w)) + '</span>' : '') + '</span>' : '') + '</span>' +
       '<span class="sp-price"><span class="sp-now">' + L.fmt(x.now) + '</span>' + (x.was > x.now ? '<s class="sp-was"><span class="sr">was </span>' + L.fmt(x.was) + '</s>' : '') +
       (x.off ? '<span class="sp-off">' + x.off + '% off</span>' : x.src === 'hf' ? '<span class="sp-off">Special</span>' : '') + '</span>' + addBtn(x) + '</li>';
@@ -3684,7 +3699,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   function matchesCard() {
     const D = dealsCfg();
     if (!D.watch.length) {
-      return '<section class="card matches"><p class="k">Our watch list</p><h2>Tell it what we buy</h2><p class="muted">Add things like coffee or Weet-Bix. When one is on special it shows here, goes to the top of the specials, and our phones pop up on Wednesday.</p>' +
+      return '<section class="card matches"><p class="k">Our watch list</p><h2>Tell it what we buy</h2><p class="muted">Add things like coffee or Weet-Bix. When one is on special it shows here, goes to the top of the specials, and our phones pop up when the new specials come in.</p>' +
         (S.readOnly ? '' : '<button class="btn btn-secondary btn-block" style="margin-top:14px" data-act="watchopen">Add to the watch list</button>') + '</section>';
     }
     if (!S.feed) return '';
@@ -3708,7 +3723,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     const D = dealsCfg(), count = {};
     watchByWord().forEach((x) => { count[x.w] = x.hits.length; });
     return '<div class="dlg-head"><h2 id="dlgT">Our watch list</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>' +
-      '<p class="muted">Things we buy. When one is on special it goes to the top of Deals, and our phones pop up on Wednesday.' + (S.feed ? ' The number is this week\'s matches.' : '') + '</p>' +
+      '<p class="muted">Things we buy. When one is on special it goes to the top of Deals, and our phones pop up when the new specials come in.' + (S.feed ? ' The number is this week\'s matches.' : '') + '</p>' +
       '<div class="watch">' + (D.watch.length ? '<div class="chips">' + D.watch.map((w) => '<button class="chip sm' + (count[w] ? ' hit' : '') + '" data-act="watchdel" data-arg="' + esc(w) + '">' + esc(w) +
         (count[w] ? ' <span class="n">' + count[w] + '</span>' : '') + '<span aria-hidden="true">' + icon('close') + '</span><span class="sr">, remove</span></button>').join('') + '</div>'
         : '<p class="hint">Nothing on it yet. Add things you buy, like coffee or Weet-Bix.</p>') +
@@ -3916,8 +3931,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   }
 
   /* ---------- phone notifications ---------- */
-  /* Pop-ups on your phones, even with the app closed: the evening before and the morning of a sale day you're keen on,
-     and on Wednesdays when something on the watch list is on special. Each phone subscribes here with Web Push. A free
+  /* Pop-ups on your phones, even with the app closed: when the other of you adds a spend, the evening before and the
+     morning of a sale day you're keen on, and when something on the watch list is on special. Each phone subscribes here with Web Push. A free
      GitHub job sends them; it signs in as its own bot user, whose login is kept in GitHub's encrypted secrets and which the
      Firestore rules limit to sale days, the watch list and phones. Each pop-up is encrypted for the phone it goes to. The first phone to turn them on makes the Web Push key pair and
      keeps it in hh/push, which only your two logins and that job can read. */
@@ -3933,7 +3948,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   }
   function pushCfg() {
     const d = S.pushDoc && typeof S.pushDoc === 'object' ? S.pushDoc : {}, subs = d.subs && typeof d.subs === 'object' ? d.subs : {};
-    const pref = (p) => { const x = d.prefs && d.prefs[p] && typeof d.prefs[p] === 'object' ? d.prefs[p] : {}; return { sale: x.sale !== false, specials: x.specials !== false }; };
+    const pref = (p) => { const x = d.prefs && d.prefs[p] && typeof d.prefs[p] === 'object' ? d.prefs[p] : {}; return { sale: x.sale !== false, specials: x.specials !== false, spends: x.spends !== false }; };
     return {
       pub: d.vapid && typeof d.vapid.pub === 'string' ? d.vapid.pub : '',
       subs: Object.keys(subs).filter((k) => subs[k] && typeof subs[k] === 'object' && typeof subs[k].endpoint === 'string').map((k) => Object.assign({ id: k }, subs[k])),
@@ -3980,7 +3995,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       return Promise.all([swReady(), pushKey()]);
     }).then((r) => subscribeWith(r[0], r[1])).then((ok) => {
       S.pushBusy = false; S.pushNote = ok ? null : 'error'; render();
-      if (ok) toast('Notifications are on for this phone');
+      if (ok) { toast('Notifications are on for this phone'); kick(); }
     }, (e) => { S.pushBusy = false; S.pushNote = e && (e.code === 'denied' || e.code === 'dismissed') ? e.code : 'error'; render(); });
   }
   function pushOff() {
@@ -3999,6 +4014,106 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     if (!P.pub || (mine && mine.vapid === P.pub && !mine.stale && mine.who === S.me)) return;
     swReady().then((reg) => subscribeWith(reg, P.pub)).catch(noop);
   }
+  /* ---------- pop-ups for new spends ---------- */
+  /* When one of us adds a spend, the other's phone gets a pop-up. The phone notes it in hh/push (a short list for each
+     person, events.a and events.b), which the GitHub job can read, then starts the job straight away with a GitHub
+     token kept in hh/ai, which only our two logins can read. Without the token, the morning and evening runs send it. */
+  const GH_TOKEN = /^(github_pat_[A-Za-z0-9_]{40,}|ghp_[A-Za-z0-9]{30,})$/;
+  const ghToken = () => (S.aiDoc && typeof S.aiDoc.ghToken === 'string' ? S.aiDoc.ghToken : '');
+  /* The repo the app is served from: owner.github.io/repo. */
+  function ghRepo() {
+    if (window.HH_REPO) return String(window.HH_REPO);
+    const m = /^([a-z0-9-]+)\.github\.io$/i.exec(location.hostname || ''), repo = (location.pathname || '').split('/').filter(Boolean)[0];
+    return m && repo ? m[1] + '/' + repo : '';
+  }
+  /* GitHub's new token page, filled in: the name, a year, and Actions read and write. The repo is picked by hand. */
+  const TOKEN_LINK = 'https://github.com/settings/personal-access-tokens/new?name=Household+pop-ups&description=' +
+    encodeURIComponent('Lets the household app start its Phone notifications job when a spend is added') + '&expires_in=366&actions=write';
+  /* Starts the job for new spends. Resolves with GitHub's answer: 204 means it's on its way, -1 that GitHub couldn't be reached. */
+  function startJob(token) {
+    const repo = ghRepo();
+    if (!repo || !token) return Promise.resolve(0);
+    return fetch('https://api.github.com/repos/' + repo + '/actions/workflows/notify.yml/dispatches', {
+      method: 'POST', cache: 'no-store',
+      headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ref: 'main', inputs: { mode: 'spends' } })
+    }).then((r) => r.status, () => -1);
+  }
+  const jobOk = (st) => st === 204 || st === 200;
+  function ghWhy(st) {
+    if (st === 401) return 'GitHub didn\'t accept the token. It may have expired or been deleted, so make a new one.';
+    if (st === 403) return 'The token isn\'t allowed to start the job. Make a new one from the link, which sets Actions to Read and write.';
+    if (st === 404) return 'The token can\'t see the household repo. Make a new one, and under Repository access pick Only select repositories, then household.';
+    if (st === 422) return 'GitHub has an older copy of the job. Close the app fully, reopen it and try again.';
+    if (st === -1) return 'Couldn\'t reach GitHub. Check your connection and try again.';
+    if (st === 0) return 'Instant pop-ups only work in the app on your Home Screen.';
+    return 'GitHub said no (' + st + '). Try again in a minute.';
+  }
+  /* Starts the job if there's a token, and remembers if GitHub said no, so Settings can say why. */
+  function kick() {
+    const tok = ghToken();
+    if (!tok) return;
+    startJob(tok).then((st) => {
+      if (st === -1 || st === 0) return;
+      const was = lsGet('hh.ghFail') || '';
+      lsSet('hh.ghFail', jobOk(st) ? '' : String(st));
+      if (!jobOk(st) && lsGet('hh.ghFailDay') !== today()) { lsSet('hh.ghFailDay', today()); setTimeout(() => toast('Instant pop-ups need a look in Settings'), 2600); }
+      if (was !== (lsGet('hh.ghFail') || '') && S.view === 'settings') safeRender();
+    });
+  }
+  const myEvents = () => { const d = S.pushDoc || {}; return d.events && Array.isArray(d.events[S.me]) ? d.events[S.me].filter((x) => x && typeof x === 'object') : []; };
+  /* Adds a note to this person's list, keeping the last 20 from the past three days. Worked out when the write runs,
+     so two quick saves both make it. */
+  function noteEvent(ev) {
+    return enqueue('hh/push', (ref) => {
+      const cut = Date.now() - 3 * 864e5;
+      return ref.update({ events: { [S.me]: myEvents().filter((x) => x.at > cut && x.id !== ev.id).slice(-19).concat([ev]) } });
+    });
+  }
+  function dropEvent(id) {
+    return enqueue('hh/push', (ref) => ref.update({ events: { [S.me]: myEvents().filter((x) => x.id !== id) } }));
+  }
+  /* A pop-up on the other person's phones for the spends one save just added: the total, what it was, who paid and
+     their share. Only if one of their phones is on and they haven't turned spends off. */
+  function spendPop(list, what) {
+    const me = S.me, to = other(me), P = pushCfg();
+    if (!me || S.readOnly || S.mode !== 'firebase' || !list.length || !P.pub || !P.prefs[to].spends || !P.subs.some((x) => x.who === to && x.vapid === P.pub && !x.stale)) return;
+    const amt = list.reduce((a, e) => a + (e.amount || 0), 0), share = list.reduce((a, e) => a + ((e.owed && e.owed[to]) || 0), 0);
+    const payers = list.map((e) => e.payer).filter((x, i, a) => a.indexOf(x) === i);
+    const paid = payers.length === 1 && (payers[0] === 'a' || payers[0] === 'b') ? (payers[0] === to ? 'You paid' : nm(payers[0]) + ' paid') : 'You both paid';
+    const e0 = list[0], name = String(what || e0.title || 'A spend').trim().slice(0, 40);
+    const cat = e0.category && e0.category !== 'Other' && e0.category.toLowerCase() !== name.toLowerCase() ? e0.category : '';
+    const ev = {
+      id: uid('e'), at: Date.now(), n: nm(me), c: amt, sh: share,
+      t: '💸 ' + nm(me) + ' added ' + L.fmt(amt),
+      b: [name, cat, e0.date !== today() ? L.fmtDay(e0.date) : ''].filter(Boolean).join(' · ') + '\n' + paid + ' · ' + (share > 0 ? 'your share ' + L.fmt(share) : 'it\'s all ' + poss(nm(me))),
+      l: L.fmt(amt) + ' ' + name
+    };
+    noteEvent(ev).then((ok) => { if (ok) kick(); });
+  }
+  /* Settings: whether new spends pop up straight away, and the setup for it (for whoever set the app up). */
+  function instantRow() {
+    const tok = ghToken(), fail = Number(lsGet('hh.ghFail') || 0), ed = isEditor();
+    if (tok && !fail) return '<p class="push-on">' + icon('check') + 'New spends pop up within a minute</p>' + (ed ? '<button class="link sm" data-act="ghtoken">Instant pop-ups setup</button>' : '');
+    if (tok) return '<p class="err-text">' + esc(ghWhy(fail)) + ' Until it\'s fixed, new spends wait for the morning or evening check.</p>' +
+      (ed ? '<button class="btn btn-secondary btn-block" data-act="ghtoken">Fix instant pop-ups</button>' : '<p class="hint">' + esc(nm(editorOf())) + ' can fix it in Settings.</p>');
+    return '<p class="hint">New spends pop up at the next morning or evening check.' + (ed ? ' A GitHub token makes it within a minute. It takes two minutes, once, for both phones.' : '') + '</p>' +
+      (ed ? '<button class="btn btn-secondary btn-block" data-act="ghtoken">Set up instant pop-ups</button>' : '');
+  }
+  function ghTokenDialog(d) {
+    const has = !!ghToken(), P = pushCfg(), mine = P.subs.some((x) => x.id === myPushId() && x.who === S.me && x.vapid === P.pub && !x.stale);
+    return '<div class="dlg-head"><h2 id="dlgT">Instant pop-ups</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>' +
+      '<p class="muted">A GitHub token lets either phone start the pop-up job the moment a spend is added, so it lands on the other phone within a minute. Make it once and it works on both phones.</p>' +
+      '<ol class="setup-steps"><li><a href="' + esc(TOKEN_LINK) + '" target="_blank" rel="noopener">Open GitHub\'s new token page</a>. It fills in the name, a one-year expiry and Actions: Read and write.</li>' +
+      '<li>Under <strong>Repository access</strong>, pick <strong>Only select repositories</strong>, then <strong>household</strong>.</li>' +
+      '<li>Tap <strong>Generate token</strong> and copy it.</li><li>Paste it here and tap Save.' + (mine ? ' This phone gets a test pop-up within a minute.' : '') + '</li></ol>' +
+      (has ? '<p class="hint">A token is saved. Paste a new one to replace it.</p>' : '') +
+      '<label class="sr" for="ghTokIn">GitHub token</label><input class="input" id="ghTokIn" placeholder="Paste the token" autocomplete="off" autocapitalize="off" spellcheck="false" data-bind="ghTokNew" data-enter="ghtoksave" value="' + esc(S.ghTokNew) + '">' +
+      (d.err ? '<p class="err-text" role="alert">' + esc(d.err) + '</p>' : '') +
+      '<p class="hint">It\'s saved privately for the two of you, never in the app\'s public code, and it can only start or stop this repo\'s GitHub jobs. If it ever gets out, delete it on GitHub under Settings, Developer settings.</p>' +
+      '<div class="dialog-actions">' + (has ? '<button class="btn btn-secondary" data-act="ghtokdel">Remove it</button>' : '<button class="btn btn-secondary" data-act="dlgclose">Not now</button>') +
+      '<button class="btn btn-primary" data-act="ghtoksave"' + (d.busy ? ' disabled' : '') + '>' + (d.busy ? 'Checking' : 'Save') + '</button></div>';
+  }
   function pushCard() {
     const P = pushCfg(), sup = pushSupport(), me = S.me, mine = P.subs.filter((x) => x.id === myPushId() && x.who === me)[0], pref = P.prefs[me];
     const who = ['a', 'b'].map((p) => nm(p) + ': ' + (P.subs.some((x) => x.who === p) ? 'on' : 'not yet')).join(' · ');
@@ -4010,11 +4125,12 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       error: 'That didn\'t work. Check your connection and try again.'
     };
     let out = '<section class="card" id="pushCard"><div class="card-head"><h2>Phone notifications</h2></div>' +
-      '<p class="muted">A pop-up the evening before a sale day you\'re keen on, and on Wednesday mornings when something on the watch list is on special.</p>' +
+      '<p class="muted">A pop-up when ' + esc(nm(other(me))) + ' adds a spend, the evening before a sale day you\'re keen on, and when something on the watch list is on special.</p>' +
       '<p class="hint">' + esc(who) + '</p>';
     if (!S.readOnly) {
       if (mine) {
         out += '<p class="push-on">' + icon('check') + 'On for this phone</p>' +
+          '<label class="switch-row"><span>Spends ' + esc(nm(other(me))) + ' adds</span><input type="checkbox" class="switch" role="switch" data-change="pushpref" data-arg="spends"' + (pref.spends ? ' checked' : '') + '></label>' +
           '<label class="switch-row"><span>Sale days we\'re keen on</span><input type="checkbox" class="switch" role="switch" data-change="pushpref" data-arg="sale"' + (pref.sale ? ' checked' : '') + '></label>' +
           '<label class="switch-row"><span>Specials on our watch list</span><input type="checkbox" class="switch" role="switch" data-change="pushpref" data-arg="specials"' + (pref.specials ? ' checked' : '') + '></label>' +
           '<button class="link sm" data-act="pushoff"' + (S.pushBusy ? ' disabled' : '') + '>Turn off for this phone</button>';
@@ -4024,7 +4140,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
           (n && notes[n] ? '<p class="hint" role="status">' + esc(notes[n]) + '</p>' : '');
       }
     }
-    if (P.last) out += '<p class="hint">Last checked ' + esc(agoLabel(P.last.at)) + '.</p>';
+    if (P.last) out += '<p class="hint">Last checked ' + esc(agoLabel(P.last.at)) + '.</p>' + (S.readOnly ? '' : '<div class="push-instant">' + instantRow() + '</div>');
     else if (isEditor()) {
       out += '<div class="push-setup"><p class="k">One-time setup</p><p>A free job in your GitHub repo sends the pop-ups. It signs in as its own bot user, which can only see your sale days, watch list and phones:</p><ol>' +
         '<li>In the Firebase console, open Authentication, then Users, and tap Add user. Use the bot email from your latest firestore.rules (your email with +bot before the @) and a long password from your password manager.</li>' +
@@ -4650,6 +4766,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       body = receiptDialog(d);
     } else if (d.type === 'aitoken') {
       body = aiTokenDialog(d);
+    } else if (d.type === 'ghtoken') {
+      body = ghTokenDialog(d);
     } else if (d.type === 'addpick') {
       body = addPickDialog();
     } else if (d.type === 'inscat') {
@@ -4826,6 +4944,37 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       upsert('hh/ai', { appCheckDebug: '' }, {});
       S.dialog = null; render(); toast('Token removed');
       if (aiLoad) setTimeout(() => location.reload(), 1200);
+    },
+    ghtoken: () => { S.ghTokNew = ''; openDialog({ type: 'ghtoken' }); },
+    /* Checks the token by starting the job for real (with a test pop-up for this phone, if it's on), and saves it only if GitHub says yes. */
+    ghtoksave: () => {
+      const d = S.dialog, t = String(S.ghTokNew || '').replace(/\s+/g, '');
+      if (!d || d.type !== 'ghtoken' || d.busy) return;
+      if (!GH_TOKEN.test(t)) { d.err = 'That doesn\'t look like a GitHub token. It starts with github_pat_ and runs to about 90 letters and numbers.'; render(); return; }
+      if (!ghRepo()) { d.err = ghWhy(0); render(); return; }
+      const P = pushCfg(), mine = P.subs.some((x) => x.id === myPushId() && x.who === S.me && x.vapid === P.pub && !x.stale);
+      const test = mine ? { id: uid('t'), at: Date.now(), self: true, n: nm(S.me), t: '🔔 Instant pop-ups are on', b: 'When ' + nm(other(S.me)) + ' adds a spend, it pops up here within a minute.' } : null;
+      d.busy = true; d.err = ''; render();
+      (test ? noteEvent(test) : Promise.resolve(true)).then(() => startJob(t)).then((st) => {
+        const open = S.dialog === d;
+        d.busy = false;
+        if (jobOk(st)) {
+          const el = document.getElementById('ghTokIn');
+          if (el) el.value = '';
+          S.ghTokNew = ''; S.aiDoc = Object.assign({}, S.aiDoc || {}, { ghToken: t }); lsSet('hh.ghFail', '');
+          upsert('hh/ai', { ghToken: t }, {});
+          if (open) S.dialog = null;
+          render(); toast(test ? 'Saved. A test pop-up is on its way' : 'Saved. New spends now pop up within a minute');
+          return;
+        }
+        if (test) dropEvent(test.id);
+        if (open) { d.err = ghWhy(st); render(); }
+      });
+    },
+    ghtokdel: () => {
+      S.aiDoc = Object.assign({}, S.aiDoc || {}, { ghToken: '' }); lsSet('hh.ghFail', '');
+      upsert('hh/ai', { ghToken: '' }, {});
+      S.dialog = null; render(); toast('Token removed. New spends wait for the morning or evening check');
     },
     shoplist: () => openDialog({ type: 'shoplist' }),
     listadd: (k) => {
@@ -5033,7 +5182,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     },
     swtrimrefresh: () => swTrimRefresh(),
     pushpref: (el) => {
-      const k = el.getAttribute('data-arg') === 'sale' ? 'sale' : 'specials', cur = pushCfg().prefs[S.me];
+      const a = el.getAttribute('data-arg'), k = a === 'sale' || a === 'spends' ? a : 'specials', cur = pushCfg().prefs[S.me];
       upsert('hh/push', { prefs: { [S.me]: Object.assign({}, cur, { [k]: !!el.checked }) } }, PUSH_BASE);
     },
     salerefresh: () => { if (S.dialog && S.dialog.type === 'sale') S.dialog.error = null; render(); },
