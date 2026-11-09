@@ -8,3 +8,5 @@ window.HH_FIREBASE = {
   messagingSenderId: "375818727624",
   appId: "1:375818727624:web:a0045fc4648985a1f675fd"
 };
+/* The reCAPTCHA key App Check uses, so Gemini knows receipt requests come from this app. Also not secret. */
+window.HH_APPCHECK = "6LcbThcuAAAAAIWv4b_ZF6XrTp2mcvleWayS0rF7";
