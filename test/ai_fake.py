@@ -17,6 +17,7 @@ export function getGenerativeModel(ai, params) {
     await new Promise((r) => setTimeout(r, 150));
     const mode = window.__aiMode || 'ok';
     if (mode === 'setup') { const e = new Error('AI Logic: The Firebase AI Logic API is not enabled in your project. (AI/api-not-enabled)'); e.code = 'api-not-enabled'; throw e; }
+    if (mode === 'config') { const e = new Error('AI Logic: Error fetching from the API: [404 ] Firebase AI Logic genai config not found. (AI/fetch-error)'); e.code = 'fetch-error'; e.customErrorData = { status: 404 }; throw e; }
     if (mode === 'quota') { const e = new Error('AI Logic: Error fetching from the API: [429 ] Resource has been exhausted (AI/fetch-error)'); e.code = 'fetch-error'; e.customErrorData = { status: 429 }; throw e; }
     if (mode === 'missing' && params.model === 'gemini-3.5-flash-lite') { const e = new Error('AI Logic: models/gemini-3.5-flash-lite is not found (AI/fetch-error)'); e.code = 'fetch-error'; e.customErrorData = { status: 404 }; throw e; }
     return { response: { text: () => JSON.stringify(window.__aiReply) } };
