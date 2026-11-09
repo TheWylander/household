@@ -18,7 +18,8 @@ export const FEEDS = [
   OZB + '/cat/groceries/feed',
   OZB + '/deals/coles.com.au/feed',
   OZB + '/deals/woolworths.com.au/feed',
-  OZB + '/deals/harrisfarm.com.au/feed'
+  OZB + '/deals/harrisfarm.com.au/feed',
+  OZB + '/deals/liquorland.com.au/feed'   // Liquorland's own site turns GitHub away, so its deals come from OzBargain
 ];
 const HF = 'https://www.harrisfarm.com.au';
 /* "online-specials" is the site's All Specials list. The others are its biggest specials aisles, in case that one moves. */

@@ -1299,7 +1299,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   }
   /* One name per store, so "WW", "Woolies" and "WOOLWORTHS 1234 MACQUARIE" all count as Woolworths. */
   var STORES = [
-    ['Coles', /\bcoles\b|^cl$/i], ['Woolworths', /\bwoolworths\b|\bwoolies\b|^ww$/i], ['Harris Farm', /\bharris ?farm/i],
+    ['Liquorland', /\bliquorland\b/i], ['Coles', /\bcoles\b|^cl$/i], ['Woolworths', /\bwoolworths\b|\bwoolies\b|^ww$/i], ['Harris Farm', /\bharris ?farm/i],
     ['ALDI', /\baldi\b/i], ['Costco', /\bcostco\b/i], ['IGA', /\biga\b/i], ['Lucky Mart', /\blucky ?mart\b/i], ['Umall', /\bumall\b/i]
   ];
   function storeName(s) {
@@ -3795,7 +3795,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   function ozbCard() {
     const F = S.feed, t = today();
     if (!F || !F.deals.length) return '';
-    const D = dealsCfg(), shops = /^(Coles|Woolworths|Harris Farm|ALDI|Costco|IGA|Lucky Mart)$/;
+    const D = dealsCfg(), shops = /^(Coles|Woolworths|Harris Farm|ALDI|Costco|IGA|Lucky Mart|Liquorland)$/;
     const list = F.deals.filter((d) => !d.hp && (!d.to || d.to >= t)).map((d) => Object.assign({ shop: L.storeName(d.s), ours: L.watchHits(d.t + ' ' + d.s, D.watch).length > 0 }, d))
       .sort((a, b) => (b.votes || 0) - (a.votes || 0));
     if (!list.length) return '';
