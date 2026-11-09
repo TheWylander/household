@@ -2678,9 +2678,10 @@
     const m = /^([a-z0-9-]+)\.github\.io$/i.exec(location.hostname || ''), repo = (location.pathname || '').split('/').filter(Boolean)[0];
     return m && repo ? m[1] + '/' + repo : '';
   }
-  /* GitHub's new token page, filled in: the name, a year, and Actions read and write. The repo is picked by hand. */
+  /* GitHub's new token page, filled in: the name, 364 days (GitHub won't take a year or more), and Actions read and write.
+     The repo is picked by hand. */
   const TOKEN_LINK = 'https://github.com/settings/personal-access-tokens/new?name=Household+pop-ups&description=' +
-    encodeURIComponent('Lets the household app start its Phone notifications job when a spend is added') + '&expires_in=366&actions=write';
+    encodeURIComponent('Lets the household app start its Phone notifications job when a spend is added') + '&expires_in=364&actions=write';
   /* Starts the job for new spends. Resolves with GitHub's answer: 204 means it's on its way, -1 that GitHub couldn't be reached. */
   function startJob(token) {
     const repo = ghRepo();
@@ -2756,7 +2757,7 @@
     const has = !!ghToken(), P = pushCfg(), mine = P.subs.some((x) => x.id === myPushId() && x.who === S.me && x.vapid === P.pub && !x.stale);
     return '<div class="dlg-head"><h2 id="dlgT">Instant pop-ups</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>' +
       '<p class="muted">A GitHub token lets either phone start the pop-up job the moment a spend is added, so it lands on the other phone within a minute. Make it once and it works on both phones.</p>' +
-      '<ol class="setup-steps"><li><a href="' + esc(TOKEN_LINK) + '" target="_blank" rel="noopener">Open GitHub\'s new token page</a>. It fills in the name, a one-year expiry and Actions: Read and write.</li>' +
+      '<ol class="setup-steps"><li><a href="' + esc(TOKEN_LINK) + '" target="_blank" rel="noopener">Open GitHub\'s new token page</a>. It fills in the name, an expiry 364 days away and Actions: Read and write.</li>' +
       '<li>Under <strong>Repository access</strong>, pick <strong>Only select repositories</strong>, then <strong>household</strong>.</li>' +
       '<li>Tap <strong>Generate token</strong> and copy it.</li><li>Paste it here and tap Save.' + (mine ? ' This phone gets a test pop-up within a minute.' : '') + '</li></ol>' +
       (has ? '<p class="hint">A token is saved. Paste a new one to replace it.</p>' : '') +

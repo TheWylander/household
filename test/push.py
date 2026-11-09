@@ -137,7 +137,7 @@ try:
         act(a, 'go', 'settings'); act(a, 'ghtoken')
         dlg = a.locator('.dialog').inner_text()
         href = a.locator('.dialog .setup-steps a').get_attribute('href')
-        check('Only select repositories' in dlg and 'test pop-up' in dlg and 'expires_in=366' in href and 'actions=write' in href and 'name=Household+pop-ups' in href, 'the setup links to a filled-in GitHub token page and says which repo to pick')
+        check('Only select repositories' in dlg and 'test pop-up' in dlg and 'expires_in=364' in href and 'actions=write' in href and 'name=Household+pop-ups' in href, 'the setup links to a filled-in GitHub token page and says which repo to pick')
         a.locator('.dialog').screenshot(path=str(ROOT / 'shots' / 'p12-instant-setup.png'))
         a.fill('#ghTokIn', 'ghp_short'); act(a, 'ghtoksave')
         check("doesn't look like a GitHub token" in a.locator('.dialog').inner_text() and gh == [], 'a wrong-looking token is caught before asking GitHub')
