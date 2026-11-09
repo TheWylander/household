@@ -18,7 +18,6 @@ export function sydneyNow(d) {
     .formatToParts(d).forEach((x) => { p[x.type] = x.value; });
   return { day: p.year + '-' + p.month + '-' + p.day, hour: Number(p.hour) };
 }
-const where = (s) => String(s || '').split(', ').pop();
 const keenOn = (s, d) => (s.keen !== false ? (s.skip || []).indexOf(d) < 0 : (s.on || []).indexOf(d) >= 0);
 const shop = (s) => (s === 'Woolworths' ? 'Woolies' : s);
 const short = (n) => String(n).split(' ').slice(0, 4).join(' ');
@@ -34,12 +33,15 @@ export function weekHits(feed, watch, day) {
   if (!feed || !Array.isArray(watch) || !watch.length) return [];
   const s = feed.sources || {}, live = (k) => !!(s[k] && s[k].to && s[k].to >= day);
   const specials = L.sortSpecials((feed.specials || []).filter((x) => x && x.n && live(x.src === 'hf' ? 'harris' : 'report') && L.watchHits(x.n, watch).length), watch)
-    .map((x) => ({ n: x.n, s: L.storeName(x.s) }));
+    .map((x) => ({ n: x.n, s: L.storeName(x.s), now: x.now }));
   const deals = (feed.deals || []).filter((d) => d && d.t && !d.hp && (!d.to || d.to >= day) && L.watchHits(d.t + ' ' + d.s, watch).length)
     .map((d) => ({ n: d.t, s: L.storeName(d.s) }));
   return specials.concat(deals);
 }
-const summary = (list) => list.slice(0, 2).map((h) => short(h.n) + (h.s ? ' at ' + shop(h.s) : '')).join(', ') + (list.length > 2 ? ' and ' + (list.length - 2) + ' more' : '');
+/* One special per line, which fits four lines on an iPhone lock screen: up to four, or three and how many more. */
+const itemLine = (h) => short(h.n) + (h.now > 0 ? ' · ' + L.fmt(h.now) : '') + (h.s ? ' at ' + shop(h.s) : '');
+const summary = (list) => (list.length > 4 ? list.slice(0, 3) : list).map(itemLine)
+  .concat(list.length > 4 ? ['+ ' + (list.length - 3) + ' more in the app'] : []).join('\n');
 
 /* Everything to send on this run, and which phones it goes to. */
 export function plan({ push, deals, feed, now }) {
@@ -50,8 +52,8 @@ export function plan({ push, deals, feed, now }) {
   const wants = (who, k) => !(P.prefs && P.prefs[who] && P.prefs[who][k] === false);
 
   subs.filter((s) => !s.welcomed).forEach((s) => out.push({
-    key: 'welcome:' + s.id, to: [s.id], welcome: true, title: 'Notifications are on',
-    body: "You'll get a heads-up the evening before a sale day you're keen on, and on Wednesdays when something on the watch list is on special.", url: './'
+    key: 'welcome:' + s.id, to: [s.id], welcome: true, title: '🔔 Notifications are on',
+    body: "📅 The evening before a sale day we're keen on\n🛒 Again that morning\n🏷️ Wednesdays, when our watch list is on special", url: './'
   }));
 
   /* Sale days: the evening before, and the morning of. */
@@ -62,7 +64,7 @@ export function plan({ push, deals, feed, now }) {
       const key = 'sale:' + s.id + '|' + d + (evening ? ':eve' : ':am');
       if (!keenOn(s, d) || sent[key]) return;
       const to = subs.filter((x) => wants(x.who, 'sale')).map((x) => x.id);
-      if (to.length) out.push({ key, to, title: s.store + (evening ? ' sale tomorrow' : ' sale is on today'), body: [s.offer, where(s.where)].filter(Boolean).join(' · ') || 'One of your sale days.', url: './#deals', tag: 'sale-' + s.id });
+      if (to.length) out.push({ key, to, title: (evening ? '📅 ' + s.store + ' sale tomorrow' : '🛒 ' + s.store + ' sale is on today'), body: [s.offer, s.where ? '📍 ' + s.where : ''].filter(Boolean).join('\n') || 'One of your sale days.', url: './#deals', tag: 'sale-' + s.id });
     });
   });
 
@@ -71,7 +73,7 @@ export function plan({ push, deals, feed, now }) {
   if (hits.length) {
     const before = Array.isArray(sent[wk]) ? sent[wk] : [], fresh = hits.filter((h) => before.indexOf(h.n) < 0);
     const to = subs.filter((x) => wants(x.who, 'specials')).map((x) => x.id);
-    if (fresh.length && to.length) out.push({ key: wk, names: hits.map((h) => h.n).slice(0, 60), to, title: before.length ? 'More on special this week' : 'On special this week', body: summary(fresh), url: './#deals', tag: 'specials' });
+    if (fresh.length && to.length) out.push({ key: wk, names: hits.map((h) => h.n).slice(0, 60), to, title: before.length ? '🏷️ More on special this week' : '🏷️ On special this week', body: summary(fresh), url: './#deals', tag: 'specials' });
   }
   return { day, hour, subs, out };
 }
