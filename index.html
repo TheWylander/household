@@ -45,14 +45,14 @@ h1, h2, h3 { margin: 0; font-family: var(--display); letter-spacing: -0.02em; }
 .k { font-size: 14px; font-weight: 700; color: var(--ink2); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-.main { max-width: 480px; margin: 0 auto; padding: 0 16px calc(var(--nav-h) + 32px + var(--nav-bottom)); }
+.main { max-width: 480px; margin: 0 auto; padding: 8px 16px calc(var(--nav-h) + 32px + var(--nav-bottom)); }
 .main.no-nav { padding-bottom: 24px; }
 .banner { max-width: 480px; margin: 0 auto; padding: 10px 16px; background: var(--marigold-soft); border-bottom: 2px solid var(--ink); font-size: 14px; font-weight: 600; }
 .banner.ro { background: var(--coral-soft); }
 
 /* headers */
-.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 4px 2px 16px; }
-.top.sheet { align-items: center; padding-top: 2px; }
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 14px 2px 12px; } /* iOS blurs the top strip of a home screen app, so the heading stays clear of it */
+.top.sheet { align-items: center; padding-top: 10px; }
 .eyebrow { font-size: 15px; font-weight: 700; color: var(--ink2); margin-bottom: 2px; }
 .title { font: 800 34px/1.02 var(--display); letter-spacing: -0.03em; }
 .title.sm { font-size: 24px; flex: 1; }
@@ -161,6 +161,17 @@ textarea.input { min-height: 140px; font-family: ui-monospace, Menlo, monospace;
 .hint a { color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 .err-text { font-size: 14px; color: var(--coral-deep); font-weight: 700; margin-top: 6px; }
 .err-why { font-size: 12px; margin-top: 8px; overflow-wrap: anywhere; }
+/* the + choice: capture a receipt or add a spend */
+.pick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.pick { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 148px; padding: 16px 14px; border: 2px solid var(--ink); border-radius: var(--r-md); background: var(--card); box-shadow: 0 4px 0 var(--ink); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.pick:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+.pick:focus-visible { outline: 3px solid var(--cobalt); outline-offset: 3px; }
+.pick-ic { width: 46px; height: 46px; flex: none; border-radius: 50%; border: 2px solid var(--ink); background: var(--marigold-soft); display: grid; place-items: center; margin-bottom: 4px; }
+.pick.file-btn .pick-ic { background: var(--coral-soft); }
+.pick-ic .ic { width: 24px; height: 24px; }
+.pick-t { font: 800 18px/1.15 var(--display); letter-spacing: -0.01em; }
+.pick-s { font-size: 13px; line-height: 1.3; color: var(--ink2); }
+.pick-photos { display: flex; justify-content: center; margin: 12px auto 0; }
 .setup-steps { margin: 12px 0 14px; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
 .setup-steps strong { font-weight: 800; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -1420,7 +1431,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       ['arrow', 'Swipe through months.', 'Swipe left or right in Insights and the Calendar. Numbers count up and charts grow as each screen opens.'],
       ['tag', 'Deals.', "Deals has its own tab. Everything on special this week is at the top, from Coles, Woolies and Harris Farm, with filters by shop and aisle and the things that are rarely this cheap. Below it, the best deal for each thing on our watch list, then sale days and OzBargain."],
       ['cal', 'Next sale day.', "Home shows the next sale day we're keen on, like Lucky Mart's monthly sale, with the address and a Keen button."],
-      ['plus', 'Snap a receipt.', "Tap the plus, then Snap a receipt. The app reads the shop, total and every item. Tap anything that's just one person's, and it adds the spends."],
+      ['camera', 'Capture a receipt.', "Tap the plus and choose Capture a receipt. The app reads the shop, total and every item. Tap anything that's just one person's, and it adds the spends."],
       ['gear', 'Upload.', 'Bringing in the Westpac statement and Splitwise files has moved to Settings, under Upload. Spends to check still show on Home.'],
       ['cart', 'Weekend shopping list.', "Tap + on any special, or on a match from the watch list, to add it to our list for the weekend shop or put it on the watch list. The list is under the trolley at the top of Deals: tick things off as you go, and add your own."],
       ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up the evening before a sale day we're keen on, and on Wednesdays when something on the watch list is on special."]
@@ -1951,7 +1962,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     runCounts();
     if (S.dialog && !S.dialog.focused) {
       S.dialog.focused = true;
-      const f = root.querySelector('.dialog input, .dialog textarea') || root.querySelector('.dialog .btn-primary, .dialog .btn-danger');
+      const f = root.querySelector('.dialog input:not([type="file"]), .dialog textarea') || root.querySelector('.dialog .btn-primary, .dialog .btn-danger');
       if (f) f.focus();
     } else if (key) {
       const el = root.querySelector(key);
@@ -2096,7 +2107,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     const item = (v, ic, label, extra) => '<button class="nav-i' + (S.view === v ? ' on' : '') + '" data-act="go" data-arg="' + v + '"' + (S.view === v ? ' aria-current="page"' : '') + '>' + icon(ic) + '<span>' + label + '</span>' + (extra || '') + '</button>';
     const fresh = notices().some((x) => x.kind === 'sp');
     return '<nav class="nav" aria-label="Main">' + item('home', 'home', 'Home') + item('cal', 'cal', 'Calendar') +
-      (S.readOnly ? '' : '<button class="nav-add" data-act="add" aria-label="Add a spend">' + icon('plus') + '</button>') +
+      (S.readOnly ? '' : snapReady() ? '<button class="nav-add" data-act="addpick" aria-label="Add a spend or capture a receipt">' + icon('plus') + '</button>'
+        : '<button class="nav-add" data-act="add" aria-label="Add a spend">' + icon('plus') + '</button>') +
       item('deals', 'tag', 'Deals', fresh ? '<span class="dot-badge" aria-hidden="true"></span><span class="sr">, new specials</span>' : '') +
       item('insights', 'chart', 'Insights') + '</nav>';
   }
@@ -2376,7 +2388,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     return '<header class="top sheet"><button class="icon-btn" data-act="closeadd" aria-label="Close">' + icon('close') + '</button>' +
       '<h1 class="title sm">' + (A.id ? 'Edit spend' : 'Add a spend') + '</h1>' +
       '<label class="date-chip"><span id="dateLbl">' + esc(L.fmtDay(A.date)) + '</span><input type="date" id="addDate" value="' + A.date + '" data-change="adddate" aria-label="Date of the spend"></label></header>' +
-      (!A.id && snapReady() ? '<label class="btn btn-secondary btn-block file-btn snap-add">' + icon('camera') + 'Snap a receipt<input type="file" accept="image/*" data-change="rcpfile" aria-label="Snap a receipt"></label>' : '') +
+      (!A.id && snapReady() ? '<label class="btn btn-secondary btn-block file-btn snap-add">' + icon('camera') + 'Capture a receipt<input type="file" accept="image/*" data-change="rcpfile" aria-label="Capture a receipt"></label>' : '') +
       '<section class="amount-box" aria-live="polite"><p class="amt-total" id="amtTotal">' + L.fmt(r.ok ? r.total : 0) + '</p><p class="amt-expr" id="amtExpr">' + esc(exprLine(A, r)) + '</p></section>' +
       (A.locked ? '<p class="hint" style="text-align:center;margin:-6px 0 16px">' + esc(A.orig.parts ? A.orig.parts.map((x) => nm(x.payer) + ' ' + L.fmt(x.amount)).join(', ') : '') + '</p>' : keypad()) +
       linesCard(A) +
@@ -2596,6 +2608,16 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     if (st && m.indexOf(String(st)) < 0) m += ' (HTTP ' + st + ')';
     return m.slice(0, 220);
   }
+  /* What the + opens: capture a receipt (straight to the camera) or add a spend by hand. */
+  function addPickDialog() {
+    return '<div class="dlg-head"><h2 id="dlgT">Add</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>' +
+      '<div class="pick-grid">' +
+      '<label class="pick file-btn"><span class="pick-ic" aria-hidden="true">' + icon('camera') + '</span><span class="pick-t">Capture a receipt</span><span class="pick-s">Gemini reads the shop, total and items</span>' +
+      '<input type="file" accept="image/*" capture="environment" data-change="rcpfile" aria-label="Capture a receipt with the camera"></label>' +
+      '<button class="pick" data-act="pickadd"><span class="pick-ic" aria-hidden="true">' + icon('plus') + '</span><span class="pick-t">Add a spend</span><span class="pick-s">Type in what we spent</span></button>' +
+      '</div>' +
+      '<label class="link sm file-btn pick-photos">' + icon('image') + 'Or choose a receipt from your photos<input type="file" accept="image/*" data-change="rcpfile" aria-label="Choose a photo of a receipt"></label>';
+  }
   function aiTokenDialog(d) {
     const has = !!aiToken();
     return '<div class="dlg-head"><h2 id="dlgT">Receipt reading setup</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>' +
@@ -2728,7 +2750,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   const snapReady = () => !S.readOnly && S.mode === 'firebase';
   function snapCard() {
     if (!snapReady()) return '';
-    return '<section class="card bold snap"><div class="snap-head"><span class="news-ic" aria-hidden="true">' + icon('camera') + '</span><h2>Snap a receipt</h2></div>' +
+    return '<section class="card bold snap"><div class="snap-head"><span class="news-ic" aria-hidden="true">' + icon('camera') + '</span><h2>Capture a receipt</h2></div>' +
       '<p class="muted">The app reads the shop, date, total and every item. You check it, mark anything that\'s just one person\'s, and it adds the spends.</p>' +
       '<label class="btn btn-primary btn-block file-btn">' + icon('camera') + 'Take a photo<input type="file" accept="image/*" capture="environment" data-change="rcpfile" aria-label="Take a photo of a receipt"></label>' +
       '<label class="btn btn-secondary btn-block file-btn" style="margin-top:12px">' + icon('image') + 'Choose from photos<input type="file" accept="image/*" data-change="rcpfile" aria-label="Choose a photo of a receipt"></label>' +
@@ -4614,6 +4636,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       body = receiptDialog(d);
     } else if (d.type === 'aitoken') {
       body = aiTokenDialog(d);
+    } else if (d.type === 'addpick') {
+      body = addPickDialog();
     } else if (d.type === 'inscat') {
       body = insCatDialog(d);
     } else if (d.type === 'news') {
@@ -4656,6 +4680,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   const ACT = {
     go: (v) => go(v),
     add: () => openAdd({}),
+    addpick: () => openDialog({ type: 'addpick' }),
+    pickadd: () => { S.dialog = null; openAdd({}); },
     addon: (d) => openAdd({ date: d }),
     edit: (id) => openEdit(id),
     closeadd: () => { const back = (S.add && S.add.from) || 'home'; S.add = null; S.view = back; render(); window.scrollTo(0, 0); },
@@ -4779,7 +4805,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       upsert('hh/ai', { appCheckDebug: t }, {});
       S.dialog = null;
       if (aiLoad) { toast('Saved. The app reopens to use it'); setTimeout(() => location.reload(), 1200); render(); return; }
-      render(); toast('Saved. Snap a receipt to try it');
+      render(); toast('Saved. Capture a receipt to try it');
     },
     aitokdel: () => {
       S.aiDoc = Object.assign({}, S.aiDoc || {}, { appCheckDebug: '' });
