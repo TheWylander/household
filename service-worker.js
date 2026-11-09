@@ -1,6 +1,6 @@
 /* Lets the app open from the home screen quickly and without a connection.
    The page itself is fetched fresh when online, so a new upload shows up the next time the app opens. */
-const VERSION = 'household-09226da16a';
+const VERSION = 'household-741d95bf0d';
 const FILES = ["./", "apple-touch-icon.png", "firebase-app-compat.js", "firebase-auth-compat.js", "firebase-config.js", "firebase-firestore-compat.js", "icon-192.png", "icon-32.png", "icon-512.png", "icon-maskable-512.png", "index.html", "manifest.json"];
 
 self.addEventListener('install', (event) => {
