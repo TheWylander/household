@@ -19,7 +19,8 @@ export const FEEDS = [
   OZB + '/deals/harrisfarm.com.au/feed'
 ];
 const HF = 'https://www.harrisfarm.com.au';
-export const HF_LISTS = ['specials', 'all-specials', 'shop-all-specials', 'weekly-specials', 'on-special'];
+/* "online-specials" is the site's All Specials list. The others are its biggest specials aisles, in case that one moves. */
+export const HF_LISTS = ['online-specials', 'grocery-specials', 'fruit-and-veg-specials'];
 /* OzBargain categories worth showing in a grocery app. */
 const KEEP_CATS = /\/cat\/(groceries|alcohol|gift-cards)$/;
 const STATE = /^(NSW|VIC|QLD|SA|WA|TAS|ACT|NT)$/;
@@ -205,9 +206,11 @@ export async function build({ prev, now = new Date(), fetchText, wait = 400, log
   /* Harris Farm: the list that worked last time first. */
   const ph = PS.harris || {}, lists = ph.handle ? [ph.handle].concat(HF_LISTS.filter((x) => x !== ph.handle)) : HF_LISTS;
   let hf = null;
+  const tried = [];
   for (const handle of lists) {
     const r = await fetchText(HF + '/collections/' + handle + '/products.json?limit=250');
     await pause(wait);
+    tried.push([handle, r ? r.status : 0]);
     if (!r || r.status !== 200) continue;
     let data = null;
     try { data = JSON.parse(r.text); } catch (e) { data = null; }
@@ -227,7 +230,7 @@ export async function build({ prev, now = new Date(), fetchText, wait = 400, log
     log('Harris Farm specials not read');
     if (live(ph) && prevHf.length) hf = { meta: Object.assign({}, ph, { stale: true }), items: prevHf };
   }
-  if (hf) { hf.meta.n = hf.items.length; out.sources.harris = hf.meta; out.specials.push(...hf.items); } else out.sources.harris = { ok: false };
+  if (hf) { hf.meta.n = hf.items.length; out.sources.harris = hf.meta; out.specials.push(...hf.items); } else out.sources.harris = { ok: false, tried };
   return out;
 }
 

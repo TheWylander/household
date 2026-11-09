@@ -3194,7 +3194,7 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
     if (!F || !F.deals.length) return '';
     const D = dealsCfg(), shops = /^(Coles|Woolworths|Harris Farm|ALDI|Costco|IGA|Lucky Mart)$/;
     const list = F.deals.filter((d) => !d.hp && (!d.to || d.to >= t)).map((d) => Object.assign({ shop: L.storeName(d.s) }, d));
-    const mine = list.filter((d) => shops.test(d.shop) || L.watchHits(d.t, D.watch).length);
+    const mine = list.filter((d) => shops.test(d.shop) || L.watchHits(d.t + ' ' + d.s, D.watch).length);
     const shown = S.ozbAll ? list.slice(0, 40) : mine.slice(0, 6);
     if (!list.length) return '';
     return '<section class="card specials"><div class="card-head"><h2>From OzBargain</h2></div><p class="muted">Deals people have posted for the shops you use.</p>' +
@@ -3272,9 +3272,14 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
     const r = F.sources.report, h = F.sources.harris, from = (r.to >= t && r.from) || (h.to >= t && h.from) || '';
     return from ? 'sp:' + from : '';
   }
+  /* Specials and OzBargain deals this week that match the watch list. A deal matches on its shop too, so "Tokyo Mart"
+     catches Tokyo Mart's sale when someone posts it. */
   function watchHitsNow() {
-    const D = dealsCfg();
-    return D.watch.length ? L.sortSpecials(specialsNow().filter((x) => L.watchHits(x.n, D.watch).length), D.watch) : [];
+    const D = dealsCfg(), F = S.feed, t = today();
+    if (!D.watch.length || !F) return [];
+    const sp = L.sortSpecials(specialsNow().filter((x) => L.watchHits(x.n, D.watch).length), D.watch);
+    const deals = F.deals.filter((d) => !d.hp && (!d.to || d.to >= t) && L.watchHits(d.t + ' ' + d.s, D.watch).length).map((d) => ({ n: d.t, s: L.storeName(d.s) }));
+    return sp.concat(deals);
   }
   function notices() {
     if (!S.settings || !S.me || S.readOnly) return [];
