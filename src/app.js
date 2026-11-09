@@ -62,6 +62,7 @@
     star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
     duo: '<circle cx="8.5" cy="12" r="5.5"/><circle cx="15.5" cy="12" r="5.5"/>',
     chart: '<path d="M4 20h16"/><path d="M7 16.5V12M12 16.5V6.5M17 16.5V9.5"/>',
+    cart: '<path d="M3 4.5h2.4l2.2 10a1.6 1.6 0 0 0 1.6 1.3h8.3a1.6 1.6 0 0 0 1.6-1.2L20.6 8H6.2"/><circle cx="9.6" cy="19.6" r="1.4"/><circle cx="17" cy="19.6" r="1.4"/>',
     bell: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z"/><path d="M10 20.6a2.1 2.1 0 0 0 4 0"/>',
     up: '<path d="M12 19V6M6 11.5 12 5.5l6 6"/>',
     pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
@@ -92,6 +93,7 @@
       ['cal', 'Next sale day.', "Home shows the next sale day we're keen on, like Lucky Mart's monthly sale, with the address and a Keen button."],
       ['plus', 'Snap a receipt.', "Tap the plus, then Snap a receipt. The app reads the shop, total and every item. Tap anything that's just one person's, and it adds the spends."],
       ['gear', 'Upload.', 'Bringing in the Westpac statement and Splitwise files has moved to Settings, under Upload. Spends to check still show on Home.'],
+      ['cart', 'Weekend shopping list.', "Tap + on any special, or on a match from the watch list, to add it to our list for the weekend shop or put it on the watch list. The list is under the trolley at the top of Deals: tick things off as you go, and add your own."],
       ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up the evening before a sale day we're keen on, and on Wednesdays when something on the watch list is on special."]
     ] }
   ];
@@ -112,7 +114,7 @@
     photos: null, photoBusy: null, photoErr: null, newsShown: false, newsDoc: null, newsEdit: null, newsId: null, factN: 0,
     enterKey: null, enterAt: 0, enterDir: 0, enterDirNow: 0, countsShown: {},
     pushDoc: null, pushBusy: false, pushNote: null,
-    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, spStore: 'all', spAisle: 'all', spWatch: false, spQuery: '', spAll: false, ozbAll: false, watchNew: '',
+    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, spStore: 'all', spAisle: 'all', spWatch: false, spQuery: '', spAll: false, ozbAll: false, watchNew: '', listNew: '',
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -1246,6 +1248,14 @@
     if ((code === 'fetch-error' && !st) || navigator.onLine === false || /failed to fetch|networkerror|load failed|importing a module/i.test(msg)) return offline;
     return 'Couldn\'t read that receipt. Try a clearer photo, or type it in.';
   }
+  /* The technical reason, in small print under the friendly one, so a screenshot says exactly what went wrong. */
+  function errDetail(e) {
+    const st = (e && e.customData && e.customData.httpStatus) || (e && e.customErrorData && e.customErrorData.status) || '';
+    let m = String((e && e.message) || '').replace(/https?:\/\/\S+/g, '').replace(/Error fetching from\s*:?/i, '').replace(/\s+/g, ' ').trim();
+    if (e && e.code && m.indexOf(e.code) < 0) m = e.code + (m ? ': ' + m : '');
+    if (st && m.indexOf(String(st)) < 0) m += ' (HTTP ' + st + ')';
+    return m.slice(0, 220);
+  }
   /* A smaller JPEG is plenty for reading, and quicker to send. */
   function shrinkPhoto(file) {
     return new Promise((res, rej) => {
@@ -1286,7 +1296,7 @@
       render();
     }, (e) => {
       if (!mine()) return;
-      S.dialog.busy = false; S.dialog.err = receiptError(e); render();
+      S.dialog.busy = false; S.dialog.err = receiptError(e); S.dialog.why = e && !e.photo ? errDetail(e) : ''; render();
     });
   }
   function receiptSums(f) {
@@ -1312,7 +1322,7 @@
     const head = '<div class="dlg-head"><h2 id="dlgT">Check the receipt</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>';
     if (d.busy) return head + '<div class="rcp-busy" role="status"><span class="spin" aria-hidden="true"></span><p><strong>Reading the receipt</strong></p><p class="muted">Gemini is reading the shop, the total and each item. It takes a few seconds.</p></div>';
     if (d.err) {
-      return head + '<p class="err-text" role="alert">' + esc(d.err) + '</p><div class="dialog-actions">' +
+      return head + '<p class="err-text" role="alert">' + esc(d.err) + '</p>' + (d.why ? '<p class="hint err-why">Details: ' + esc(d.why) + '</p>' : '') + '<div class="dialog-actions">' +
         '<label class="btn btn-secondary file-btn">Another photo<input type="file" accept="image/*" data-change="rcpfile" aria-label="Choose another photo of the receipt"></label>' +
         '<button class="btn btn-primary" data-act="rcptype">Type it in</button></div>';
     }
@@ -2011,7 +2021,8 @@
     { key: 'luckymart', store: 'Lucky Mart', offer: 'Up to 20% off', where: 'Shop 2, 2 Wilkes Ave, Artarmon', rule: { k: 'nth', n: 2, dow: 6 },
       link: 'https://www.sushifactory.com.au/our-group/', note: 'Japanese grocer by Artarmon station. Its sale is the 2nd Saturday of every month.' }
   ];
-  const DEALS_BASE = { sales: [], watch: [], keen: {} };
+  const DEALS_BASE = { sales: [], watch: [], keen: {}, list: [] };
+  const centsOk = (v) => (typeof v === 'number' && isFinite(v) && v > 0 && v < 1e7 ? Math.round(v) : 0);
   const LINK_OK = /^https:\/\/(www\.)?(ozbargain\.com\.au|coles\.com\.au|woolworths\.com\.au|harrisfarm\.com\.au|sushifactory\.com\.au)\/[^\s"'<>]*$/;
   const linkOk = (u) => (LINK_OK.test(String(u || '')) ? String(u).slice(0, 300) : '');
   const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -2033,7 +2044,11 @@
         where: String(x.where || '').slice(0, 80), note: String(x.note || '').slice(0, 160), link: linkOk(x.link), rule: saleRule(x.rule),
         keen: x.keen !== false, skip: days(x.skip), on: days(x.on)
       })),
-      watch: (Array.isArray(d.watch) ? d.watch : []).filter((w) => typeof w === 'string' && w.trim()).map((w) => w.trim().slice(0, 30)).slice(0, 30)
+      watch: (Array.isArray(d.watch) ? d.watch : []).filter((w) => typeof w === 'string' && w.trim()).map((w) => w.trim().slice(0, 30)).slice(0, 30),
+      list: (Array.isArray(d.list) ? d.list : []).filter((x) => x && typeof x.id === 'string' && typeof x.n === 'string' && x.n.trim()).slice(0, 80).map((x) => ({
+        id: x.id.slice(0, 24), n: x.n.trim().replace(/\s+/g, ' ').slice(0, 80), s: typeof x.s === 'string' ? x.s.trim().slice(0, 30) : '',
+        p: centsOk(x.p), w: centsOk(x.w), link: linkOk(x.link), to: ISO_DAY.test(x.to || '') ? x.to : '', done: x.done === true
+      }))
     };
   }
   /* Saved right away on this phone too, so a tap shows straight away instead of after the round trip. */
@@ -2137,13 +2152,73 @@
     const list = S.spAisle === 'all' ? spBase() : spBase().filter((x) => aisleOf(x) === S.spAisle);
     return L.sortSpecials(list, dealsCfg().watch);
   }
+  /* ---------- the weekend shopping list ---------- */
+  /* Kept with the watch list in hh/deals, so both phones share it. Specials carry their price and when the special ends. */
+  const spKey = (x) => (x.src || '') + '|' + x.s + '|' + x.n;
+  const findSpecial = (k) => specialsNow().filter((x) => spKey(x) === k)[0] || null;
+  const listKey = (i) => (i.s || '') + '|' + String(i.n).toLowerCase();
+  let listMemo = { doc: undefined, keys: null };
+  function onList(x) {
+    if (listMemo.doc !== S.dealsDoc) listMemo = { doc: S.dealsDoc, keys: new Set(dealsCfg().list.filter((i) => !i.done).map(listKey)) };
+    return listMemo.keys.has(listKey(x));
+  }
+  function specialEnd(x) {
+    const F = S.feed, src = F && F.sources[x.src === 'hf' ? 'harris' : 'report'];
+    return (src && ISO_DAY.test(src.to || '') && src.to) || '';
+  }
+  /* A starting word for the watch list from a product name: the first few words, without the size. */
+  function watchWord(n) {
+    const w = String(n || '').replace(/\b\d+(\.\d+)?\s*(g|kg|ml|l|lt|pk|pack|ea|each)\b/gi, ' ').replace(/\b\d+\s*x\s*\d+\w*/gi, ' ').replace(/[^\w'&-]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+    return w.slice(0, 3).join(' ').slice(0, 30);
+  }
+  function saveList(list) { saveDeals({ list: list.slice(-80) }); }
+  function addToList(it) {
+    const D = dealsCfg(), k = listKey(it);
+    if (D.list.some((i) => !i.done && listKey(i) === k)) return false;
+    saveList(D.list.filter((i) => listKey(i) !== k).concat([Object.assign({ id: uid('l'), s: '', p: 0, w: 0, link: '', to: '', done: false }, it)]));
+    return true;
+  }
+  const addBtn = (x) => (S.readOnly ? '' : '<button class="sp-add' + (onList(x) ? ' on' : '') + '" data-act="spitem" data-arg="' + esc(spKey(x)) + '" aria-label="' +
+    esc((onList(x) ? 'On the weekend list: ' : 'Add to a list: ') + x.n) + '">' + icon(onList(x) ? 'check' : 'plus') + '</button>');
+  function spItemDialog(d) {
+    const x = findSpecial(d.key), head = (t) => '<div class="dlg-head"><h2 id="dlgT">' + esc(t) + '</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>';
+    if (!x) return head('That special has finished') + '<p class="muted">The specials have moved on since. Have a look at this week\'s.</p><div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
+    const k = esc(spKey(x)), on = onList(x), words = L.watchHits(x.n, dealsCfg().watch), end = specialEnd(x);
+    return head(x.n) +
+      '<p class="muted">' + esc([shopLabel(x.s), L.fmt(x.now) + (x.was > x.now ? ', was ' + L.fmt(x.was) : ''), end ? 'special till ' + L.fmtDay(end) : ''].filter(Boolean).join(' · ')) + '</p>' +
+      '<div class="item-acts">' +
+      (on ? '<button class="btn btn-secondary btn-block" data-act="listoff" data-arg="' + k + '">' + icon('check') + 'On the weekend list. Take it off</button>'
+        : '<button class="btn btn-primary btn-block" data-act="listadd" data-arg="' + k + '">' + icon('cart') + 'Add to our weekend list</button>') +
+      (words.length ? '<p class="hint">On the watch list as ' + esc(listNames(words)) + '.</p>'
+        : '<button class="btn btn-secondary btn-block" data-act="watchfor" data-arg="' + k + '">' + icon('bell') + 'Put it on the watch list</button>') +
+      (x.link ? '<a class="link sm" href="' + esc(x.link) + '" target="_blank" rel="noopener">See it at ' + esc(shopLabel(x.s)) + '</a>' : '') + '</div>';
+  }
+  function shopListDialog() {
+    const D = dealsCfg(), t = today(), list = D.list, left = list.filter((i) => !i.done), ticked = list.length - left.length, sum = left.reduce((a, i) => a + i.p, 0);
+    const groups = {};
+    list.forEach((i) => { (groups[i.s] = groups[i.s] || []).push(i); });
+    const order = Object.keys(groups).sort((a, b) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)));
+    const row = (i) => '<li class="sl-row' + (i.done ? ' done' : '') + '">' +
+      '<button class="sl-tick" role="checkbox" aria-checked="' + i.done + '" data-act="listtick" data-arg="' + esc(i.id) + '" aria-label="' + esc(i.n) + '">' + (i.done ? icon('check') : '') + '</button>' +
+      '<span class="sl-main"><span class="sl-n">' + esc(i.n) + '</span>' +
+      (i.w > i.p || i.to ? '<span class="k">' + esc([i.w > i.p ? 'was ' + L.fmt(i.w) : '', i.to ? (i.to < t ? 'special has finished' : 'special till ' + L.fmtDay(i.to)) : ''].filter(Boolean).join(' · ')) + '</span>' : '') + '</span>' +
+      (i.p ? '<span class="sl-p">' + L.fmt(i.p) + '</span>' : '<span></span>') +
+      (S.readOnly ? '' : '<button class="sl-del" data-act="listdel" data-arg="' + esc(i.id) + '" aria-label="Take ' + esc(i.n) + ' off the list">' + icon('close') + '</button>') + '</li>';
+    return '<div class="dlg-head"><h2 id="dlgT">Weekend shopping list</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>' +
+      '<p class="muted">' + (list.length ? (left.length ? left.length + ' to get' + (sum ? ', about <strong>' + L.fmt(sum) + '</strong> at the special prices' : '') + '.' : 'All ticked off.')
+        : 'Nothing on it yet. Tap + on any special in Deals to add it, or add your own below.') + '</p>' +
+      order.map((g) => '<p class="sp-sec">' + esc(g ? shopLabel(g) : 'Anywhere') + '</p><ul class="sl-list">' + groups[g].map(row).join('') + '</ul>').join('') +
+      (S.readOnly ? '' : '<div class="watch-add"><label class="sr" for="listIn">Add to the list</label><input class="input" id="listIn" maxlength="60" placeholder="Add something else, like bread" autocomplete="off" enterkeyhint="done" data-bind="listNew" data-enter="listnew" value="' + esc(S.listNew) + '">' +
+        '<button class="btn btn-secondary btn-small" data-act="listnew">Add</button></div>') +
+      '<div class="dialog-actions">' + (ticked && !S.readOnly ? '<button class="btn btn-secondary" data-act="listclear">Clear ' + ticked + ' ticked</button>' : '') + '<button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
+  }
   function spRow(x, words) {
     const hit = L.watchHits(x.n, words).length > 0, w = rareWeeks(x);
     const name = x.link ? '<a class="sp-n" href="' + esc(x.link) + '" target="_blank" rel="noopener">' + esc(x.n) + '</a>' : '<span class="sp-n">' + esc(x.n) + '</span>';
-    return '<li class="sp-row' + (hit ? ' hit' : '') + '"><span class="sp-main">' + name + '<span class="k">' + esc([shopLabel(x.s), x.cat].filter(Boolean).join(' · ')) + '</span>' +
+    return '<li class="sp-row' + (hit ? ' hit' : '') + (S.readOnly ? '' : ' has-add') + '"><span class="sp-main">' + name + '<span class="k">' + esc([shopLabel(x.s), x.cat].filter(Boolean).join(' · ')) + '</span>' +
       (hit || w >= 8 ? '<span class="sp-tags">' + (hit ? '<span class="tag hit">On our list</span>' : '') + (w >= 8 ? '<span class="tag rare">' + esc(rareLabel(w)) + '</span>' : '') + '</span>' : '') + '</span>' +
       '<span class="sp-price"><span class="sp-now">' + L.fmt(x.now) + '</span>' + (x.was > x.now ? '<s class="sp-was"><span class="sr">was </span>' + L.fmt(x.was) + '</s>' : '') +
-      (x.off ? '<span class="sp-off">' + x.off + '% off</span>' : x.src === 'hf' ? '<span class="sp-off">Special</span>' : '') + '</span></li>';
+      (x.off ? '<span class="sp-off">' + x.off + '% off</span>' : x.src === 'hf' ? '<span class="sp-off">Special</span>' : '') + '</span>' + addBtn(x) + '</li>';
   }
   /* With no filter on, a few rarely-cheap picks and a button for the lot; otherwise the list itself. */
   function spListHtml() {
@@ -2222,9 +2297,9 @@
     const m = on.reduce((a, x) => a + x.sp, 0), save = on.reduce((a, x) => a + (x.hits[0].was > x.hits[0].now ? x.hits[0].was - x.hits[0].now : 0), 0);
     const rows = on.map((x) => {
       const h = x.hits[0], name = h.link ? '<a class="match-n" href="' + esc(h.link) + '" target="_blank" rel="noopener">' + esc(h.n) + '</a>' : '<span class="match-n">' + esc(h.n) + '</span>';
-      return '<li class="match-row"><span class="match-main">' + name + '<span class="match-meta"><span class="wpill">' + esc(x.w) + ' <span class="n">' + x.hits.length + '</span></span>' +
+      return '<li class="match-row' + (h.deal || S.readOnly ? '' : ' has-add') + '"><span class="match-main">' + name + '<span class="match-meta"><span class="wpill">' + esc(x.w) + ' <span class="n">' + x.hits.length + '</span></span>' +
         '<span>' + esc([shopLabel(h.s), h.was > h.now ? 'was ' + L.fmt(h.was) : ''].filter(Boolean).join(' · ')) + '</span></span></span>' +
-        '<span class="sp-price">' + (h.now ? '<span class="sp-now">' + L.fmt(h.now) + '</span>' : '') + '<span class="sp-off">' + (h.deal ? 'Deal' : h.off ? h.off + '% off' : 'Special') + '</span></span></li>';
+        '<span class="sp-price">' + (h.now ? '<span class="sp-now">' + L.fmt(h.now) + '</span>' : '') + '<span class="sp-off">' + (h.deal ? 'Deal' : h.off ? h.off + '% off' : 'Special') + '</span></span>' + (h.deal ? '' : addBtn(h)) + '</li>';
     }).join('');
     return '<section class="card matches" id="matchCard"><div class="match-head"><span class="news-ic" aria-hidden="true">' + icon('tag') + '</span><p class="k">On our watch list this week</p></div>' +
       '<h2>' + esc(on.length ? thingsLine(on) : 'Nothing we buy is on special this week') + '</h2>' +
@@ -2297,12 +2372,16 @@
       (S.readOnly ? '' : '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="saleadd" data-arg="' + d + '">' + icon('plus') + 'Add a sale day on this day</button>') + '</section>';
   }
   /* The Deals tab: everything on special first, then the watch list, sale days and OzBargain. */
+  function listBtn() {
+    const n = dealsCfg().list.filter((i) => !i.done).length;
+    return '<button class="icon-btn list-btn" data-act="shoplist" aria-label="Weekend shopping list' + (n ? ', ' + n + ' to get' : '') + '">' + icon('cart') + (n ? '<span class="list-n" aria-hidden="true">' + n + '</span>' : '') + '</button>';
+  }
   function dealsView() {
     const F = S.feed, t = today(), rep = F && F.sources.report, hf = F && F.sources.harris;
     const wk = F ? (rep.to >= t ? rep : hf.to >= t ? hf : null) : null;
     const eyebrow = wk && wk.from && wk.to ? 'Specials ' + L.fmtDay(wk.from) + ' to ' + L.fmtDay(wk.to) : 'Sale days and specials';
     return '<header class="top"><div><p class="eyebrow">' + esc(eyebrow) + '</p><h1 class="title">Deals</h1></div>' +
-      '<button class="icon-btn" data-act="salemonth" aria-label="Sale days by month">' + icon('cal') + '</button></header>' +
+      '<div class="top-right">' + listBtn() + '<button class="icon-btn" data-act="salemonth" aria-label="Sale days by month">' + icon('cal') + '</button></div></header>' +
       everythingCard() + matchesCard() + saleDaysRow() + ozbCard() + dealsFoot();
   }
   function saleDaysRow() {
@@ -3165,6 +3244,10 @@
       body = saleDialog(d);
     } else if (d.type === 'watch') {
       body = watchDialog();
+    } else if (d.type === 'spitem') {
+      body = spItemDialog(d);
+    } else if (d.type === 'shoplist') {
+      body = shopListDialog();
     } else if (d.type === 'salemonth') {
       body = monthDialog();
     } else if (d.type === 'receipt') {
@@ -3324,6 +3407,34 @@
       if (S.spWatch) { const c = document.getElementById('spCard'); if (c) c.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' }); }
     },
     watchopen: () => openDialog({ type: 'watch' }),
+    spitem: (k) => openDialog({ type: 'spitem', key: k }),
+    shoplist: () => openDialog({ type: 'shoplist' }),
+    listadd: (k) => {
+      const x = findSpecial(k);
+      if (!x || S.readOnly) return;
+      addToList({ n: x.n, s: x.s, p: centsOk(x.now), w: centsOk(x.was), link: linkOk(x.link), to: specialEnd(x) });
+      S.dialog = null; render(); toast('Added to the weekend list');
+    },
+    listoff: (k) => {
+      const x = findSpecial(k);
+      if (!x || S.readOnly) return;
+      saveList(dealsCfg().list.filter((i) => listKey(i) !== listKey(x)));
+      S.dialog = null; render(); toast('Taken off the weekend list');
+    },
+    watchfor: (k) => { const x = findSpecial(k); if (!x) return; S.watchNew = watchWord(x.n); openDialog({ type: 'watch' }); },
+    listtick: (id) => { if (S.readOnly) return; saveList(dealsCfg().list.map((i) => (i.id === id ? Object.assign({}, i, { done: !i.done }) : i))); render(); },
+    listdel: (id) => { if (S.readOnly) return; saveList(dealsCfg().list.filter((i) => i.id !== id)); render(); },
+    listclear: () => { if (S.readOnly) return; saveList(dealsCfg().list.filter((i) => !i.done)); render(); },
+    listnew: () => {
+      const n = String(S.listNew || '').trim().replace(/\s+/g, ' ').slice(0, 60), el = () => document.getElementById('listIn');
+      if (!n || S.readOnly) { if (el()) el().focus(); return; }
+      S.listNew = '';
+      if (el()) el().value = '';
+      if (dealsCfg().list.length >= 80) { toast('That\'s the most the list keeps. Clear some ticked things first.'); render(); return; }
+      addToList({ n });
+      render();
+      if (el()) el().focus();
+    },
     salemonth: () => { if (!S.cal) initCal(); else S.cal.picked = false; openDialog({ type: 'salemonth' }); },
     salemonthgo: () => { go('deals'); ACT.salemonth(); },
     rcptype: () => { S.dialog = null; if (S.view === 'add') render(); else openAdd({ from: S.view === 'upload' ? 'upload' : 'home' }); },
@@ -3342,6 +3453,7 @@
       const el = () => document.getElementById('watchIn');
       if (!w) { if (el()) el().focus(); return; }
       S.watchNew = '';
+      if (el()) el().value = ''; // or Chrome's change event, as the old box is swapped out, would put the word back
       if (!D.watch.some((x) => x.toLowerCase() === w.toLowerCase())) {
         if (D.watch.length >= 30) { toast('That\'s the most words the watch list keeps.'); render(); return; }
         saveDeals({ watch: D.watch.concat([w]) });

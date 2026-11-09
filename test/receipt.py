@@ -160,7 +160,8 @@ try:
         check("couldn't confirm this is our app" in b.locator('.dialog').inner_text(), 'a token Gemini turns down: says to reopen the app and retry')
         b.locator('.dialog [data-act="dlgclose"]').first.click(); b.wait_for_timeout(200)
         snap(b, mode='recaptcha')
-        check("couldn't confirm this is our app" in b.locator('.dialog').inner_text(), 'reCAPTCHA failing on the phone: the same')
+        check("couldn't confirm this is our app" in b.locator('.dialog').inner_text() and 'appCheck/recaptcha-error' in b.locator('.dialog .err-why').inner_text(),
+              'reCAPTCHA failing on the phone: the same, with the technical reason in small print')
         b.locator('.dialog [data-act="dlgclose"]').first.click(); b.wait_for_timeout(200)
         snap(b, mode='enforce')
         dlg = b.locator('.dialog').inner_text()
