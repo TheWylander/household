@@ -2139,10 +2139,10 @@
     const D = dealsCfg(), list = spFiltered(), q = String(S.spQuery || '').trim();
     if (!list.length) return '<p class="muted sp-none">' + (q ? 'Nothing on special matches that this week.' : 'Nothing here this week.') + '</p>';
     if (!S.spAll && !q && S.spAisle === 'all' && !S.spWatch) {
-      const rare = list.filter((x) => rareWeeks(x) >= 8).sort((a, b) => rareWeeks(b) - rareWeeks(a) || b.off - a.off).slice(0, 3);
-      return (rare.length ? '<div class="sp-rare"><p class="sp-rare-t">Rarely this cheap</p><p class="hint">Not half price for months, so worth stocking up.</p><ul class="sp-list">' + rare.map((x) => spRow(x, D.watch)).join('') + '</ul></div>'
-        : '<ul class="sp-list">' + list.slice(0, 5).map((x) => spRow(x, D.watch)).join('') + '</ul>') +
-        '<button class="btn btn-secondary btn-block sp-more" data-act="spmore">See all ' + list.length + ' specials</button>';
+      const rare = list.filter((x) => rareWeeks(x) >= 8).sort((a, b) => rareWeeks(b) - rareWeeks(a) || b.off - a.off).slice(0, 3), rest = list.filter((x) => rare.indexOf(x) < 0).slice(0, 8);
+      return (rare.length ? '<div class="sp-rare"><p class="sp-sec">Rarely this cheap <span>Not half price for months</span></p><ul class="sp-list">' + rare.map((x) => spRow(x, D.watch)).join('') + '</ul></div>' : '') +
+        (rest.length ? '<p class="sp-sec">Top specials <span>' + (D.watch.length ? 'Our list first, then the biggest discounts' : 'Biggest discounts first') + '</span></p><ul class="sp-list">' + rest.map((x) => spRow(x, D.watch)).join('') + '</ul>' : '') +
+        (list.length > rare.length + rest.length ? '<button class="btn btn-secondary btn-block sp-more" data-act="spmore">See all ' + list.length + ' specials</button>' : '');
     }
     const shown = S.spAll ? list.slice(0, 500) : list.slice(0, 40);
     return '<ul class="sp-list">' + shown.map((x) => spRow(x, D.watch)).join('') + '</ul>' +

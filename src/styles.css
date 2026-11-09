@@ -612,9 +612,9 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
 .aisle-chips { margin: 10px -16px 0 0; }
 .chip.hit { background: var(--marigold); border-color: var(--ink); }
 .chip.hit .ic { width: 14px; height: 14px; }
-.sp-rare { margin-top: 14px; padding: 12px 12px 4px; border-radius: 18px; background: var(--track); }
-.sp-rare-t { margin: 0; font-weight: 800; }
-.sp-rare .hint { margin: 2px 0 0; }
+.sp-sec { margin: 18px 0 0; padding-bottom: 4px; border-bottom: 2px solid var(--ink); font-weight: 800; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
+.sp-sec span { font-size: 13px; font-weight: 600; color: var(--ink2); }
+.specials .sp-now { font-size: 18px; }
 .sp-tags { display: flex; flex-wrap: wrap; gap: 0 6px; }
 .tag.rare { margin-top: 4px; background: var(--fern-soft); border-color: var(--fern); color: var(--fern); }
 .matches { background: var(--marigold-soft); border-color: var(--ink); box-shadow: 0 4px 0 var(--ink); }
@@ -622,11 +622,12 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
 .match-head .k { margin: 0; }
 .matches h2 { font-size: 26px; line-height: 1.08; margin: 10px 0 6px; }
 .matches .muted strong { color: var(--ink); }
-.match-list { list-style: none; margin: 14px 0 0; padding: 2px 12px; background: var(--card); border: 2px solid var(--ink); border-radius: 18px; }
-.match-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px dashed var(--dash); }
+.match-list { list-style: none; margin: 12px 0 0; padding: 0; border-top: 2px solid var(--ink); }
+.match-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px dashed rgba(43, 27, 18, .25); }
 .match-row:first-child { border-top: 0; }
 .match-main { display: flex; flex-direction: column; min-width: 0; }
-.match-n { font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.match-n { font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+.matches .sp-now { font-size: 18px; }
 a.match-n { text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 .match-meta { display: flex; align-items: center; gap: 7px; min-width: 0; margin-top: 3px; font-size: 13px; font-weight: 600; color: var(--ink2); }
 .match-meta > span:last-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -682,3 +683,6 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
 .rcp-sum { margin-top: 12px; padding: 10px 12px; border-radius: 16px; background: var(--marigold-soft); border: 2px solid var(--ink); }
 .rcp-sum-t { font-weight: 700; }
 .rcp-sum .muted { margin-top: 2px; font-size: 14px; }
+
+/* Phones 380px and up (an iPhone Pro is 402) get narrower page margins, so cards and lists use more of the screen. */
+@media (min-width: 380px) { .main { padding-left: 12px; padding-right: 12px; } }
