@@ -73,7 +73,7 @@ try:
         # ---------- from Upload ----------
         act(a, 'go', 'settings'); act(a, 'go', 'upload')
         snapcard = a.locator('.snap').inner_text()
-        check('Snap a receipt' in snapcard and 'Take a photo' in snapcard and 'Choose from photos' in snapcard and 'Gemini' in snapcard, 'Upload starts with Snap a receipt, and says photos go to Gemini')
+        check('Capture a receipt' in snapcard and 'Take a photo' in snapcard and 'Choose from photos' in snapcard and 'Gemini' in snapcard, 'Upload starts with Snap a receipt, and says photos go to Gemini')
         check(a.locator('.snap input[capture="environment"]').count() == 1, 'Take a photo opens the camera')
         a.locator('.snap').screenshot(path=str(SHOTS / 'p11-snap.png'))
         snap(a)
@@ -139,6 +139,22 @@ try:
         a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
         act(a, 'closeadd'); a.wait_for_timeout(300)
         check(len(entries(a)) == 2, 'nothing else was saved')
+
+        # ---------- the + asks first: capture a receipt, or add a spend ----------
+        act(a, 'addpick'); a.wait_for_timeout(200)
+        pick = a.locator('.dialog').inner_text()
+        check('Capture a receipt' in pick and 'Add a spend' in pick and a.locator('.dialog input[capture="environment"]').count() == 1 and a.evaluate('document.activeElement.type') != 'file',
+              'the + asks: capture a receipt (straight to the camera) or add a spend')
+        a.locator('.dialog').screenshot(path=str(SHOTS / 'p15-plus-pick.png'))
+        act(a, 'pickadd'); a.wait_for_timeout(300)
+        check(a.locator('#amtTotal').count() == 1 and a.locator('.dialog').count() == 0, 'Add a spend opens the keypad')
+        act(a, 'closeadd'); a.wait_for_timeout(300)
+        act(a, 'addpick'); a.wait_for_timeout(200)
+        a.evaluate("([r, m]) => { window.__aiReply = r; window.__aiMode = m; window.__aiCalls = []; }", [ai_fake.reply(str(TODAY - timedelta(days=2))), 'ok'])
+        a.locator('.dialog input[capture="environment"]').set_input_files(PHOTO); a.wait_for_timeout(900)
+        check('Check the receipt' in a.locator('.dialog').inner_text() and '$52.37' in a.locator('.dialog').inner_text(), 'Capture a receipt goes straight to reading it')
+        a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
+        check(len(entries(a)) == 2, 'and nothing is saved until you say so')
 
         # ---------- with App Check's key in the config ----------
         b = ctx.new_page()

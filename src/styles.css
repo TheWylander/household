@@ -27,14 +27,14 @@ h1, h2, h3 { margin: 0; font-family: var(--display); letter-spacing: -0.02em; }
 .k { font-size: 14px; font-weight: 700; color: var(--ink2); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-.main { max-width: 480px; margin: 0 auto; padding: 0 16px calc(var(--nav-h) + 32px + var(--nav-bottom)); }
+.main { max-width: 480px; margin: 0 auto; padding: 8px 16px calc(var(--nav-h) + 32px + var(--nav-bottom)); }
 .main.no-nav { padding-bottom: 24px; }
 .banner { max-width: 480px; margin: 0 auto; padding: 10px 16px; background: var(--marigold-soft); border-bottom: 2px solid var(--ink); font-size: 14px; font-weight: 600; }
 .banner.ro { background: var(--coral-soft); }
 
 /* headers */
-.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 4px 2px 16px; }
-.top.sheet { align-items: center; padding-top: 2px; }
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 14px 2px 12px; } /* iOS blurs the top strip of a home screen app, so the heading stays clear of it */
+.top.sheet { align-items: center; padding-top: 10px; }
 .eyebrow { font-size: 15px; font-weight: 700; color: var(--ink2); margin-bottom: 2px; }
 .title { font: 800 34px/1.02 var(--display); letter-spacing: -0.03em; }
 .title.sm { font-size: 24px; flex: 1; }
@@ -143,6 +143,17 @@ textarea.input { min-height: 140px; font-family: ui-monospace, Menlo, monospace;
 .hint a { color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 .err-text { font-size: 14px; color: var(--coral-deep); font-weight: 700; margin-top: 6px; }
 .err-why { font-size: 12px; margin-top: 8px; overflow-wrap: anywhere; }
+/* the + choice: capture a receipt or add a spend */
+.pick-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.pick { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 148px; padding: 16px 14px; border: 2px solid var(--ink); border-radius: var(--r-md); background: var(--card); box-shadow: 0 4px 0 var(--ink); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.pick:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+.pick:focus-visible { outline: 3px solid var(--cobalt); outline-offset: 3px; }
+.pick-ic { width: 46px; height: 46px; flex: none; border-radius: 50%; border: 2px solid var(--ink); background: var(--marigold-soft); display: grid; place-items: center; margin-bottom: 4px; }
+.pick.file-btn .pick-ic { background: var(--coral-soft); }
+.pick-ic .ic { width: 24px; height: 24px; }
+.pick-t { font: 800 18px/1.15 var(--display); letter-spacing: -0.01em; }
+.pick-s { font-size: 13px; line-height: 1.3; color: var(--ink2); }
+.pick-photos { display: flex; justify-content: center; margin: 12px auto 0; }
 .setup-steps { margin: 12px 0 14px; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
 .setup-steps strong { font-weight: 800; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

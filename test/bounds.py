@@ -95,7 +95,7 @@ try:
             a.fill('#sbudget', '2000'); act(a, 'snext'); act(a, 'sfinish'); a.wait_for_timeout(500)
             audit(a, 'home', width)
             # a day of spends with notes
-            act(a, 'add')
+            act(a, 'addpick'); act(a, 'pickadd')
             for k in ['7', '7', '+', '1', '3', '.', '5', '0', '+', '4', '2']:
                 act(a, 'key', k)
             a.fill('#lnNote0', 'Crepes at the market with a long note that keeps going'); a.fill('#lnNote1', 'Coffee')
@@ -178,7 +178,7 @@ try:
             a.locator('[data-act="inscatopen"]').first.click(); a.wait_for_timeout(200)
             audit(a, 'category dialog with a spend open', width)
             a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
-            act(a, 'go', 'home'); act(a, 'add'); act(a, 'go', 'tab')
+            act(a, 'go', 'home'); act(a, 'addpick'); act(a, 'pickadd'); act(a, 'go', 'tab')
             if a.locator('[data-act="tabstart"]').count():
                 act(a, 'tabstart')
             a.fill('#tabAmt', '12.50'); a.fill('#tabLabel', 'Ice cream'); act(a, 'tabadd')

@@ -195,7 +195,7 @@ try:
         check(settings['members']['a'] == 'uid-robin' and settings['members']['b'] is None, 'this phone linked to Robin\'s login')
 
         # a spend, saved through Firestore
-        act(a, 'add')
+        act(a, 'addpick'); act(a, 'pickadd')
         for k in ['4', '2', '.', '5']:
             act(a, 'key', k)
         a.fill('#addTitle', 'Dinner')

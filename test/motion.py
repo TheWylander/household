@@ -45,7 +45,7 @@ def household(ctx):
     a.fill('#sna', 'Robin'); a.fill('#snb', 'Jules'); act(a, 'sme', 'a'); act(a, 'snext')
     a.fill('#sbudget', '2000'); act(a, 'snext'); act(a, 'sfinish'); a.wait_for_timeout(500)
     for amount in ['84.20', '12.50']:
-        act(a, 'add')
+        act(a, 'addpick'); act(a, 'pickadd')
         for k in amount:
             act(a, 'key', k)
         act(a, 'saveadd'); a.wait_for_timeout(250)
@@ -72,7 +72,7 @@ try:
         a.wait_for_timeout(1500)
         final = a.inner_text('.hero-v')
         # leaving Home and coming back after a spend: the number moves from what you saw to the new value
-        act(a, 'add')
+        act(a, 'addpick'); act(a, 'pickadd')
         for k in '30':
             act(a, 'key', k)
         a.locator('[data-act="saveadd"]').click()
