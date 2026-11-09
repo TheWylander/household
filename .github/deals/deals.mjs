@@ -147,6 +147,9 @@ export function parseReport(html) {
 }
 
 /* ---------- Harris Farm ---------- */
+/* Harris Farm's "was" price is often per kilo while the special is per item or pack (a 250g brie "was $36.99"), so
+   only the special price is kept. Its product types carry shelf codes: "Frdg1-Cheese" is Cheese. */
+export const hfCat = (t) => clip(String(t || '').replace(/^[A-Za-z]+\d*[A-Za-z]?-/, '').trim(), 40);
 export function hfItems(products) {
   const out = [], seen = {};
   (products || []).forEach((p) => {
@@ -157,7 +160,7 @@ export function hfItems(products) {
       const n = clip(String(p.title).trim() + (v.title && !/^default title$/i.test(v.title) ? ' ' + v.title : ''), 120);
       if (seen[n.toLowerCase()]) return;
       seen[n.toLowerCase()] = true;
-      out.push({ s: 'Harris Farm', n, was, now, off: Math.round((was - now) / was * 100), cat: clip(p.product_type, 40), last: '', link: p.handle ? safeLink(HF + '/products/' + encodeURIComponent(p.handle)) : '', src: 'hf' });
+      out.push({ s: 'Harris Farm', n, was: 0, now, off: 0, cat: hfCat(p.product_type), last: '', link: p.handle ? safeLink(HF + '/products/' + encodeURIComponent(p.handle)) : '', src: 'hf' });
     });
   });
   return out.slice(0, 400);

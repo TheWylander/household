@@ -3141,7 +3141,7 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
     return '<li class="sp-row' + (hit ? ' hit' : '') + '"><span class="sp-main">' + name + '<span class="k">' + esc([shopLabel(x.s), x.cat, lastLabel(x.last)].filter(Boolean).join(' · ')) + '</span>' +
       (hit ? '<span class="tag hit">On our list</span>' : '') + '</span>' +
       '<span class="sp-price"><span class="sp-now">' + L.fmt(x.now) + '</span>' + (x.was > x.now ? '<s class="sp-was"><span class="sr">was </span>' + L.fmt(x.was) + '</s>' : '') +
-      (x.off ? '<span class="sp-off">' + x.off + '% off</span>' : '') + '</span></li>';
+      (x.off ? '<span class="sp-off">' + x.off + '% off</span>' : x.src === 'hf' ? '<span class="sp-off">Special</span>' : '') + '</span></li>';
   }
   function spListHtml() {
     const D = dealsCfg(), list = spFiltered(), shown = S.spAll ? list.slice(0, 500) : list.slice(0, 12);
