@@ -42,6 +42,10 @@ It signs in to Firebase as its own bot user through Firebase's REST APIs, so it 
 
 It does nothing until both secrets exist. It also runs once whenever its code changes on `main`. Its run log is public, so each run's note says how many pop-ups went out and what kind, never what they said. The list of runs shows when the app started one for a new spend, but nothing about the spend.
 
+## Welcome
+
+The first time the other person signs in, they land on a welcome page: a five-item tour of what they can do (add a spend, stay square, grab the specials, every day and sale days, pop-ups), with Come on in at the bottom. The person who set the app up can add a note in Settings (Customise the welcome), which then shows at the end of the tour; with no note there's just the tour. Coming in marks the latest update note as read, so the tour isn't followed by an update dialog. It only shows to someone who hasn't been in yet.
+
 ## Where the data lives
 
 Firebase (Firestore and email sign-in). The Firestore rules are set in the Firebase console and only let the two verified emails in, plus the notification bot, which can read sale days, the watch list, phones and new-spend notes. `config/firebase.json` is the web config the live site already serves, so it isn't secret.

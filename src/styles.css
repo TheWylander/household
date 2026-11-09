@@ -315,6 +315,7 @@ details li { margin: 4px 0; }
 .wl-mark svg { display: block; width: 100%; height: auto; overflow: visible; }
 .welcome h1 { font: 800 40px/1.02 var(--display); letter-spacing: -0.03em; margin: 0 0 8px; }
 .welcome .lead { font-weight: 600; margin-bottom: 26px; }
+.wl-lead { display: flex; align-items: center; justify-content: center; gap: 10px; text-align: left; }
 .wl-note { position: relative; margin: 0 6px 28px; padding: 22px 20px 20px; text-align: left; background: var(--card); border: 2px solid var(--ink); border-radius: 22px; box-shadow: 0 5px 0 var(--ink); transform: rotate(-1.2deg); }
 .wl-note::before { content: ''; position: absolute; top: -13px; left: 50%; width: 84px; height: 24px; margin-left: -42px; background: var(--marigold-soft); border: 2px solid var(--ink); border-radius: 6px; transform: rotate(3deg); }
 .wl-note figcaption { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 14px; font-weight: 800; color: var(--ink2); }
@@ -323,10 +324,14 @@ details li { margin: 4px 0; }
 .wl-note blockquote p:last-child { margin: 0; }
 .wl-list { list-style: none; margin: 0 0 28px; padding: 0 4px; display: grid; gap: 12px; text-align: left; font-weight: 700; }
 .wl-list li { display: flex; align-items: center; gap: 12px; }
+.wl-tour { list-style: none; margin: 4px 0 28px; padding: 0 4px; display: grid; gap: 14px; text-align: left; }
+.wl-tour li { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: start; }
+.wl-tour strong { display: block; font-weight: 800; font-size: 17px; line-height: 1.25; }
+.wl-t { display: block; margin-top: 2px; font-size: 15px; line-height: 1.4; color: var(--ink2); }
 .wl-ic { display: grid; place-items: center; width: 40px; height: 40px; flex: none; border-radius: 14px; border: 2px solid var(--ink); background: var(--me-soft); }
 .wl-ic .ic { width: 22px; height: 22px; }
 .wl-not { margin-top: 12px; }
-textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resize: vertical; }
+textarea.input.wl-text { min-height: 160px; font: 600 16px/1.5 var(--body); resize: vertical; }
 .si-mark { width: 116px; margin: 18px 0 18px; }
 .si-mark svg { display: block; width: 100%; height: auto; }
 .si-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; margin-top: 14px; }

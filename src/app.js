@@ -2968,7 +2968,7 @@
       home: { week: C.home.week !== false, goal: C.home.goal !== false, spot: C.home.spot !== false, recap: C.home.recap !== false, soon: C.home.soon !== false, fact: C.home.fact !== false, sale: C.home.sale !== false, deals: C.home.deals !== false },
       spot: { type: C.spot.type === 'countdown' ? 'countdown' : 'note', text: String(C.spot.text || ''), date: String(C.spot.date || '') },
       budgetSkip: C.budgetSkip.slice(), cardFrom: C.cardFrom, scheme: C.scheme,
-      welcome: { note: C.welcome.note || (S.me ? defaultNote(other(S.me)) : '') },
+      welcome: { note: C.welcome.note || '' },
       rent: { on: C.rent.on, amount: C.rent.amount ? centsToStr(C.rent.amount) : '', from: C.rent.from, day: String(C.rent.day), start: C.rent.start },
       error: null
     };
@@ -3209,7 +3209,8 @@
   }
 
   /* ---------- welcome ---------- */
-  /* The first time the second person opens the app, they get a welcome instead of the plain "Who's this?". */
+  /* The first time the second person opens the app, they get a welcome instead of the plain "Who's this?": a quick
+     tour of what they can do, with a note from whoever set the app up at the end, if they wrote one. */
   function welcomeFor() {
     if (!S.settings || S.me || !S.myId || S.whoPick) return null;
     const m = cfg().members, free = ['a', 'b'].filter((p) => !m[p]);
@@ -3224,7 +3225,18 @@
   }
   function welcomeNote(p, preview) {
     const raw = preview && S.draft && S.draft.welcome ? S.draft.welcome.note : cfg().welcome.note;
-    return String(raw || '').trim() || defaultNote(p);
+    return String(raw || '').trim();
+  }
+  /* What the second person can do straight away, in the order they'll want it. */
+  function welcomeTour(p) {
+    const from = nm(other(p));
+    return [
+      ['camera', 'Add a spend', 'Tap + to capture a receipt, or type one in. Mark anything that\'s just yours.'],
+      ['duo', 'Stay square', 'Home shows where you two stand, what\'s left of the month\'s budget and what\'s coming up.'],
+      ['tag', 'Grab the specials', 'Deals has what\'s on special at Coles, Woolies, Harris Farm, Umall and Liquorland. Tap + to put one on our weekend list.'],
+      ['cal', 'Every day, and sale days', 'The Calendar shows each day\'s spends, and the sale days we\'re keen on.'],
+      ['bell', 'Pop-ups', 'Turn them on in Settings to hear when ' + from + ' adds a spend, and when something we buy is on special.']
+    ];
   }
   /* An untouched default is stored empty, so it keeps up with name and card changes. */
   function welcomeNoteToSave(D) {
@@ -3236,13 +3248,13 @@
     if (!S.welcomeT) S.welcomeT = Date.now();
     const anim = Date.now() - S.welcomeT < 1600 ? ' wl-anim' : '';
     const mark = markSvg();
-    const items = [['plus', 'Add a spend in a couple of taps'], ['cal', 'See every day added up'], ['duo', 'Always know where you two stand']];
+    const note = welcomeNote(p, preview);
     return '<div class="welcome' + anim + '" style="--me:' + me.main + ';--me-soft:' + me.soft + '">' +
       (preview ? '<div class="wl-preview"><span>Preview of what ' + n + ' sees</span><button class="btn btn-secondary btn-small" data-act="wpclose">Close</button></div>' : '') +
       '<div class="wl-mark">' + mark + '</div><div class="wl-rest">' +
-      '<h1>Welcome home, ' + n + '</h1><p class="lead">' + esc(nm(from)) + ' made this for the two of you.</p>' +
-      '<figure class="wl-note"><figcaption>' + av(from, true) + '<span>From ' + esc(nm(from)) + '</span></figcaption><blockquote>' + welcomeNote(p, preview).split(/\n\s*\n/).map((t) => '<p>' + esc(t.trim()) + '</p>').join('') + '</blockquote></figure>' +
-      '<ul class="wl-list">' + items.map((it) => '<li><span class="wl-ic">' + icon(it[0]) + '</span>' + it[1] + '</li>').join('') + '</ul>' +
+      '<h1>Welcome home, ' + n + '</h1><p class="lead wl-lead">' + av(from) + '<span>' + esc(nm(from)) + ' made Two of Us just for the two of you. Here\'s what you can do.</span></p>' +
+      '<ol class="wl-tour">' + welcomeTour(p).map((it) => '<li><span class="wl-ic">' + icon(it[0]) + '</span><span><strong>' + esc(it[1]) + '</strong><span class="wl-t">' + esc(it[2]) + '</span></span></li>').join('') + '</ol>' +
+      (note ? '<figure class="wl-note"><figcaption>' + av(from, true) + '<span>From ' + esc(nm(from)) + '</span></figcaption><blockquote>' + note.split(/\n\s*\n/).map((t) => '<p>' + esc(t.trim()) + '</p>').join('') + '</blockquote></figure>' : '') +
       '<button class="btn btn-primary btn-block" data-act="' + (preview ? 'wpclose' : 'welcomein') + '">Come on in</button>' +
       '<button class="link wl-not" data-act="' + (preview ? 'wpclose' : 'wnotme') + '">Not ' + n + '? Pick your name</button>' +
       '</div></div>';
@@ -3257,8 +3269,10 @@
       upsert('hh/settings', patch, defaults());
     }
     ensureRent();
+    /* The tour covered what's new, so the latest update note is marked as read rather than shown on top. */
     const shown = publishedNote();
-    if (shown && !S.readOnly) { S.dialog = { type: 'news', id: shown.id, fresh: true }; S.newsShown = true; }
+    S.newsShown = true;
+    if (shown && !S.readOnly) markNewsSeen(shown.id);
     render(); window.scrollTo(0, 0);
     toast("You're in. Add a spend any time with the plus.");
   }
@@ -3269,10 +3283,10 @@
     if (C.members[p]) {
       if (C.welcome.to !== p || !C.welcome.seen) return '';
       return head + '<p class="muted" style="margin-bottom:12px">' + n + ' came in on ' + esc(L.fmtDayLong(C.welcome.seen)) + '.</p>' +
-        '<button class="btn btn-secondary btn-block" data-act="wpreview">See what ' + n + ' saw</button></section>';
+        '<button class="btn btn-secondary btn-block" data-act="wpreview">See the welcome page</button></section>';
     }
-    return head + '<p class="muted" style="margin-bottom:12px">This shows the first time ' + n + ' opens the app.</p>' +
-      '<label class="field"><span>Your note</span><textarea class="input wl-text" id="dwnote" rows="8" maxlength="400" data-bind="draft.welcome.note" data-change="dirty"' + ro + '>' + esc(D.welcome.note) + '</textarea></label>' +
+    return head + '<p class="muted" style="margin-bottom:12px">The first time ' + n + ' opens the app, a quick tour shows what ' + n + ' can do. Add a note and it goes at the end.</p>' +
+      '<label class="field"><span>Your note (optional)</span><textarea class="input wl-text" id="dwnote" rows="6" maxlength="400" placeholder="A few words from you, if you like" data-bind="draft.welcome.note" data-change="dirty"' + ro + '>' + esc(D.welcome.note) + '</textarea></label>' +
       '<button class="btn btn-secondary btn-block" data-act="wpreview">Preview what ' + n + ' sees</button></section>';
   }
 
