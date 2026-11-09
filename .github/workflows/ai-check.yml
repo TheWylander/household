@@ -1,4 +1,4 @@
-# One-off: checks which Sydney Asian grocers publish their specials as public store data. Deleted after it runs.
+# One-off: checks the product photo links in Harris Farm and Umall's public store data.
 name: AI Logic check
 on:
   push:
