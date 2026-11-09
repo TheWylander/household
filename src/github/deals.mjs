@@ -5,6 +5,7 @@
      - Harris Farm's online specials: the public product list their Shopify shop serves.
      - Umall, Sydney's online Asian supermarket (the same range as Asian Grocer Online): its half-price picks, Saturday to
        Tuesday, and its weekly specials, Wednesday to Friday, from the public product lists of its Shopify shop.
+     - Meat Emporium, Sydney's big meat market: whatever its Shopify shop has marked down (a was-price above the price).
    Nothing about the household is in here. Each phone picks out what matters to it.
    Run: node deals.mjs prev.json out/deals.json   (prev.json is the last deals.json, or {}) */
 import { readFile, writeFile, mkdir, appendFile } from 'node:fs/promises';
@@ -28,8 +29,9 @@ export const HF_LISTS = ['online-specials', 'grocery-specials', 'fruit-and-veg-s
 const KEEP_CATS = /\/cat\/(groceries|alcohol|gift-cards)$/;
 const STATE = /^(NSW|VIC|QLD|SA|WA|TAS|ACT|NT)$/;
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
-const LINK_OK = /^https:\/\/(www\.)?(ozbargain\.com\.au|coles\.com\.au|woolworths\.com\.au|harrisfarm\.com\.au|umall\.com\.au)\//;
+const LINK_OK = /^https:\/\/(www\.)?(ozbargain\.com\.au|coles\.com\.au|woolworths\.com\.au|harrisfarm\.com\.au|umall\.com\.au|meatemporium\.com\.au)\//;
 const UM = 'https://www.umall.com.au';
+const ME = 'https://www.meatemporium.com.au';
 /* Umall's lists and when each runs: from (0 Sunday to 6 Saturday), for this many more days. */
 export const UM_LISTS = [{ handle: 'half-price', from: 6, days: 3 }, { handle: 'weekly-special', from: 3, days: 2 }];
 
@@ -213,6 +215,30 @@ export function umItems(products, to) {
   });
   return out.slice(0, 300);
 }
+/* ---------- Meat Emporium ---------- */
+/* Its product types, to the shop categories the app sorts into aisles: meat unless it says otherwise. */
+export function meCat(p) {
+  const t = String((p && p.product_type) || '').toLowerCase();
+  if (/equipment|accessor|merch|charcoal|wood|class|gift/.test(t)) return 'Household';
+  if (/sauce|rub|grocer|condiment|bread|dairy|chips|caviar|snack|drink/.test(t)) return 'Pantry';
+  return 'Meat & Seafood';
+}
+/* Meat is sold by weight, so a "was" price is for the same pack as the price. Sold-out cuts are left out. */
+export function meItems(products) {
+  const out = [], seen = {};
+  (products || []).forEach((p) => {
+    if (!p || !p.title) return;
+    (p.variants || []).slice(0, 3).forEach((v) => {
+      const now = cents(v && v.price), was = cents(v && v.compare_at_price);
+      if (!(now > 0 && was > now) || (v && v.available === false)) return;
+      const n = clip(text(p.title) + (v.title && !/^default title$/i.test(v.title) ? ' ' + text(v.title) : ''), 120), k = n.toLowerCase();
+      if (!n || seen[k]) return;
+      seen[k] = true;
+      out.push({ s: 'Meat Emporium', n, was, now, off: Math.round((1 - now / was) * 100), cat: meCat(p), last: '', link: p.handle ? safeLink(ME + '/products/' + encodeURIComponent(p.handle)) : '', img: shopImg(p), src: 'me' });
+    });
+  });
+  return out.slice(0, 200);
+}
 /* A Shopify shop's public product list, up to three pages of 250. */
 async function shopifyProducts(fetchText, url, wait) {
   const r = await fetchText(url);
@@ -327,6 +353,20 @@ export async function build({ prev, now = new Date(), fetchText, wait = 400, log
     out.sources.umall = Object.assign({}, PS.umall || {}, { ok: true, stale: true, n: prevUm.length });
     out.specials.push(...prevUm);
   } else { log('Umall specials not read'); out.sources.umall = { ok: false, tried: umTried }; }
+
+  /* Meat Emporium: what's marked down now. Its sales have no end day, so they run to the end of the specials week and
+     are looked at again on every run. */
+  const pm = PS.meat || {}, prevMe = (Array.isArray(P.specials) ? P.specials : []).filter((x) => x.src === 'me');
+  const meGot = await shopifyProducts(fetchText, ME + '/products.json?limit=250', wait);
+  if (meGot.products) {
+    const list = meItems(meGot.products), wk = specialsWeek(today);
+    out.sources.meat = { ok: true, from: wk.from, to: wk.to, at, n: list.length };
+    out.specials.push(...list);
+  } else if (live(pm) && prevMe.length) {
+    log('Meat Emporium specials not read, keeping what ran last time');
+    out.sources.meat = Object.assign({}, pm, { ok: true, stale: true, n: prevMe.length });
+    out.specials.push(...prevMe);
+  } else { log('Meat Emporium specials not read'); out.sources.meat = { ok: false, tried: meGot.status }; }
   return out;
 }
 
@@ -337,6 +377,7 @@ export function fingerprint(out) {
     report: s.report && s.report.ok ? [s.report.id, s.report.to] : null,
     harris: s.harris && s.harris.ok ? [s.harris.from, s.harris.to] : null,
     umall: s.umall && s.umall.ok ? [s.umall.from, s.umall.to] : null,
+    meat: s.meat && s.meat.ok ? [s.meat.from, s.meat.to] : null,
     specials: (Array.isArray(o.specials) ? o.specials : []).map((x) => [x.s, x.n, x.now, x.was, x.img ? 1 : 0]),
     deals: (Array.isArray(o.deals) ? o.deals : []).map((d) => d.id + '|' + d.to).sort()
   });
@@ -367,7 +408,8 @@ async function main() {
   const s = out.sources;
   console.log((changed ? 'New deals. ' : 'Nothing new, so nothing published. ') + 'OzBargain deals: ' + out.deals.length + ' | half-price list: ' + (s.report.n || 0) + (s.report.stale ? ' (kept from last run)' : '') +
     ' | Harris Farm: ' + (s.harris.n || 0) + (s.harris.handle ? ' from /collections/' + s.harris.handle : '') + (s.harris.stale ? ' (kept from last run)' : '') +
-    ' | Umall: ' + (s.umall.n || 0) + (s.umall.lists ? ' from ' + s.umall.lists : '') + (s.umall.stale ? ' (kept from last run)' : ''));
+    ' | Umall: ' + (s.umall.n || 0) + (s.umall.lists ? ' from ' + s.umall.lists : '') + (s.umall.stale ? ' (kept from last run)' : '') +
+    ' | Meat Emporium: ' + (s.meat.n || 0) + (s.meat.stale ? ' (kept from last run)' : ''));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

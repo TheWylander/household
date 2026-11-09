@@ -90,7 +90,7 @@
       ['check', 'Tidy categories.', 'In Insights, tap a category to see every spend in it, and move any that belong somewhere else.'],
       ['star', 'Fun fact.', 'A little fact about how we spend, a new one each time you open the app.'],
       ['arrow', 'Swipe through months.', 'Swipe left or right in Insights and the Calendar. Numbers count up and charts grow as each screen opens.'],
-      ['tag', 'Deals.', "Deals has its own tab. Everything on special this week is at the top, from Coles, Woolies, Harris Farm and Umall (with photos for Harris Farm and Umall), with filters by shop and category and the things that are rarely this cheap. Below it, the best deal for each thing on our watch list, then OzBargain."],
+      ['tag', 'Deals.', "Deals has its own tab. Everything on special this week is at the top, from Coles, Woolies, Harris Farm, Umall, Liquorland and Meat Emporium (with photos for Harris Farm, Umall and Meat Emporium), with filters by shop and category and the things that are rarely this cheap. Below it, the best deal for each thing on our watch list, then OzBargain."],
       ['cal', 'Sale days.', "Sale days are in the Calendar: marked on the month, with a Keen button on each. Home shows the next one we're keen on, like Lucky Mart's monthly sale, with the address."],
       ['camera', 'Capture a receipt.', "Tap the plus and choose Capture a receipt. The app reads the shop, total and every item. Tap anything that's just one person's, and it adds the spends."],
       ['gear', 'Upload.', 'Bringing in the Westpac statement and Splitwise files has moved to Settings, under Upload. Spends to check still show on Home.'],
@@ -2082,7 +2082,7 @@
   ];
   const DEALS_BASE = { sales: [], watch: [], keen: {}, list: [] };
   const centsOk = (v) => (typeof v === 'number' && isFinite(v) && v > 0 && v < 1e7 ? Math.round(v) : 0);
-  const LINK_OK = /^https:\/\/(www\.)?(ozbargain\.com\.au|coles\.com\.au|woolworths\.com\.au|harrisfarm\.com\.au|umall\.com\.au|sushifactory\.com\.au)\/[^\s"'<>]*$/;
+  const LINK_OK = /^https:\/\/(www\.)?(ozbargain\.com\.au|coles\.com\.au|woolworths\.com\.au|harrisfarm\.com\.au|umall\.com\.au|meatemporium\.com\.au|sushifactory\.com\.au)\/[^\s"'<>]*$/;
   const linkOk = (u) => (LINK_OK.test(String(u || '')) ? String(u).slice(0, 300) : '');
   const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
   const shopLabel = (s) => (s === 'Woolworths' ? 'Woolies' : s);
@@ -2136,7 +2136,7 @@
     return m && repo ? 'https://raw.githubusercontent.com/' + m[1] + '/' + repo + '/deals/deals.json' : '';
   }
   /* Only what the app expects gets through: plain text, whole cents, real dates, links to the stores and OzBargain. */
-  /* Product photos from Harris Farm and Umall's Shopify stores: only plain image files on Shopify's image CDN, asked for
+  /* Product photos from Harris Farm, Umall and Meat Emporium's Shopify stores: only plain image files on Shopify's image CDN, asked for
      at the size they're shown (three times over, for the iPhone's screen). */
   const IMG_OK = /^https:\/\/cdn\.shopify\.com\/s\/files\/[A-Za-z0-9_./%-]+\.(?:jpe?g|png|webp)(?:\?v=\d+)?$/i;
   const imgOk = (u) => (typeof u === 'string' && u.length <= 300 && IMG_OK.test(u) ? u : '');
@@ -2148,10 +2148,10 @@
     const so = j.sources && typeof j.sources === 'object' ? j.sources : {};
     return {
       updated: str(j.updated, 40),
-      sources: { ozb: src(so.ozb), report: src(so.report), harris: src(so.harris), umall: src(so.umall) },
+      sources: { ozb: src(so.ozb), report: src(so.report), harris: src(so.harris), umall: src(so.umall), meat: src(so.meat) },
       specials: (Array.isArray(j.specials) ? j.specials : []).slice(0, 1500).filter((x) => x && typeof x.n === 'string' && x.n.trim() && int(x.now) > 0).map((x) => ({
         s: L.storeName(str(x.s, 40)), n: str(x.n, 120), was: int(x.was), now: int(x.now), off: L.clamp(int(x.off), 0, 99), cat: str(x.cat, 40), last: str(x.last, 40),
-        link: linkOk(x.link), img: imgOk(x.img), src: x.src === 'hf' || x.src === 'um' ? x.src : 'hp', to: day(x.to)
+        link: linkOk(x.link), img: imgOk(x.img), src: x.src === 'hf' || x.src === 'um' || x.src === 'me' ? x.src : 'hp', to: day(x.to)
       })),
       deals: (Array.isArray(j.deals) ? j.deals : []).slice(0, 150).filter((x) => x && typeof x.t === 'string' && x.t.trim()).map((x) => ({
         id: str(x.id, 12), t: str(x.t, 160), s: str(x.s, 40), link: linkOk(x.link), from: day(x.from), to: day(x.to), votes: int(x.votes), hp: x.hp === true
@@ -2168,12 +2168,14 @@
       .catch(() => { S.feedErr = 'bad'; })
       .then(() => { S.feedBusy = false; S.feedAt = Date.now(); if (S.settings && S.me) safeRender(); });
   }
+  /* Which list a special belongs to: Harris Farm's and Meat Emporium's run for the specials week, Umall's carry their own end day. */
+  const feedKey = (x) => (x.src === 'hf' ? 'harris' : x.src === 'me' ? 'meat' : 'report');
   /* Specials whose week hasn't ended. */
   function specialsNow() {
     const F = S.feed, t = today();
     if (!F) return [];
     const live = (k) => { const s = F.sources[k]; return !!(s && s.to && s.to >= t); };
-    return F.specials.filter((x) => (x.src === 'um' ? !!x.to && x.to >= t : live(x.src === 'hf' ? 'harris' : 'report')));
+    return F.specials.filter((x) => (x.src === 'um' ? !!x.to && x.to >= t : live(feedKey(x))));
   }
   /* Shops you actually go to, from this past year of shared spends: Coles 19 trips and so on. */
   function shopVisits() {
@@ -2238,13 +2240,13 @@
   }
   function specialEnd(x) {
     if (x.src === 'um') return x.to || '';
-    const F = S.feed, src = F && F.sources[x.src === 'hf' ? 'harris' : 'report'];
+    const F = S.feed, src = F && F.sources[feedKey(x)];
     return (src && ISO_DAY.test(src.to || '') && src.to) || '';
   }
   /* When a special's list starts, if that's after today: next week's half-price list is sometimes all there is. */
   function specialStart(x) {
     if (x.src === 'um') return '';
-    const F = S.feed, src = F && F.sources[x.src === 'hf' ? 'harris' : 'report'], f = src && ISO_DAY.test(src.from || '') ? src.from : '';
+    const F = S.feed, src = F && F.sources[feedKey(x)], f = src && ISO_DAY.test(src.from || '') ? src.from : '';
     return f > today() ? f : '';
   }
   /* A starting word for the watch list from a product name: the first few words, without the size. */
@@ -2423,13 +2425,14 @@
     if (rep.ok || rep.stale) srcs.push('Coles and Woolies from the weekly half-price list posted on ' + (rep.link ? '<a href="' + esc(rep.link) + '" target="_blank" rel="noopener">OzBargain</a>' : 'OzBargain'));
     if (hf.ok || hf.stale) srcs.push('Harris Farm from its online specials');
     if (F.sources.umall.ok || F.sources.umall.stale) srcs.push('Umall, Sydney\'s online Asian supermarket, from its half-price and weekly specials (delivery only)');
+    if (F.sources.meat.ok || F.sources.meat.stale) srcs.push('Meat Emporium, Sydney\'s big meat market, from what its online shop has marked down');
     return srcs.length ? '<p class="hint sp-src">' + srcs.join('. ') + '. Updated ' + esc(agoLabel(F.updated)) + '. Prices can differ by store.</p>' : '';
   }
   /* OzBargain deals at our shops or on the watch list, most votes first. */
   function ozbCard() {
     const F = S.feed, t = today();
     if (!F || !F.deals.length) return '';
-    const D = dealsCfg(), shops = /^(Coles|Woolworths|Harris Farm|ALDI|Costco|IGA|Lucky Mart|Liquorland)$/;
+    const D = dealsCfg(), shops = /^(Coles|Woolworths|Harris Farm|ALDI|Costco|IGA|Lucky Mart|Liquorland|Meat Emporium|United Meat Co)$/;
     const list = F.deals.filter((d) => !d.hp && (!d.to || d.to >= t)).map((d) => Object.assign({ shop: L.storeName(d.s), ours: L.watchHits(d.t + ' ' + d.s, D.watch).length > 0 }, d))
       .sort((a, b) => (b.votes || 0) - (a.votes || 0));
     if (!list.length) return '';
@@ -3233,7 +3236,7 @@
     return [
       ['camera', 'Add a spend', 'Tap + to capture a receipt, or type one in. Mark anything that\'s just yours.'],
       ['duo', 'Stay square', 'Home shows where you two stand, what\'s left of the month\'s budget and what\'s coming up.'],
-      ['tag', 'Grab the specials', 'Deals has what\'s on special at Coles, Woolies, Harris Farm, Umall and Liquorland. Tap + to put one on our weekend list.'],
+      ['tag', 'Grab the specials', 'Deals has what\'s on special at Coles, Woolies, Harris Farm, Umall, Liquorland and Meat Emporium. Tap + to put one on our weekend list.'],
       ['cal', 'Every day, and sale days', 'The Calendar shows each day\'s spends, and the sale days we\'re keen on.'],
       ['bell', 'Pop-ups', 'Turn them on in Settings to hear when ' + from + ' adds a spend, and when something we buy is on special.']
     ];

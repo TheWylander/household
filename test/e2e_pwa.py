@@ -287,21 +287,21 @@ try:
               'Everything on special comes first, and sale days have moved to the Calendar: ' + ', '.join(cards[:4]))
         check(a.locator('.nav [data-arg="deals"]').count() == 1 and a.locator('.nav [data-arg="inbox"]').count() == 0, 'the tab bar has Deals where Inbox was')
         shops = ' | '.join(a.locator('#spShop option').all_inner_texts())
-        check('All shops' in shops and 'Coles · 9' in shops and 'Woolies · 9' in shops and 'Harris Farm · 2' in shops and 'Umall · 1' in shops and a.locator('.specials .chip').count() == 0,
-              'specials from Coles, Woolies, Harris Farm and Umall (not its ended pick), picked from a drop-down rather than pills: ' + shops)
+        check('All shops' in shops and 'Coles · 9' in shops and 'Woolies · 9' in shops and 'Harris Farm · 2' in shops and 'Umall · 1' in shops and 'Meat Emporium · 1' in shops and a.locator('.specials .chip').count() == 0,
+              'specials from Coles, Woolies, Harris Farm, Umall and Meat Emporium (not Umall\'s ended pick), picked from a drop-down rather than pills: ' + shops)
         rare = a.locator('.sp-rare .sp-row').all_inner_texts()
         check(len(rare) == 3 and 'Vittoria' in rare[0] and 'First time at half price' in rare[0] and 'First time in 15 weeks' in rare[1], 'Rarely this cheap: the three not half price for longest')
         aisles = ' | '.join(a.locator('#spCat option').all_inner_texts())
-        check('All categories' in aisles and 'Pantry · 18' in aisles and 'Fresh · 2' in aisles and 'Freezer · 1' in aisles, 'categories with how many in each: ' + aisles)
-        check(a.locator('[data-act="spmore"]').inner_text() == 'See all 21 specials', 'a button for the lot')
+        check('All categories' in aisles and 'Pantry · 19' in aisles and 'Fresh · 2' in aisles and 'Freezer · 1' in aisles, 'categories with how many in each: ' + aisles)
+        check(a.locator('[data-act="spmore"]').inner_text() == 'See all 22 specials', 'a button for the lot')
         act(a, 'spmore')
-        check(a.locator('#spList .sp-row').count() == 21 and 'Frozen Pork & Cabbage Dumplings' in text(a) and 'Ended Umall pick' not in text(a) and 'Umall' in a.locator('.sp-src').inner_text() and a.evaluate('window.__xss') is None and a.locator('.specials img:not(.sp-img)').count() == 0 and '<img src=x' in text(a), 'every special, and text from the deals file shows as text and never runs')
+        check(a.locator('#spList .sp-row').count() == 22 and 'Frozen Pork & Cabbage Dumplings' in text(a) and 'Ended Umall pick' not in text(a) and 'Umall' in a.locator('.sp-src').inner_text() and 'Meat Emporium' in a.locator('.sp-src').inner_text() and a.evaluate('window.__xss') is None and a.locator('.specials img:not(.sp-img)').count() == 0 and '<img src=x' in text(a), 'every special, and text from the deals file shows as text and never runs')
         for i in range(a.locator('#spList .sp-img').count()):
             a.locator('#spList .sp-img').nth(i).scroll_into_view_if_needed(); a.wait_for_timeout(400)
         imgs = a.evaluate("[...document.querySelectorAll('#spList .sp-img')].map((i) => [i.closest('.sp-row').querySelector('.sp-n').textContent, i.getAttribute('src'), i.complete && i.naturalWidth > 0, i.getAttribute('alt'), i.className])")
-        check(len(imgs) == 2 and {x[0] for x in imgs} == {'Imperfect Avocados 600g', 'Frozen Pork & Cabbage Dumplings 1kg'}
+        check(len(imgs) == 3 and {x[0] for x in imgs} == {'Imperfect Avocados 600g', 'Frozen Pork & Cabbage Dumplings 1kg', 'Beef Rump Cap WAS $30.99/KG NOW $25.99/KG'}
               and all(x[1].startswith('https://cdn.shopify.com/s/files/') and x[1].endswith('width=144') and x[3] == '' for x in imgs),
-              'photos on the Harris Farm and Umall specials, only from Shopify, sized for the row: ' + json.dumps(imgs))
+              'photos on the Harris Farm, Umall and Meat Emporium specials, only from Shopify, sized for the row: ' + json.dumps(imgs))
         check(any(x[2] for x in imgs) and all('width=144' in u or 'width=264' in u for u in shop_photos), 'and they load, at the size asked for: ' + json.dumps([imgs, shop_photos])[:600])
         check(a.locator('.specials a[href^="javascript"]').count() == 0, 'only links to the stores and OzBargain')
         act(a, 'spmore')
@@ -367,12 +367,12 @@ try:
         check(fits == [['Shops', True], ['Categories', True]], 'unfiltered, the drop-downs say Shops and Categories, in full: ' + json.dumps(fits))
         a.select_option('#spSort', 'low'); a.wait_for_timeout(250)
         prices = a.evaluate("[...document.querySelectorAll('#spList .sp-row .sp-now')].map((e) => Number(e.textContent.replace(/[^0-9.]/g, '')))")
-        check(len(prices) == 21 and prices == sorted(prices) and a.locator('.sp-sort.on').count() == 1 and 'Lowest price first' in a.locator('#spList').inner_text()
+        check(len(prices) == 22 and prices == sorted(prices) and a.locator('.sp-sort.on').count() == 1 and 'Lowest price first' in a.locator('#spList').inner_text()
               and a.evaluate('document.activeElement && document.activeElement.id') != 'spSort', 'Lowest price sorts every special, the button shows a sort is on, and the picker lets go: ' + str(prices[:5]))
         a.locator('#spCard').screenshot(path=str(SHOTS / 'p15-deals-sorted.png'))
         a.select_option('#spSort', 'az'); a.wait_for_timeout(250)
         names = [n.lower() for n in a.locator('#spList .sp-row .sp-n').all_inner_texts()]
-        check(len(names) == 21 and names == sorted(names), 'A to Z')
+        check(len(names) == 22 and names == sorted(names), 'A to Z')
         a.select_option('#spSort', 'save'); a.wait_for_timeout(250)
         first = a.locator('#spList .sp-row').first.inner_text()
         check('Harris Farm' not in first, 'Biggest saving puts Harris Farm, which only gives its special price, after the rest: ' + first.replace('\n', ' | '))

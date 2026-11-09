@@ -2,7 +2,7 @@
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { build, parseRss, parseReport, splitTitle, hfItems, hfCat, FEEDS, HF_LISTS, UM_LISTS, umWindow, umItems, umCat, sydneyDay, specialsWeek, fingerprint } from '../src/github/deals.mjs';
+import { build, parseRss, parseReport, splitTitle, hfItems, hfCat, FEEDS, HF_LISTS, UM_LISTS, umWindow, umItems, umCat, meItems, meCat, sydneyDay, specialsWeek, fingerprint } from '../src/github/deals.mjs';
 
 const dir = fileURLToPath(new URL('./fixtures/', import.meta.url));
 const read = (f) => readFileSync(dir + f, 'utf8');
@@ -125,6 +125,36 @@ await t("a run with Umall: Monday reads the weekend picks only, and they're kept
   const wed = await build({ prev: run, now: new Date('2026-11-10T21:00:00Z'), fetchText: site({ [UM_WEEK]: { status: 200, text: '{"products":[]}' } }).fetchText, wait: 0 });
   assert.deepStrictEqual([wed.sources.umall.ok, wed.sources.umall.lists, wed.specials.filter((x) => x.src === 'um').length], [true, 'weekly-special', 0], "Wednesday: the weekend picks are gone and this week's list is read");
   assert.strictEqual(first.sources.umall.ok, false, 'Umall not answering on the first run is noted');
+});
+
+const ME_ALL = 'https://www.meatemporium.com.au/products.json?limit=250';
+await t('Meat Emporium specials: in-stock products with a was-price above the price, with photo and aisle', () => {
+  const list = meItems(JSON.parse(read('me-products.json')).products);
+  assert.deepStrictEqual(list.map((x) => [x.n, x.now, x.was, x.off, x.cat]), [
+    ['Beef Rump Cap WAS $30.99/KG NOW $25.99/KG', 5718, 6818, 16, 'Meat & Seafood'],
+    ['Fats Duo SAVE 22%', 1799, 2299, 22, 'Meat & Seafood'],
+    ['Chimichurri Rub 200g', 899, 1199, 25, 'Pantry'],
+    ['BBQ Tongs', 1500, 2000, 25, 'Household']
+  ], 'no sold-out cut, no 0.00 was-price, nothing at full price');
+  assert.deepStrictEqual([list[0].s, list[0].src, list[0].to, list[0].link], ['Meat Emporium', 'me', undefined, 'https://www.meatemporium.com.au/products/beef-rump-cap']);
+  assert.deepStrictEqual(list.map((x) => (x.img ? x.img.split('/').pop() : '')), ['rump-cap.jpg?v=1632136984', 'fats-duo.png?v=1700000000', '', ''], 'photos only from the image CDN, with the protocol added');
+  assert.deepStrictEqual(['Beef', 'Wagyu', 'Sauces & Rubs', 'Groceries', 'BBQ Equipment & Accessories', 'Merch', ''].map((ty) => meCat({ product_type: ty })), ['Meat & Seafood', 'Meat & Seafood', 'Pantry', 'Pantry', 'Household', 'Household', 'Meat & Seafood']);
+  assert.deepStrictEqual(meItems([{ title: 'x', handle: 'x', variants: [{ price: '2', compare_at_price: '1' }] }, null]), []);
+});
+
+await t('a run with Meat Emporium: its sales run to the end of the specials week, and are kept if the shop is down', async () => {
+  const s = site({ [ME_ALL]: { status: 200, text: read('me-products.json') } });
+  const run = await build({ prev: {}, now: NOW, fetchText: s.fetchText, wait: 0 });
+  assert.deepStrictEqual([run.sources.meat.ok, run.sources.meat.n, run.sources.meat.from, run.sources.meat.to], [true, 4, '2026-11-04', '2026-11-10']);
+  assert.strictEqual(run.specials.filter((x) => x.src === 'me').length, 4);
+  assert.notStrictEqual(fingerprint(run), fingerprint(first), 'new Meat Emporium sales are news');
+  assert.strictEqual(first.sources.meat.ok, false, 'Meat Emporium not answering on the first run is noted');
+  const down = await build({ prev: run, now: new Date('2026-11-09T07:00:00Z'), fetchText: async () => ({ status: 0, text: '' }), wait: 0 });
+  assert.deepStrictEqual([down.sources.meat.stale, down.specials.filter((x) => x.src === 'me').length], [true, 4], "kept while this week's list runs");
+  const later = await build({ prev: run, now: new Date('2026-11-10T21:00:00Z'), fetchText: async () => ({ status: 0, text: '' }), wait: 0 });
+  assert.deepStrictEqual([later.sources.meat.ok, later.specials.filter((x) => x.src === 'me').length], [false, 0], 'but not into the next week');
+  const none = await build({ prev: run, now: NOW, fetchText: site({ [ME_ALL]: { status: 200, text: '{"products":[]}' } }).fetchText, wait: 0 });
+  assert.deepStrictEqual([none.sources.meat.ok, none.sources.meat.n, none.specials.filter((x) => x.src === 'me').length], [true, 0, 0], 'a sale that ends is dropped');
 });
 
 await t('the next run reuses the report and the Harris Farm list that worked', async () => {

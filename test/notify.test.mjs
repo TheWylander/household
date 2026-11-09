@@ -97,6 +97,11 @@ await t('the week key and hits follow the live list', () => {
   const um = JSON.parse(JSON.stringify(feed));
   um.specials.push({ s: 'Umall', n: 'Frozen Pork Dumplings 1kg', now: 999, was: 1869, off: 47, src: 'um', to: '2026-11-17' }, { s: 'Umall', n: 'Pork Buns 6 Pack', now: 500, was: 900, off: 44, src: 'um', to: '2026-11-10' });
   assert.deepStrictEqual(weekHits(um, ['dumplings', 'buns'], '2026-11-13').map((h) => h.n), ['Frozen Pork Dumplings 1kg'], "Umall's specials count while each one runs");
+  const me = JSON.parse(JSON.stringify(feed));
+  me.sources.meat = { ok: true, from: '2026-11-11', to: '2026-11-17' };
+  me.specials.push({ s: 'Meat Emporium', n: 'Beef Rump Cap WAS $30.99/KG NOW $25.99/KG', now: 5718, was: 6818, off: 16, src: 'me' });
+  assert.deepStrictEqual(weekHits(me, ['rump'], '2026-11-13').map((h) => [h.n, h.s]), [['Beef Rump Cap WAS $30.99/KG NOW $25.99/KG', 'Meat Emporium']], "Meat Emporium's sales count through the specials week");
+  assert.deepStrictEqual(weekHits(me, ['rump'], '2026-11-18'), [], 'and not after it');
   assert.deepStrictEqual(oldKeys({ 'sale:s1|2026-08-01:eve': 1, 'sale:s1|2026-11-14:eve': 1, 'sp:2026-09-01': [], 'welcome:x': 1, 'ev:2026-11-05:e1': 1, 'ev:2026-11-06:e2': 1 }, '2026-11-13'), ['sale:s1|2026-08-01:eve', 'sp:2026-09-01', 'ev:2026-11-05:e1'], "a spend's marker goes after a week");
 });
 

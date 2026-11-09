@@ -40,6 +40,8 @@ def feed(today_iso):
         {'s': 'Umall', 'n': 'Frozen Pork & Cabbage Dumplings 1kg', 'was': 1869, 'now': 999, 'off': 47, 'cat': 'Freezer', 'last': '',
          'link': 'https://www.umall.com.au/products/frozen-pork-cabbage-dumplings-1kg', 'img': 'https://cdn.shopify.com/s/files/1/0864/3602/0511/files/dumplings.png?v=2', 'src': 'um', 'to': (t + timedelta(days=2)).isoformat()},
         {'s': 'Umall', 'n': 'Ended Umall pick', 'was': 900, 'now': 450, 'off': 50, 'cat': 'Pantry', 'last': '', 'link': '', 'src': 'um', 'to': (t - timedelta(days=1)).isoformat()},
+        {'s': 'Meat Emporium', 'n': 'Beef Rump Cap WAS $30.99/KG NOW $25.99/KG', 'was': 6818, 'now': 5718, 'off': 16, 'cat': 'Meat & Seafood', 'last': '',
+         'link': 'https://www.meatemporium.com.au/products/beef-rump-cap', 'img': 'https://cdn.shopify.com/s/files/1/0347/3729/1402/products/rump-cap.jpg?v=1', 'src': 'me'},
     ]
     for i in range(14):
         specials.append({'s': 'Coles' if i % 2 else 'Woolworths', 'n': f'Pantry item {i + 1} 500g', 'was': 400 + i * 10, 'now': 200 + i * 5, 'off': 50,
@@ -57,5 +59,6 @@ def feed(today_iso):
             'sources': {'ozb': {'ok': True, 'feeds': 4, 'n': len(deals), 'at': now},
                         'report': {'ok': True, 'id': '980001', 'link': 'https://www.ozbargain.com.au/node/980001', 'date': S, 'from': S, 'to': E, 'n': 18, 'coles': 9, 'woolies': 9, 'at': now},
                         'harris': {'ok': True, 'handle': 'specials', 'from': S, 'to': E, 'n': 2, 'at': now},
-                        'umall': {'ok': True, 'lists': 'half-price', 'from': (t - timedelta(days=1)).isoformat(), 'to': (t + timedelta(days=2)).isoformat(), 'n': 2, 'at': now}},
+                        'umall': {'ok': True, 'lists': 'half-price', 'from': (t - timedelta(days=1)).isoformat(), 'to': (t + timedelta(days=2)).isoformat(), 'n': 2, 'at': now},
+                        'meat': {'ok': True, 'from': S, 'to': E, 'n': 1, 'at': now}},
             'specials': specials, 'deals': deals}
