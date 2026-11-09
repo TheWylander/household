@@ -143,6 +143,8 @@ textarea.input { min-height: 140px; font-family: ui-monospace, Menlo, monospace;
 .hint a { color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 .err-text { font-size: 14px; color: var(--coral-deep); font-weight: 700; margin-top: 6px; }
 .err-why { font-size: 12px; margin-top: 8px; overflow-wrap: anywhere; }
+.setup-steps { margin: 12px 0 14px; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.setup-steps strong { font-weight: 800; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .check-row { display: flex; align-items: center; gap: 12px; min-height: 48px; margin: 0 0 14px; font-weight: 700; cursor: pointer; }
 .check-row input { width: 24px; height: 24px; accent-color: var(--ink); flex: none; margin: 0; }

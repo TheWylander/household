@@ -31,8 +31,10 @@ export function getGenerativeModel(ai, params) {
 
 APP_CHECK = """
 export class ReCaptchaEnterpriseProvider { constructor(key) { this.key = key; } }
+export class CustomProvider { constructor(o) { this.o = o; } }
 export function initializeAppCheck(app, opts) {
-  window.__appCheck = (window.__appCheck || []).concat([{ app: app.name, key: opts.provider.key, auto: opts.isTokenAutoRefreshEnabled }]);
+  window.__appCheck = (window.__appCheck || []).concat([{ app: app.name, key: opts.provider.key || null, custom: opts.provider instanceof CustomProvider,
+    debug: self.FIREBASE_APPCHECK_DEBUG_TOKEN || null, auto: opts.isTokenAutoRefreshEnabled }]);
   return { app };
 }
 """

@@ -132,7 +132,7 @@ try:
         check(models == ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'] and '$52.37' in a.locator('.dialog').inner_text(), 'if the newest model is not there, the one before it reads it')
         a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
         snap(a, mode='unattested')
-        check("App Check key hasn't been added yet" in a.locator('.dialog').inner_text(), 'Gemini wants App Check and the app has no key yet: says so')
+        check('Set up receipt reading with a token' in a.locator('.dialog').inner_text() and a.locator('.dialog [data-act="aitoken"]').count() == 1, 'Gemini wants App Check and the app has no key yet: says so, and offers the setup')
         a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
         snap(a, reply={'shop': '', 'date': '', 'total': 0, 'category': 'Other', 'items': []})
         check("doesn't look like a receipt" in a.locator('.dialog').inner_text(), 'a photo that is not a receipt')
@@ -152,12 +152,12 @@ try:
               and b.locator('.snap .hint a[href="https://policies.google.com/terms"]').count() == 1, "the note says Google's reCAPTCHA checks it's our app, with Google's privacy and terms links")
         b.locator('.snap').screenshot(path=str(SHOTS / 'p11b-snap-appcheck.png'))
         snap(b)
-        check('$52.37' in b.locator('.dialog').inner_text() and b.evaluate('window.__appCheck') == [{'app': 'hh-ai', 'key': 'test-recaptcha-key-0123456789abcdefghij', 'auto': False}]
+        check('$52.37' in b.locator('.dialog').inner_text() and b.evaluate('window.__appCheck') == [{'app': 'hh-ai', 'key': 'test-recaptcha-key-0123456789abcdefghij', 'custom': False, 'debug': None, 'auto': False}]
               and b.evaluate('window.__aiOpts') == {'app': 'hh-ai', 'limited': True},
               'App Check is set up on the receipt app with the reCAPTCHA key, and Gemini gets a fresh one-use token each time')
         b.locator('.dialog [data-act="dlgclose"]').first.click(); b.wait_for_timeout(200)
         snap(b, mode='unattested')
-        check("couldn't confirm this is our app" in b.locator('.dialog').inner_text(), 'a token Gemini turns down: says to reopen the app and retry')
+        check("couldn't confirm this is our app" in b.locator('.dialog').inner_text() and b.locator('.dialog [data-act="aitoken"]').count() == 1, 'reCAPTCHA turned down: says why, and offers the token setup')
         b.locator('.dialog [data-act="dlgclose"]').first.click(); b.wait_for_timeout(200)
         snap(b, mode='recaptcha')
         check("couldn't confirm this is our app" in b.locator('.dialog').inner_text() and 'appCheck/recaptcha-error' in b.locator('.dialog .err-why').inner_text(),
@@ -168,6 +168,27 @@ try:
         check('until App Check is enforced' in dlg and 'Firebase AI Logic to Enforced' in dlg, 'App Check not enforced yet: says where to switch it on')
         check(len(b.evaluate('window.__appCheck')) == 1, 'App Check is set up once, however many receipts are snapped')
         b.locator('.dialog').screenshot(path=str(SHOTS / 'p13-receipt-appcheck.png'))
+        b.locator('.dialog [data-act="dlgclose"]').first.click(); b.wait_for_timeout(200)
+
+        # ---------- iPhones block reCAPTCHA in home screen apps: a saved App Check token instead ----------
+        snap(b, mode='recaptcha')
+        b.locator('.dialog [data-act="aitoken"]').click(); b.wait_for_timeout(200)
+        dlg = b.locator('.dialog').inner_text()
+        check('Receipt reading setup' in dlg and 'Manage debug tokens' in dlg and 'never in the app' in dlg, 'the setup says where to make the token, and that it stays private')
+        b.fill('#aiTokIn', 'not-a-token'); act(b, 'aitoksave')
+        check("doesn't look like an App Check token" in b.locator('.dialog').inner_text(), 'a wrong paste is caught')
+        b.locator('.dialog').screenshot(path=str(SHOTS / 'p14-receipt-token.png'))
+        tok = '1a2b3c4d-1a2b-4a2b-8a2b-1a2b3c4d5e6f'
+        b.fill('#aiTokIn', tok); act(b, 'aitoksave'); b.wait_for_timeout(2600)  # it reopens, since App Check had already started
+        check(b.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/ai'].appCheckDebug") == tok and b.evaluate('window.__appCheck') is None, 'saved privately in the household, and the app reopened')
+        act(b, 'go', 'settings'); act(b, 'go', 'upload')
+        check('token saved' in b.locator('.snap').inner_text() and 'reCAPTCHA' not in b.locator('.snap .hint').inner_text(), 'the snap card says a token is saved')
+        snap(b)
+        check('$52.37' in b.locator('.dialog').inner_text() and b.evaluate('window.__appCheck') == [{'app': 'hh-ai', 'key': None, 'custom': True, 'debug': tok, 'auto': False}]
+              and b.evaluate('window.__aiOpts') == {'app': 'hh-ai', 'limited': True}, 'with the token, App Check skips reCAPTCHA and Gemini reads the receipt')
+        b.locator('.dialog [data-act="dlgclose"]').first.click(); b.wait_for_timeout(200)
+        snap(b, mode='unattested')
+        check('turned down the App Check token' in b.locator('.dialog').inner_text(), 'a token Google turns down: says to check it in the Firebase console')
 
         browser.close()
 finally:

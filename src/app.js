@@ -114,7 +114,7 @@
     photos: null, photoBusy: null, photoErr: null, newsShown: false, newsDoc: null, newsEdit: null, newsId: null, factN: 0,
     enterKey: null, enterAt: 0, enterDir: 0, enterDirNow: 0, countsShown: {},
     pushDoc: null, pushBusy: false, pushNote: null,
-    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, spStore: 'all', spAisle: 'all', spWatch: false, spQuery: '', spAll: false, ozbAll: false, watchNew: '', listNew: '',
+    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, spStore: 'all', spAisle: 'all', spWatch: false, spQuery: '', spAll: false, ozbAll: false, watchNew: '', listNew: '', aiDoc: null, aiTokNew: '',
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -500,6 +500,7 @@
       S.newsDoc = got.news && typeof got.news === 'object' ? got.news : null;
       S.dealsDoc = got.deals && typeof got.deals === 'object' ? got.deals : null;
       S.pushDoc = got.push && typeof got.push === 'object' ? got.push : null;
+      S.aiDoc = got.ai && typeof got.ai === 'object' ? got.ai : null;
       applyPhotos();
       parseStaged();
       S.hhLoaded = true; S.offline = false;
@@ -1198,13 +1199,22 @@
      things that are just the other person's are saved as a spend they owe in full. */
   const AI_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
   let aiLoad = null;
-  /* Firebase AI Logic only answers apps that pass App Check. Ours uses an invisible reCAPTCHA check (no puzzles), loaded
-     only here, and a fresh one-use token for each request, so it works whether or not replay protection is on. */
+  /* Firebase AI Logic only answers apps that pass App Check, with a fresh one-use token for each request (so it works
+     whether or not replay protection is on). The check is Google's invisible reCAPTCHA, except that iPhones block it in
+     home screen apps. So once the household has saved an App Check token (made in the Firebase console, kept in hh/ai,
+     which only the two of you can read, and never in this public code), the app uses that instead. */
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const aiToken = () => { const t = S.aiDoc && S.aiDoc.appCheckDebug; return typeof t === 'string' && UUID.test(t) ? t : ''; };
+  const noProviderToken = () => Promise.reject(new Error('This household uses its saved App Check token.'));
   function aiModel(name, schema) {
-    const key = window.HH_APPCHECK;
-    aiLoad = aiLoad || Promise.all([import('./firebase-app.js'), import('./firebase-ai.js'), key ? import('./firebase-app-check.js') : null]).then((m) => {
+    const key = window.HH_APPCHECK, tok = aiToken();
+    aiLoad = aiLoad || Promise.all([import('./firebase-app.js'), import('./firebase-ai.js'), key || tok ? import('./firebase-app-check.js') : null]).then((m) => {
       const A = m[0], AI = m[1], AC = m[2], app = A.getApps().filter((x) => x.name === 'hh-ai')[0] || A.initializeApp(window.HH_FIREBASE, 'hh-ai');
-      if (AC) AC.initializeAppCheck(app, { provider: new AC.ReCaptchaEnterpriseProvider(key), isTokenAutoRefreshEnabled: false });
+      if (AC) {
+        if (tok) self.FIREBASE_APPCHECK_DEBUG_TOKEN = tok;
+        AC.initializeAppCheck(app, { provider: tok ? new AC.CustomProvider({ getToken: noProviderToken }) : new AC.ReCaptchaEnterpriseProvider(key), isTokenAutoRefreshEnabled: false });
+      }
+      S.aiCheck = AC ? (tok ? 'token' : 'recaptcha') : 'none';
       return { AI, ai: AI.getAI(app, { backend: new AI.GoogleAIBackend(), useLimitedUseAppCheckTokens: !!AC }) };
     }, (e) => { aiLoad = null; throw e; });
     return aiLoad.then((x) => x.AI.getGenerativeModel(x.ai, { model: name, generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0 } }));
@@ -1237,11 +1247,12 @@
   function receiptError(e) {
     const code = String((e && e.code) || ''), st = e && e.customErrorData && e.customErrorData.status, msg = String((e && e.message) || '');
     const offline = 'Couldn\'t reach Gemini. Check your connection and try again.';
-    const notUs = 'Google couldn\'t confirm this is our app. Close the app fully, open it again and retry. If it keeps happening, App Check needs a look in the Firebase console.';
+    const notUs = S.aiCheck === 'token' ? 'Google turned down the App Check token. Check it\'s still listed under Manage debug tokens in the Firebase console, or save a new one.'
+      : 'Google couldn\'t confirm this is our app. iPhones often block that check in home screen apps, so set up receipt reading with a token instead. It\'s a one-off, for both phones.';
     if (code === 'api-not-enabled' || /api-not-enabled|has not been used|is disabled|genai config not found/i.test(msg)) return 'Receipt reading isn\'t set up yet. In the Firebase console, open AI Logic, tap Get started, choose the Gemini Developer API and finish every step. If you just did, give it 10 minutes.';
     if (/enforce Firebase App Check|has been deactivated/i.test(msg)) return 'Gemini is switched off for this project until App Check is enforced. In the Firebase console, open Security, App Check, APIs, and set Firebase AI Logic to Enforced.';
     if (/^appCheck\//.test(code) || /\(appCheck\//.test(msg)) return navigator.onLine === false ? offline : notUs;
-    if (st === 401 || /app ?check|attestation/i.test(msg)) return window.HH_APPCHECK ? notUs : 'Gemini needs App Check before it will answer, and the app\'s App Check key hasn\'t been added yet.';
+    if (st === 401 || /app ?check|attestation/i.test(msg)) return window.HH_APPCHECK ? notUs : 'Gemini needs App Check before it will answer. Set up receipt reading with a token, once for both phones.';
     if (/are blocked|API_KEY_SERVICE_BLOCKED/i.test(msg)) return 'The app\'s Firebase key isn\'t allowed to use Gemini yet. In the Google Cloud console, open Credentials, edit the Browser key, and add the Firebase AI Logic API.';
     if (st === 429 || /quota|exhausted/i.test(msg)) return 'Gemini\'s free limit is used up for now. Type this one in, or try again later.';
     if (e && e.photo) return 'That photo couldn\'t be opened. Try another one.';
@@ -1255,6 +1266,19 @@
     if (e && e.code && m.indexOf(e.code) < 0) m = e.code + (m ? ': ' + m : '');
     if (st && m.indexOf(String(st)) < 0) m += ' (HTTP ' + st + ')';
     return m.slice(0, 220);
+  }
+  function aiTokenDialog(d) {
+    const has = !!aiToken();
+    return '<div class="dlg-head"><h2 id="dlgT">Receipt reading setup</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>' +
+      '<p class="muted">Gemini only answers our app once Google has checked it\'s really us. iPhones block Google\'s usual check in home screen apps, so we use an App Check token instead. Make it once and it works on both phones.</p>' +
+      '<ol class="setup-steps"><li>In the Firebase console, open <strong>App Check</strong>, then <strong>Apps</strong>.</li><li>Tap <strong>⋮</strong> on the web app, then <strong>Manage debug tokens</strong>.</li>' +
+      '<li><strong>Add debug token</strong>, then <strong>Generate token</strong>. Name it Household and save.</li><li>Copy the token and paste it here.</li></ol>' +
+      (has ? '<p class="hint">A token is saved. Paste a new one to replace it.</p>' : '') +
+      '<label class="sr" for="aiTokIn">App Check token</label><input class="input" id="aiTokIn" placeholder="Paste the token" autocomplete="off" autocapitalize="off" spellcheck="false" data-bind="aiTokNew" data-enter="aitoksave" value="' + esc(S.aiTokNew) + '">' +
+      (d.err ? '<p class="err-text" role="alert">' + esc(d.err) + '</p>' : '') +
+      '<p class="hint">It\'s saved privately for the two of you, never in the app\'s public code. Google makes these tokens for testing, so if it ever gets out, delete it in the Firebase console and make a new one.</p>' +
+      '<div class="dialog-actions">' + (has ? '<button class="btn btn-secondary" data-act="aitokdel">Remove it</button>' : '<button class="btn btn-secondary" data-act="dlgclose">Not now</button>') +
+      '<button class="btn btn-primary" data-act="aitoksave">Save</button></div>';
   }
   /* A smaller JPEG is plenty for reading, and quicker to send. */
   function shrinkPhoto(file) {
@@ -1296,7 +1320,9 @@
       render();
     }, (e) => {
       if (!mine()) return;
-      S.dialog.busy = false; S.dialog.err = receiptError(e); S.dialog.why = e && !e.photo ? errDetail(e) : ''; render();
+      S.dialog.busy = false; S.dialog.err = receiptError(e); S.dialog.why = e && !e.photo ? errDetail(e) : '';
+      S.dialog.fix = !S.readOnly && /appCheck\/|app ?check|attestation/i.test(String((e && e.code) || '') + ' ' + String((e && e.message) || '')) ? 'aitoken' : '';
+      render();
     });
   }
   function receiptSums(f) {
@@ -1322,6 +1348,10 @@
     const head = '<div class="dlg-head"><h2 id="dlgT">Check the receipt</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>';
     if (d.busy) return head + '<div class="rcp-busy" role="status"><span class="spin" aria-hidden="true"></span><p><strong>Reading the receipt</strong></p><p class="muted">Gemini is reading the shop, the total and each item. It takes a few seconds.</p></div>';
     if (d.err) {
+      if (d.fix === 'aitoken') {
+        return head + '<p class="err-text" role="alert">' + esc(d.err) + '</p>' + (d.why ? '<p class="hint err-why">Details: ' + esc(d.why) + '</p>' : '') + '<div class="dialog-actions">' +
+          '<button class="btn btn-secondary" data-act="rcptype">Type it in</button><button class="btn btn-primary" data-act="aitoken">Set it up</button></div>';
+      }
       return head + '<p class="err-text" role="alert">' + esc(d.err) + '</p>' + (d.why ? '<p class="hint err-why">Details: ' + esc(d.why) + '</p>' : '') + '<div class="dialog-actions">' +
         '<label class="btn btn-secondary file-btn">Another photo<input type="file" accept="image/*" data-change="rcpfile" aria-label="Choose another photo of the receipt"></label>' +
         '<button class="btn btn-primary" data-act="rcptype">Type it in</button></div>';
@@ -1374,7 +1404,8 @@
       '<label class="btn btn-primary btn-block file-btn">' + icon('camera') + 'Take a photo<input type="file" accept="image/*" capture="environment" data-change="rcpfile" aria-label="Take a photo of a receipt"></label>' +
       '<label class="btn btn-secondary btn-block file-btn" style="margin-top:12px">' + icon('image') + 'Choose from photos<input type="file" accept="image/*" data-change="rcpfile" aria-label="Choose a photo of a receipt"></label>' +
       '<p class="hint" style="margin-top:12px">Receipt photos go to Google\'s Gemini to be read. The app doesn\'t keep them, and nothing else in the app goes to Gemini.' +
-      (window.HH_APPCHECK ? ' An invisible Google reCAPTCHA check confirms it\'s our app, and Google\'s <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Terms</a> apply.' : '') + '</p></section>';
+      (window.HH_APPCHECK && !aiToken() ? ' An invisible Google reCAPTCHA check confirms it\'s our app, and Google\'s <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Terms</a> apply.' : '') + '</p>' +
+      (S.readOnly ? '' : '<button class="link sm" data-act="aitoken">' + (aiToken() ? 'Receipt reading setup: token saved' : 'Receipt reading setup') + '</button>') + '</section>';
   }
 
   /* ---------- upload: statements, Splitwise files, and spends to check ---------- */
@@ -3252,6 +3283,8 @@
       body = monthDialog();
     } else if (d.type === 'receipt') {
       body = receiptDialog(d);
+    } else if (d.type === 'aitoken') {
+      body = aiTokenDialog(d);
     } else if (d.type === 'inscat') {
       body = insCatDialog(d);
     } else if (d.type === 'news') {
@@ -3408,6 +3441,23 @@
     },
     watchopen: () => openDialog({ type: 'watch' }),
     spitem: (k) => openDialog({ type: 'spitem', key: k }),
+    aitoken: () => { S.aiTokNew = ''; openDialog({ type: 'aitoken' }); },
+    aitoksave: () => {
+      const t = String(S.aiTokNew || '').trim(), el = document.getElementById('aiTokIn');
+      if (!UUID.test(t)) { S.dialog.err = 'That doesn\'t look like an App Check token. It\'s 36 characters, like 1a2b3c4d-1a2b-1a2b-1a2b-1a2b3c4d5e6f.'; render(); return; }
+      if (el) el.value = '';
+      S.aiTokNew = ''; S.aiDoc = Object.assign({}, S.aiDoc || {}, { appCheckDebug: t });
+      upsert('hh/ai', { appCheckDebug: t }, {});
+      S.dialog = null;
+      if (aiLoad) { toast('Saved. The app reopens to use it'); setTimeout(() => location.reload(), 1200); render(); return; }
+      render(); toast('Saved. Snap a receipt to try it');
+    },
+    aitokdel: () => {
+      S.aiDoc = Object.assign({}, S.aiDoc || {}, { appCheckDebug: '' });
+      upsert('hh/ai', { appCheckDebug: '' }, {});
+      S.dialog = null; render(); toast('Token removed');
+      if (aiLoad) setTimeout(() => location.reload(), 1200);
+    },
     shoplist: () => openDialog({ type: 'shoplist' }),
     listadd: (k) => {
       const x = findSpecial(k);
