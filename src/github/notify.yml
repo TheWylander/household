@@ -1,0 +1,50 @@
+# Sends the household app's phone notifications: sale days you're keen on (the evening before and the morning of)
+# and specials on the watch list. Free on GitHub for public repos. It needs one secret, FIREBASE_SERVICE_ACCOUNT,
+# and does nothing until it's there. Run it by hand to send a test to phones that have just turned notifications on.
+name: Phone notifications
+
+on:
+  schedule:
+    - cron: '37 20 * * *'   # about 7:40am in Sydney (6:40am in winter)
+    - cron: '7 8 * * *'     # about 7pm in Sydney (6pm in winter)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: notify
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Check the key is there
+        id: key
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -n "$SA" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "::notice::Phone notifications aren't set up yet. Add the FIREBASE_SERVICE_ACCOUNT secret."; fi
+      - uses: actions/checkout@v4
+        if: steps.key.outputs.ok == 'true'
+        with:
+          sparse-checkout: .github
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.ok == 'true'
+        with:
+          node-version: 22
+      - name: Get this week's deals
+        if: steps.key.outputs.ok == 'true'
+        run: |
+          if git fetch --depth 1 origin deals 2>/dev/null; then git show FETCH_HEAD:deals.json > deals.json || echo '{}' > deals.json; else echo '{}' > deals.json; fi
+      - name: Install
+        if: steps.key.outputs.ok == 'true'
+        working-directory: .github/notify
+        run: npm init -y > /dev/null && npm install --no-audit --no-fund firebase-admin@14 web-push@3.6.7
+      - name: Send
+        if: steps.key.outputs.ok == 'true'
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node .github/notify/notify.mjs deals.json

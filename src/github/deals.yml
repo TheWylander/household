@@ -1,13 +1,17 @@
 # Collects this week's grocery deals into deals.json on the "deals" branch, where the app reads them.
+# Runs every Wednesday, when supermarket specials change, and publishes only when something is new.
 # Free on GitHub for public repos. Nothing secret is needed: every source is public, and the household's
-# watch list and picks stay on your phones.
+# watch list and picks stay in Firebase.
 name: Grocery deals
 
 on:
   schedule:
-    - cron: '23 19 * * *'   # about 6:20am in Sydney (5:20am in winter)
-    - cron: '23 6 * * *'    # about 5:20pm in Sydney (4:20pm in winter)
+    - cron: '7 20 * * 2'    # Wednesday about 7am in Sydney (6am in winter)
+    - cron: '7 7 * * 3'     # Wednesday about 6pm (5pm in winter), in case the half-price list is posted late
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/deals.yml', '.github/deals/**']
 
 permissions:
   contents: write
@@ -31,8 +35,10 @@ jobs:
         run: |
           if git fetch --depth 1 origin deals 2>/dev/null; then git show FETCH_HEAD:deals.json > prev.json || echo '{}' > prev.json; else echo '{}' > prev.json; fi
       - name: Collect this week's deals
+        id: collect
         run: node .github/deals/deals.mjs prev.json out/deals.json
       - name: Publish to the deals branch
+        if: steps.collect.outputs.changed == 'true'
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

@@ -63,6 +63,7 @@
     star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>',
     duo: '<circle cx="8.5" cy="12" r="5.5"/><circle cx="15.5" cy="12" r="5.5"/>',
     chart: '<path d="M4 20h16"/><path d="M7 16.5V12M12 16.5V6.5M17 16.5V9.5"/>',
+    bell: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z"/><path d="M10 20.6a2.1 2.1 0 0 0 4 0"/>',
     tag: '<path d="M3.5 12.3V4.5a1 1 0 0 1 1-1h7.8l8.2 8.2a1.6 1.6 0 0 1 0 2.2l-6.1 6.1a1.6 1.6 0 0 1-2.2 0z"/><circle cx="8.3" cy="8.3" r="1.6"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3 5.5 5.5"/><circle cx="12" cy="12" r="6.3"/>'
   };
@@ -83,7 +84,8 @@
       ['check', 'Tidy categories.', 'In Insights, tap a category to see every spend in it, and move any that belong somewhere else.'],
       ['star', 'Fun fact.', 'A little fact about how we spend, a new one each time you open the app.'],
       ['arrow', 'Swipe through months.', 'Swipe left or right in Insights and the Calendar. Numbers count up and charts grow as each screen opens.'],
-      ['tag', 'Deals.', "The Calendar has a Deals view: sale days like Lucky Mart's monthly sale, plus this week's Coles, Woolies and Harris Farm specials. Add things we buy to the watch list and Home tells us when they're cheap."]
+      ['tag', 'Deals.', "The Calendar has a Deals view: sale days like Lucky Mart's monthly sale, plus this week's Coles, Woolies and Harris Farm specials, updated every Wednesday. Add things we buy to the watch list, and Home gives us a heads-up when they're cheap or a sale day is tomorrow."],
+      ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up the evening before a sale day we're keen on, and on Wednesdays when something on the watch list is on special."]
     ] }
   ];
 
@@ -102,6 +104,7 @@
     insMode: 'month', insYearOff: 0, insSel: null, insDay: null, pace: null, paceOn: false,
     photos: null, photoBusy: null, photoErr: null, newsShown: false, newsDoc: null, newsEdit: null, newsId: null, factN: 0,
     enterKey: null, enterAt: 0, enterDir: 0, enterDirNow: 0, countsShown: {},
+    pushDoc: null, pushBusy: false, pushNote: null,
     calMode: 'spend', dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, spStore: 'all', spQuery: '', spAll: false, ozbAll: false, watchNew: '',
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
@@ -412,6 +415,11 @@
   function boot() {
     S.factN = (Number(lsGet('hh.factN')) || 0) + 1; lsSet('hh.factN', String(S.factN));
     try { S.feed = cleanFeed(JSON.parse(lsGet('hh.deals') || 'null')); } catch (e) { S.feed = null; }
+    /* A tapped notification opens Deals. */
+    if (location.hash === '#deals') {
+      S.view = 'cal'; S.calMode = 'deals';
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* fine either way */ }
+    }
     setTimeout(() => loadFeed(), 1200);
     render();
     slowTimer = setTimeout(() => { if (!(S.live.hh && S.live.months)) { S.slow = true; safeRender(); } }, 10000);
@@ -482,10 +490,11 @@
       S.photos = got.photos && typeof got.photos === 'object' ? got.photos : null;
       S.newsDoc = got.news && typeof got.news === 'object' ? got.news : null;
       S.dealsDoc = got.deals && typeof got.deals === 'object' ? got.deals : null;
+      S.pushDoc = got.push && typeof got.push === 'object' ? got.push : null;
       applyPhotos();
       parseStaged();
       S.hhLoaded = true; S.offline = false;
-      markLive('hh', snap); resolveMe(); ensureRent(); ensureEditor(); safeRender();
+      markLive('hh', snap); resolveMe(); ensureRent(); ensureEditor(); pushCheck(); safeRender();
     }, (e) => subError('hh', e, subHH));
   }
   function subMonths() {
@@ -746,7 +755,8 @@
   function navBar() {
     const n = pendingAll().length;
     const item = (v, ic, label, extra) => '<button class="nav-i' + (S.view === v ? ' on' : '') + '" data-act="go" data-arg="' + v + '"' + (S.view === v ? ' aria-current="page"' : '') + '>' + icon(ic) + '<span>' + label + '</span>' + (extra || '') + '</button>';
-    return '<nav class="nav" aria-label="Main">' + item('home', 'home', 'Home') + item('cal', 'cal', 'Calendar') +
+    const fresh = notices().some((x) => x.kind === 'sp');
+    return '<nav class="nav" aria-label="Main">' + item('home', 'home', 'Home') + item('cal', 'cal', 'Calendar', fresh ? '<span class="dot-badge" aria-hidden="true"></span><span class="sr">, new specials</span>' : '') +
       (S.readOnly ? '' : '<button class="nav-add" data-act="add" aria-label="Add a spend">' + icon('plus') + '</button>') +
       item('inbox', 'inbox', 'Inbox', n ? '<span class="badge"><span class="sr">, </span>' + n + '<span class="sr"> to check</span></span>' : '') +
       item('insights', 'chart', 'Insights') + '</nav>';
@@ -784,7 +794,7 @@
     }
     let out = '<header class="top"><div><p class="eyebrow">Hi ' + esc(nm(S.me)) + '</p><h1 class="title">' + esc(L.periodLabel(p, t)) + '</h1></div>' +
       '<div class="top-right"><div class="duo" aria-hidden="true">' + av('a') + av('b') + '</div>' +
-      '<button class="icon-btn" data-act="go" data-arg="settings" aria-label="Settings">' + icon('gear') + '</button></div></header>' + stagedCard() + hero;
+      '<button class="icon-btn" data-act="go" data-arg="settings" aria-label="Settings">' + icon('gear') + '</button></div></header>' + notices().map(noticeHtml).join('') + stagedCard() + hero;
 
     const items = tabItems();
     if (S.tab && S.tab.open) {
@@ -1813,7 +1823,7 @@
   /* ---------- deals ---------- */
   /* Sale days (a shop's regular sale, like a monthly 20% off Saturday) and this week's supermarket specials.
      Sale days, the watch list and what you're keen on live in hh/deals with the rest of your data. Specials come from
-     deals.json, which a free GitHub job builds twice a day from public sources. Each phone filters it, so nothing about
+     deals.json, which a free GitHub job builds every Wednesday from public sources. Each phone filters it, so nothing about
      the two of you goes into that file. */
   const SALE_IDEAS = [
     { key: 'luckymart', store: 'Lucky Mart', offer: 'Up to 20% off', where: 'Shop 2, 2 Wilkes Ave, Artarmon', rule: { k: 'nth', n: 2, dow: 6 },
@@ -1935,7 +1945,7 @@
     return '<li class="sp-row' + (hit ? ' hit' : '') + '"><span class="sp-main">' + name + '<span class="k">' + esc([shopLabel(x.s), x.cat, lastLabel(x.last)].filter(Boolean).join(' · ')) + '</span>' +
       (hit ? '<span class="tag hit">On our list</span>' : '') + '</span>' +
       '<span class="sp-price"><span class="sp-now">' + L.fmt(x.now) + '</span>' + (x.was > x.now ? '<s class="sp-was"><span class="sr">was </span>' + L.fmt(x.was) + '</s>' : '') +
-      (x.off ? '<span class="sp-off">' + x.off + '% off</span>' : '') + '</span></li>';
+      (x.off ? '<span class="sp-off">' + x.off + '% off</span>' : x.src === 'hf' ? '<span class="sp-off">Special</span>' : '') + '</span></li>';
   }
   function spListHtml() {
     const D = dealsCfg(), list = spFiltered(), shown = S.spAll ? list.slice(0, 500) : list.slice(0, 12);
@@ -1961,7 +1971,7 @@
         '<button class="btn btn-secondary btn-small" data-act="watchadd">Add</button></div>') + '</div>';
     if (!F) {
       const why = !dealsUrl() ? 'Specials show here in the app on your phones.' : S.feedBusy || !S.feedAt ? 'Getting this week\'s specials.'
-        : S.feedErr === 'none' ? 'The deals job hasn\'t run yet. It runs every morning and evening, so check back soon.' : 'This week\'s specials couldn\'t be reached. Check your connection.';
+        : S.feedErr === 'none' ? 'The deals job hasn\'t run yet. It runs every Wednesday morning, when the specials change.' : 'This week\'s specials couldn\'t be reached. Check your connection.';
       return '<section class="card specials">' + head + '<p class="muted">' + esc(why) + '</p>' +
         (S.feedErr === 'net' || S.feedErr === 'bad' ? '<button class="link sm" data-act="feedretry">Try again</button>' : '') + watch + '</section>';
     }
@@ -1979,7 +1989,7 @@
       (all.length ? '<div class="chips store-chips" role="group" aria-label="Shop">' + chip('all', 'All', all.length) + stores.map((s) => chip(s, shopLabel(s), counts[s])).join('') + '</div>' +
         '<label class="sr" for="spQ">Search specials</label><input class="input sp-search" id="spQ" type="search" placeholder="Search specials" autocomplete="off" enterkeyhint="search" data-bind="spQuery" data-input="spsearch" value="' + esc(S.spQuery) + '">' +
         '<div id="spList">' + spListHtml() + '</div>'
-        : '<p class="muted">No specials have come through for this week yet. They update every morning and evening.</p>') +
+        : '<p class="muted">This week\'s specials haven\'t come through yet. They update on Wednesdays.</p>') +
       (srcs.length ? '<p class="hint sp-src">' + srcs.join('. ') + '. Updated ' + esc(agoLabel(F.updated)) + '. Prices can differ by store.</p>' : '') + '</section>';
   }
   /* OzBargain deals at your shops, or matching your watch list. */
@@ -1988,7 +1998,7 @@
     if (!F || !F.deals.length) return '';
     const D = dealsCfg(), shops = /^(Coles|Woolworths|Harris Farm|ALDI|Costco|IGA|Lucky Mart)$/;
     const list = F.deals.filter((d) => !d.hp && (!d.to || d.to >= t)).map((d) => Object.assign({ shop: L.storeName(d.s) }, d));
-    const mine = list.filter((d) => shops.test(d.shop) || L.watchHits(d.t, D.watch).length);
+    const mine = list.filter((d) => shops.test(d.shop) || L.watchHits(d.t + ' ' + d.s, D.watch).length);
     const shown = S.ozbAll ? list.slice(0, 40) : mine.slice(0, 6);
     if (!list.length) return '';
     return '<section class="card specials"><div class="card-head"><h2>From OzBargain</h2></div><p class="muted">Deals people have posted for the shops you use.</p>' +
@@ -2047,13 +2057,63 @@
   }
   /* Home: the specials this week on your watch list. */
   function onSpecialCard() {
-    const D = dealsCfg();
-    if (!D.watch.length || !S.feed) return '';
-    const hits = L.sortSpecials(specialsNow().filter((x) => L.watchHits(x.n, D.watch).length), D.watch);
+    if (!S.feed || notices().some((n) => n.kind === 'sp')) return '';
+    const hits = watchHitsNow();
     if (!hits.length) return '';
     const names = hits.slice(0, 2).map((x) => x.n.split(' ').slice(0, 4).join(' ') + ' at ' + shopLabel(x.s));
     return '<button class="card row-card hot" data-act="godeals"><span class="row-lead"><span class="news-ic" aria-hidden="true">' + icon('tag') + '</span><span><span class="k">On special this week</span>' +
       '<span class="row-t">' + esc(names.join(', ') + (hits.length > 2 ? ' and ' + (hits.length - 2) + ' more' : '')) + '</span></span></span>' + icon('arrow') + '</button>';
+  }
+  /* ---------- in-app notices ---------- */
+  /* A heads-up at the top of Home when something's new: specials on your watch list when a new week's specials land,
+     and a sale day you're keen on that's today or tomorrow. Each stays until it's closed or opened. What you've seen
+     is kept on this phone only. */
+  function seenList() { try { const v = JSON.parse(lsGet('hh.seen') || '[]'); return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : []; } catch (e) { return []; } }
+  function markSeen(k) { const v = seenList().filter((x) => x !== k); v.push(String(k).slice(0, 80)); lsSet('hh.seen', JSON.stringify(v.slice(-40))); }
+  function specialsKey() {
+    const F = S.feed, t = today();
+    if (!F) return '';
+    const r = F.sources.report, h = F.sources.harris, from = (r.to >= t && r.from) || (h.to >= t && h.from) || '';
+    return from ? 'sp:' + from : '';
+  }
+  /* Specials and OzBargain deals this week that match the watch list. A deal matches on its shop too, so "Tokyo Mart"
+     catches Tokyo Mart's sale when someone posts it. */
+  function watchHitsNow() {
+    const D = dealsCfg(), F = S.feed, t = today();
+    if (!D.watch.length || !F) return [];
+    const sp = L.sortSpecials(specialsNow().filter((x) => L.watchHits(x.n, D.watch).length), D.watch);
+    const deals = F.deals.filter((d) => !d.hp && (!d.to || d.to >= t) && L.watchHits(d.t + ' ' + d.s, D.watch).length).map((d) => ({ n: d.t, s: L.storeName(d.s) }));
+    return sp.concat(deals);
+  }
+  function notices() {
+    if (!S.settings || !S.me || S.readOnly) return [];
+    const t = today(), seen = seenList(), out = [], wk = specialsKey(), hits = wk && seen.indexOf(wk) < 0 ? watchHitsNow() : [];
+    if (hits.length) out.push({ key: wk, kind: 'sp', hits });
+    saleDays(t, L.addDays(t, 1)).forEach((o) => { const k = 'sale:' + o.sale.id + '|' + o.date; if (o.keen && seen.indexOf(k) < 0) out.push({ key: k, kind: 'sale', o }); });
+    return out;
+  }
+  const noticeAt = {};
+  function noticeHtml(n) {
+    const t = today(), now = performance.now(), at = noticeAt[n.key] || (noticeAt[n.key] = now), since = now - at;
+    /* A notice that turns up after Home has opened (the specials arrive a moment later) pops in on its own. */
+    const pop = since < 600 && at - S.enterAt > 300 && !reduceMotion();
+    let eyebrow, title, sub, go = '';
+    if (n.kind === 'sp') {
+      eyebrow = 'New this week';
+      title = n.hits.length === 1 ? 'Something on our list is on special' : n.hits.length + ' things on our list are on special';
+      sub = n.hits.slice(0, 2).map((x) => x.n.split(' ').slice(0, 4).join(' ') + ' at ' + shopLabel(x.s)).join(', ') + (n.hits.length > 2 ? ' and ' + (n.hits.length - 2) + ' more' : '');
+      go = '<button class="btn btn-secondary btn-small" data-act="noticego" data-arg="' + esc(n.key) + '">See them</button>';
+    } else {
+      const s = n.o.sale;
+      eyebrow = 'Sale day';
+      title = s.store + ' sale ' + (n.o.date === t ? 'is on today' : 'is tomorrow');
+      sub = [s.offer, s.where.split(', ').pop()].filter(Boolean).join(' · ');
+    }
+    return '<section class="card notice' + (pop ? ' pop' : '') + '"' + (pop ? ' style="--nd:-' + Math.round(since) + 'ms"' : '') + ' role="status">' +
+      '<span class="news-ic" aria-hidden="true">' + icon(n.kind === 'sp' ? 'tag' : 'cal') + '</span>' +
+      '<div class="notice-b"><p class="k">' + esc(eyebrow) + '</p><p class="notice-t">' + esc(title) + '</p>' + (sub ? '<p class="muted notice-s">' + esc(sub) + '</p>' : '') +
+      (go ? '<div class="notice-go">' + go + '</div>' : '') + '</div>' +
+      '<button class="icon-btn notice-x" data-act="noticex" data-arg="' + esc(n.key) + '" aria-label="Close this notice">' + icon('close') + '</button></section>';
   }
   function saleForm(s, date) {
     if (s) return { store: s.store, offer: s.offer, where: s.where, k: s.rule.k, n: String(s.rule.n || 2), dow: String(s.rule.dow != null ? s.rule.dow : 6), day: String(s.rule.day || 1), date: s.rule.date || '', keen: s.keen };
@@ -2087,6 +2147,125 @@
       (d.error ? '<p class="err-text" role="alert">' + esc(d.error) + '</p>' : '') +
       '<div class="dialog-actions"><button class="btn btn-secondary" data-act="dlgclose">Cancel</button><button class="btn btn-primary" data-act="salesave">' + (d.id ? 'Save' : 'Add sale day') + '</button></div>' +
       (d.id ? '<p class="dlg-extra"><button class="link sm danger" data-act="saledel">Remove this sale day</button></p>' : '');
+  }
+
+  /* ---------- phone notifications ---------- */
+  /* Pop-ups on your phones, even with the app closed: the evening before and the morning of a sale day you're keen on,
+     and on Wednesdays when something on the watch list is on special. Each phone subscribes here with Web Push. A free
+     GitHub job sends them; it reads this household's data with a Firebase key kept in GitHub's encrypted secrets, and
+     each pop-up is encrypted for the phone it goes to. The first phone to turn them on makes the Web Push key pair and
+     keeps it in hh/push, which only your two logins and that job can read. */
+  const PUSH_BASE = { vapid: null, subs: {}, prefs: {}, sent: {}, last: null };
+  const b64u = (bytes) => btoa(String.fromCharCode.apply(null, Array.from(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const unb64u = (t) => { t = String(t || ''); return Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((t.length + 3) % 4)), (c) => c.charCodeAt(0)); };
+  const isIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = () => { try { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } };
+  function pushSupport() {
+    if (isIOS() && !standalone()) return 'install';
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return 'unsupported';
+    return Notification.permission === 'denied' ? 'denied' : 'ok';
+  }
+  function pushCfg() {
+    const d = S.pushDoc && typeof S.pushDoc === 'object' ? S.pushDoc : {}, subs = d.subs && typeof d.subs === 'object' ? d.subs : {};
+    const pref = (p) => { const x = d.prefs && d.prefs[p] && typeof d.prefs[p] === 'object' ? d.prefs[p] : {}; return { sale: x.sale !== false, specials: x.specials !== false }; };
+    return {
+      pub: d.vapid && typeof d.vapid.pub === 'string' ? d.vapid.pub : '',
+      subs: Object.keys(subs).filter((k) => subs[k] && typeof subs[k] === 'object' && typeof subs[k].endpoint === 'string').map((k) => Object.assign({ id: k }, subs[k])),
+      prefs: { a: pref('a'), b: pref('b') },
+      last: d.last && typeof d.last === 'object' && typeof d.last.at === 'string' ? d.last : null
+    };
+  }
+  const myPushId = () => lsGet('hh.pushId') || '';
+  const swReady = () => Promise.race([navigator.serviceWorker.ready, delay(6000).then(() => { throw { code: 'sw' }; })]);
+  /* The Web Push key pair, made on the first phone that turns notifications on. */
+  function pushKey() {
+    const have = pushCfg().pub;
+    if (have) return Promise.resolve(have);
+    return crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])
+      .then((kp) => Promise.all([crypto.subtle.exportKey('raw', kp.publicKey), crypto.subtle.exportKey('jwk', kp.privateKey)]))
+      .then((r) => {
+        const pub = b64u(new Uint8Array(r[0]));
+        S.pushDoc = Object.assign({}, S.pushDoc || PUSH_BASE, { vapid: { pub, d: r[1].d } });
+        return upsert('hh/push', { vapid: { pub, d: r[1].d } }, PUSH_BASE).then((ok) => { if (!ok) throw { code: 'save' }; return pub; });
+      });
+  }
+  const deviceName = () => (isIOS() ? 'iPhone' : /Android/i.test(navigator.userAgent) ? 'Android phone' : 'Computer');
+  /* Subscribes this phone with the household's key, swapping out a subscription made with an older one. */
+  function subscribeWith(reg, pub) {
+    return reg.pushManager.getSubscription().then((old) => {
+      const k = old && old.options && old.options.applicationServerKey;
+      return old && (!k || b64u(new Uint8Array(k)) !== pub) ? old.unsubscribe().then(() => null, () => null) : old;
+    }).then((old) => old || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: unb64u(pub) })).then((sub) => {
+      const j = sub.toJSON(), id = 'p' + L.hash(j.endpoint).slice(0, 12), prev = myPushId(), subs = {};
+      subs[id] = { who: S.me, endpoint: j.endpoint, keys: j.keys, vapid: pub, at: Date.now(), welcomed: false, stale: false, device: deviceName() };
+      if (prev && prev !== id) subs[prev] = null;
+      lsSet('hh.pushId', id);
+      return upsert('hh/push', { subs }, PUSH_BASE);
+    });
+  }
+  function pushOn() {
+    const sup = pushSupport();
+    if (sup !== 'ok') { S.pushNote = sup; render(); return; }
+    /* Asked first, inside the tap: iPhones only show the question for a tap. */
+    const ask = Notification.requestPermission();
+    S.pushBusy = true; S.pushNote = null; render();
+    Promise.resolve(ask).then((perm) => {
+      if (perm !== 'granted') throw { code: perm === 'denied' ? 'denied' : 'dismissed' };
+      return Promise.all([swReady(), pushKey()]);
+    }).then((r) => subscribeWith(r[0], r[1])).then((ok) => {
+      S.pushBusy = false; S.pushNote = ok ? null : 'error'; render();
+      if (ok) toast('Notifications are on for this phone');
+    }, (e) => { S.pushBusy = false; S.pushNote = e && (e.code === 'denied' || e.code === 'dismissed') ? e.code : 'error'; render(); });
+  }
+  function pushOff() {
+    const id = myPushId();
+    S.pushBusy = true; render();
+    const done = () => { lsSet('hh.pushId', ''); S.pushBusy = false; S.pushNote = null; render(); toast('Notifications are off for this phone'); };
+    swReady().then((reg) => reg.pushManager.getSubscription()).then((s) => s && s.unsubscribe()).catch(noop)
+      .then(() => (id ? upsert('hh/push', { subs: { [id]: null } }, PUSH_BASE) : true)).then(done, done);
+  }
+  /* Each time the app opens: a phone whose subscription went stale (or was made with an older key) quietly signs up again. */
+  let pushChecked = false;
+  function pushCheck() {
+    if (pushChecked || !S.me || S.readOnly || !S.live.hh || !myPushId() || pushSupport() !== 'ok' || Notification.permission !== 'granted') return;
+    pushChecked = true;
+    const P = pushCfg(), mine = P.subs.filter((x) => x.id === myPushId())[0];
+    if (!P.pub || (mine && mine.vapid === P.pub && !mine.stale && mine.who === S.me)) return;
+    swReady().then((reg) => subscribeWith(reg, P.pub)).catch(noop);
+  }
+  function pushCard() {
+    const P = pushCfg(), sup = pushSupport(), me = S.me, mine = P.subs.filter((x) => x.id === myPushId() && x.who === me)[0], pref = P.prefs[me];
+    const who = ['a', 'b'].map((p) => nm(p) + ': ' + (P.subs.some((x) => x.who === p) ? 'on' : 'not yet')).join(' · ');
+    const notes = {
+      install: 'Open the app from its icon on your Home Screen to turn these on. iPhones need iOS 16.4 or later.',
+      unsupported: 'This browser can\'t show notifications. Open the app on your phone instead.',
+      denied: 'Notifications are blocked for this app. Allow them in your phone\'s Settings under Notifications, then come back here.',
+      dismissed: 'No worries. Tap the button again when you\'re ready.',
+      error: 'That didn\'t work. Check your connection and try again.'
+    };
+    let out = '<section class="card" id="pushCard"><div class="card-head"><h2>Phone notifications</h2></div>' +
+      '<p class="muted">A pop-up the evening before a sale day you\'re keen on, and on Wednesday mornings when something on the watch list is on special.</p>' +
+      '<p class="hint">' + esc(who) + '</p>';
+    if (!S.readOnly) {
+      if (mine) {
+        out += '<p class="push-on">' + icon('check') + 'On for this phone</p>' +
+          '<label class="switch-row"><span>Sale days we\'re keen on</span><input type="checkbox" class="switch" role="switch" data-change="pushpref" data-arg="sale"' + (pref.sale ? ' checked' : '') + '></label>' +
+          '<label class="switch-row"><span>Specials on our watch list</span><input type="checkbox" class="switch" role="switch" data-change="pushpref" data-arg="specials"' + (pref.specials ? ' checked' : '') + '></label>' +
+          '<button class="link sm" data-act="pushoff"' + (S.pushBusy ? ' disabled' : '') + '>Turn off for this phone</button>';
+      } else {
+        const blocked = sup === 'install' || sup === 'unsupported', n = S.pushNote || (sup !== 'ok' ? sup : null);
+        out += '<button class="btn btn-primary btn-block" data-act="pushon"' + (S.pushBusy || blocked ? ' disabled' : '') + '>' + (S.pushBusy ? 'Turning on' : 'Turn on for this phone') + '</button>' +
+          (n && notes[n] ? '<p class="hint" role="status">' + esc(notes[n]) + '</p>' : '');
+      }
+    }
+    if (P.last) out += '<p class="hint">Last checked ' + esc(agoLabel(P.last.at)) + '.</p>';
+    else if (isEditor()) {
+      out += '<div class="push-setup"><p class="k">One-time setup</p><p>A free job in your GitHub repo sends the pop-ups. It needs a key to read your sale days and watch list:</p><ol>' +
+        '<li>In the Firebase console, open Project settings, then Service accounts, and tap Generate new private key.</li>' +
+        '<li>On GitHub, open your household repo, then Settings, Secrets and variables, Actions, and New repository secret. Name it FIREBASE_SERVICE_ACCOUNT and paste in everything in the key file.</li>' +
+        '<li>Delete the downloaded key file.</li></ol><p class="hint">To test it, open Actions on GitHub, then Phone notifications, then Run workflow.</p></div>';
+    } else out += '<p class="hint">' + esc(nm(editorOf())) + ' is finishing the setup for these.</p>';
+    return out + '</section>';
   }
 
   /* ---------- notes for the other person ---------- */
@@ -2220,6 +2399,7 @@
     } else if (publishedNote()) {
       out += '<button class="card row-card" data-act="newsopen"><span><span class="row-t">What\'s new</span><span class="k">' + esc(publishedNote().title) + '</span></span>' + icon('arrow') + '</button>';
     }
+    if (fb) out += pushCard();
     if (fb) {
       out += '<section class="card"><div class="card-head"><h2>Account</h2></div><p class="muted">Signed in as <strong>' + esc((S.authUser && S.authUser.email) || '') + '</strong></p>' +
         '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="auout">Sign out</button></section>';
@@ -2825,6 +3005,10 @@
     swtrimgo: () => doSwTrim(),
     newsok: () => closeDialog(),
     factnext: () => { S.factN++; lsSet('hh.factN', String(S.factN)); const c = document.getElementById('factCard'); if (c) c.outerHTML = factCard(null, true); },
+    pushon: () => pushOn(),
+    pushoff: () => pushOff(),
+    noticex: (k) => { markSeen(k); render(); },
+    noticego: (k) => { markSeen(k); ACT.godeals(); },
     calmode: (m) => { S.calMode = m === 'deals' ? 'deals' : 'spend'; if (S.cal) S.cal.picked = false; if (S.calMode === 'deals') loadFeed(); render(); },
     godeals: () => { if (!S.cal) initCal(); S.calMode = 'deals'; loadFeed(); go('cal'); },
     feedretry: () => { loadFeed(true); render(); },
@@ -2992,6 +3176,10 @@
       }, () => { S.importResult = { error: "That file couldn't be opened. Export it again from Splitwise and try once more." }; render(); });
     },
     swtrimrefresh: () => swTrimRefresh(),
+    pushpref: (el) => {
+      const k = el.getAttribute('data-arg') === 'sale' ? 'sale' : 'specials', cur = pushCfg().prefs[S.me];
+      upsert('hh/push', { prefs: { [S.me]: Object.assign({}, cur, { [k]: !!el.checked }) } }, PUSH_BASE);
+    },
     salerefresh: () => { if (S.dialog && S.dialog.type === 'sale') S.dialog.error = null; render(); },
     newssave: () => { if (S.newsEdit) saveNote(); },
     photo: (el) => {
@@ -3261,6 +3449,13 @@
   document.addEventListener('pointerup', pointerUp, true);
   document.addEventListener('pointercancel', pointerUp, true);
   document.addEventListener('focusout', () => { setTimeout(flushPending, 0); });
+  if (navigator.serviceWorker && navigator.serviceWorker.addEventListener) {
+    navigator.serviceWorker.addEventListener('message', (ev) => {
+      const m = ev.data || {};
+      if (m.hh !== 'open' || !S.settings || !S.me) return;
+      if (m.hash === '#deals') ACT.godeals(); else go('home');
+    });
+  }
 
   boot();
 })();

@@ -33,8 +33,8 @@ def feed(today_iso):
         {'s': 'Woolworths', 'n': 'Vittoria Espresso Coffee Beans 1kg', 'was': 4000, 'now': 2000, 'off': 50, 'cat': 'Pantry', 'last': 'Never', 'link': '', 'src': 'hp'},
         {'s': 'Coles', 'n': 'Tip Top English Muffins 6 Pack 400g', 'was': 640, 'now': 320, 'off': 50, 'cat': 'Bakery', 'last': '1 week ago @ WW', 'link': '', 'src': 'hp'},
         {'s': 'Woolworths', 'n': '<img src=x onerror="window.__xss=1"> Helga\'s Wraps', 'was': 550, 'now': 275, 'off': 50, 'cat': 'Bakery', 'last': '7 weeks ago @ WW', 'link': 'javascript:window.__xss=1', 'src': 'hp'},
-        {'s': 'Harris Farm', 'n': 'Imperfect Avocados 600g', 'was': 450, 'now': 299, 'off': 34, 'cat': 'Fruit', 'last': '', 'link': 'https://www.harrisfarm.com.au/products/imperfect-avocados', 'src': 'hf'},
-        {'s': 'Harris Farm', 'n': 'Harris Farm Pure Australian Honey 1kg', 'was': 1299, 'now': 899, 'off': 31, 'cat': 'Pantry', 'last': '', 'link': 'https://www.harrisfarm.com.au/products/hf-honey', 'src': 'hf'},
+        {'s': 'Harris Farm', 'n': 'Imperfect Avocados 600g', 'was': 0, 'now': 299, 'off': 0, 'cat': 'Fruit', 'last': '', 'link': 'https://www.harrisfarm.com.au/products/imperfect-avocados', 'src': 'hf'},
+        {'s': 'Harris Farm', 'n': 'Harris Farm Pure Australian Honey 1kg', 'was': 0, 'now': 899, 'off': 0, 'cat': 'Pantry', 'last': '', 'link': 'https://www.harrisfarm.com.au/products/hf-honey', 'src': 'hf'},
     ]
     for i in range(14):
         specials.append({'s': 'Coles' if i % 2 else 'Woolworths', 'n': f'Pantry item {i + 1} 500g', 'was': 400 + i * 10, 'now': 200 + i * 5, 'off': 50,

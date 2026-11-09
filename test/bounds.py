@@ -3,7 +3,7 @@
 Runs the home-screen web app against the Firebase test double and visits each screen and dialog.
 (iOS sizes date fields its own way, so the stylesheet also sets them to shrink; this test covers the rest.)"""
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import deals_fixture
@@ -133,8 +133,17 @@ try:
             a.locator('.dialog [data-act="dlgclose"]').click(); a.wait_for_timeout(200)
             a.locator('[data-act="saleopen"]').first.click(); a.wait_for_timeout(200); audit(a, 'editing a sale day', width)
             a.locator('.dialog [data-act="dlgclose"]').click(); a.wait_for_timeout(200)
+            act(a, 'saleadd'); a.fill('#saleStore', 'A shop with quite a long name'); a.fill('#saleOffer', '20% off everything in store')
+            a.select_option('#saleKind', 'once'); a.wait_for_timeout(150)
+            a.fill('#saleDate', (datetime.now(ZoneInfo('Australia/Sydney')).date() + timedelta(days=1)).isoformat()); a.wait_for_timeout(150)
+            act(a, 'salesave'); a.wait_for_timeout(200)
             act(a, 'calmode', 'spend')
-            act(a, 'go', 'home'); a.wait_for_timeout(200); audit(a, 'home with a special and a sale day', width)
+            act(a, 'go', 'home'); a.wait_for_timeout(200)
+            check(a.locator('.notice').count() == 2, f'{width}px: two heads-ups on Home')
+            audit(a, 'home with two heads-ups', width)
+            for _ in range(2):
+                a.locator('.notice [data-act="noticex"]').first.click(); a.wait_for_timeout(150)
+            audit(a, 'home with a special and a sale day', width)
             act(a, 'go', 'inbox'); audit(a, 'inbox', width)
             act(a, 'go', 'insights'); audit(a, 'insights, month', width)
             act(a, 'insmode', 'year'); audit(a, 'insights, year', width)

@@ -1,10 +1,11 @@
-/* Builds deals.json for the household app from public sources. GitHub runs it twice a day for free.
+/* Builds deals.json for the household app from public sources. GitHub runs it free every Wednesday, when the
+   supermarket specials change, and publishes only when something is new.
      - OzBargain's grocery feeds: deals people post, with when they end.
      - The weekly "Catalogue Half-Price Report" on OzBargain: every Coles and Woolworths half-price item in the NSW catalogue.
      - Harris Farm's online specials: the public product list their Shopify shop serves.
    Nothing about the household is in here. Each phone picks out what matters to it.
    Run: node deals.mjs prev.json out/deals.json   (prev.json is the last deals.json, or {}) */
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, appendFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -18,7 +19,8 @@ export const FEEDS = [
   OZB + '/deals/harrisfarm.com.au/feed'
 ];
 const HF = 'https://www.harrisfarm.com.au';
-export const HF_LISTS = ['specials', 'all-specials', 'shop-all-specials', 'weekly-specials', 'on-special'];
+/* "online-specials" is the site's All Specials list. The others are its biggest specials aisles, in case that one moves. */
+export const HF_LISTS = ['online-specials', 'grocery-specials', 'fruit-and-veg-specials'];
 /* OzBargain categories worth showing in a grocery app. */
 const KEEP_CATS = /\/cat\/(groceries|alcohol|gift-cards)$/;
 const STATE = /^(NSW|VIC|QLD|SA|WA|TAS|ACT|NT)$/;
@@ -145,6 +147,9 @@ export function parseReport(html) {
 }
 
 /* ---------- Harris Farm ---------- */
+/* Harris Farm's "was" price is often per kilo while the special is per item or pack (a 250g brie "was $36.99"), so
+   only the special price is kept. Its product types carry shelf codes: "Frdg1-Cheese" is Cheese. */
+export const hfCat = (t) => clip(String(t || '').replace(/^[A-Za-z]+\d*[A-Za-z]?-/, '').trim(), 40);
 export function hfItems(products) {
   const out = [], seen = {};
   (products || []).forEach((p) => {
@@ -155,7 +160,7 @@ export function hfItems(products) {
       const n = clip(String(p.title).trim() + (v.title && !/^default title$/i.test(v.title) ? ' ' + v.title : ''), 120);
       if (seen[n.toLowerCase()]) return;
       seen[n.toLowerCase()] = true;
-      out.push({ s: 'Harris Farm', n, was, now, off: Math.round((was - now) / was * 100), cat: clip(p.product_type, 40), last: '', link: p.handle ? safeLink(HF + '/products/' + encodeURIComponent(p.handle)) : '', src: 'hf' });
+      out.push({ s: 'Harris Farm', n, was: 0, now, off: 0, cat: hfCat(p.product_type), last: '', link: p.handle ? safeLink(HF + '/products/' + encodeURIComponent(p.handle)) : '', src: 'hf' });
     });
   });
   return out.slice(0, 400);
@@ -204,9 +209,11 @@ export async function build({ prev, now = new Date(), fetchText, wait = 400, log
   /* Harris Farm: the list that worked last time first. */
   const ph = PS.harris || {}, lists = ph.handle ? [ph.handle].concat(HF_LISTS.filter((x) => x !== ph.handle)) : HF_LISTS;
   let hf = null;
+  const tried = [];
   for (const handle of lists) {
     const r = await fetchText(HF + '/collections/' + handle + '/products.json?limit=250');
     await pause(wait);
+    tried.push([handle, r ? r.status : 0]);
     if (!r || r.status !== 200) continue;
     let data = null;
     try { data = JSON.parse(r.text); } catch (e) { data = null; }
@@ -226,8 +233,19 @@ export async function build({ prev, now = new Date(), fetchText, wait = 400, log
     log('Harris Farm specials not read');
     if (live(ph) && prevHf.length) hf = { meta: Object.assign({}, ph, { stale: true }), items: prevHf };
   }
-  if (hf) { hf.meta.n = hf.items.length; out.sources.harris = hf.meta; out.specials.push(...hf.items); } else out.sources.harris = { ok: false };
+  if (hf) { hf.meta.n = hf.items.length; out.sources.harris = hf.meta; out.specials.push(...hf.items); } else out.sources.harris = { ok: false, tried };
   return out;
+}
+
+/* What a run found, leaving out times and vote counts, so a run with nothing new can skip publishing. */
+export function fingerprint(out) {
+  const o = out && typeof out === 'object' ? out : {}, s = o.sources || {};
+  return JSON.stringify({
+    report: s.report && s.report.ok ? [s.report.id, s.report.to] : null,
+    harris: s.harris && s.harris.ok ? [s.harris.from, s.harris.to] : null,
+    specials: (Array.isArray(o.specials) ? o.specials : []).map((x) => [x.s, x.n, x.now, x.was]),
+    deals: (Array.isArray(o.deals) ? o.deals : []).map((d) => d.id + '|' + d.to).sort()
+  });
 }
 
 async function realFetch(url) {
@@ -247,10 +265,13 @@ async function main() {
   let prev = {};
   try { prev = JSON.parse(await readFile(prevPath, 'utf8')); } catch (e) { prev = {}; }
   const out = await build({ prev, fetchText: realFetch, log: (m) => console.log('::warning::' + m) });
+  const changed = fingerprint(out) !== fingerprint(prev);
+  if (!changed && prev.updated) out.updated = prev.updated;
   await mkdir(dirname(outPath), { recursive: true });
   await writeFile(outPath, JSON.stringify(out));
+  if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, 'changed=' + changed + '\n');
   const s = out.sources;
-  console.log('OzBargain deals: ' + out.deals.length + ' | half-price list: ' + (s.report.n || 0) + (s.report.stale ? ' (kept from last run)' : '') +
+  console.log((changed ? 'New deals. ' : 'Nothing new, so nothing published. ') + 'OzBargain deals: ' + out.deals.length + ' | half-price list: ' + (s.report.n || 0) + (s.report.stale ? ' (kept from last run)' : '') +
     ' | Harris Farm: ' + (s.harris.n || 0) + (s.harris.handle ? ' from /collections/' + s.harris.handle : '') + (s.harris.stale ? ' (kept from last run)' : ''));
 }
 

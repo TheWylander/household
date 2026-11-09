@@ -2,7 +2,7 @@
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { build, parseRss, parseReport, splitTitle, hfItems, FEEDS, HF_LISTS, sydneyDay, specialsWeek } from '../src/github/deals.mjs';
+import { build, parseRss, parseReport, splitTitle, hfItems, hfCat, FEEDS, HF_LISTS, sydneyDay, specialsWeek, fingerprint } from '../src/github/deals.mjs';
 
 const dir = fileURLToPath(new URL('./fixtures/', import.meta.url));
 const read = (f) => readFileSync(dir + f, 'utf8');
@@ -19,8 +19,8 @@ function site(over) {
     [FEEDS[2]]: { status: 403, text: '<html>Just a moment...</html>' },
     [FEEDS[3]]: { status: 200, text: read('ozb-harris.xml') },
     'https://www.ozbargain.com.au/node/980001': { status: 200, text: read('ozb-report.html') },
-    'https://www.harrisfarm.com.au/collections/specials/products.json?limit=250': { status: 404, text: 'Not found' },
-    'https://www.harrisfarm.com.au/collections/all-specials/products.json?limit=250': { status: 200, text: read('hf-products.json') }
+    ['https://www.harrisfarm.com.au/collections/' + HF_LISTS[0] + '/products.json?limit=250']: { status: 404, text: 'Not found' },
+    ['https://www.harrisfarm.com.au/collections/' + HF_LISTS[1] + '/products.json?limit=250']: { status: 200, text: read('hf-products.json') }
   }, over || {});
   const fetchText = async (u) => { calls.push(u); return pages[u] || { status: 404, text: '' }; };
   return { fetchText, calls };
@@ -60,7 +60,8 @@ await t('the half-price report parses', () => {
 
 await t('Harris Farm specials are the discounted products', () => {
   const list = hfItems(JSON.parse(read('hf-products.json')).products);
-  assert.deepStrictEqual(list.map((x) => [x.n, x.now, x.was, x.off]), [['Imperfect Avocados 600g', 299, 450, 34], ['Harris Farm Pure Australian Honey 1kg', 899, 1299, 31], ['Sirena Tuna 95g', 199, 269, 26]]);
+  assert.deepStrictEqual(list.map((x) => [x.n, x.now, x.was, x.off]), [['Imperfect Avocados 600g', 299, 0, 0], ['Harris Farm Pure Australian Honey 1kg', 899, 0, 0], ['Sirena Tuna 95g', 199, 0, 0]], 'the special price only: their was price is often per kilo');
+  assert.deepStrictEqual(['S11S-Veg', 'Frdg1-Cheese', 'Fridge-Seafood', 'Butcher', 'S07H-Fruit'].map(hfCat), ['Veg', 'Cheese', 'Seafood', 'Butcher', 'Fruit']);
   assert.strictEqual(list[0].link, 'https://www.harrisfarm.com.au/products/imperfect-avocados');
   assert.deepStrictEqual(hfItems([{ title: 'x', handle: 'x', variants: [{ price: 'free', compare_at_price: '2' }] }, null]), []);
 });
@@ -78,7 +79,7 @@ await t('a full run', async () => {
   assert.strictEqual(first.deals.find((d) => d.id === '980001').hp, true);
   assert.strictEqual(first.sources.ozb.feeds, 3);
   assert.deepStrictEqual([first.sources.report.id, first.sources.report.n, first.sources.report.coles, first.sources.report.woolies, first.sources.report.to], ['980001', 5, 2, 3, '2026-11-10']);
-  assert.deepStrictEqual([first.sources.harris.handle, first.sources.harris.n, first.sources.harris.from, first.sources.harris.to], ['all-specials', 3, '2026-11-04', '2026-11-10']);
+  assert.deepStrictEqual([first.sources.harris.handle, first.sources.harris.n, first.sources.harris.from, first.sources.harris.to], [HF_LISTS[1], 3, '2026-11-04', '2026-11-10']);
   assert.strictEqual(first.specials.length, 8);
   assert.ok(JSON.stringify(first).indexOf('<script>') < 0);
   assert.ok(s.calls.indexOf('https://www.harrisfarm.com.au/collections/' + HF_LISTS[0] + '/products.json?limit=250') >= 0);
@@ -89,7 +90,7 @@ await t('the next run reuses the report and the Harris Farm list that worked', a
   const next = await build({ prev: first, now: new Date('2026-11-09T07:00:00Z'), fetchText: s.fetchText, wait: 0 });
   assert.strictEqual(s.calls.indexOf('https://www.ozbargain.com.au/node/980001'), -1, 'same report, not fetched again');
   assert.strictEqual(next.sources.report.n, 5);
-  assert.strictEqual(s.calls.filter((u) => /harrisfarm\.com\.au\/collections/.test(u))[0], 'https://www.harrisfarm.com.au/collections/all-specials/products.json?limit=250');
+  assert.strictEqual(s.calls.filter((u) => /harrisfarm\.com\.au\/collections/.test(u))[0], 'https://www.harrisfarm.com.au/collections/' + HF_LISTS[1] + '/products.json?limit=250');
 });
 
 await t('when everything is down, what still applies is kept', async () => {
@@ -104,6 +105,21 @@ await t('when everything is down, what still applies is kept', async () => {
   assert.deepStrictEqual(later.deals.map((d) => d.id), ['979009'], 'only what has not ended');
   assert.strictEqual(later.specials.length, 0, "last week's specials are dropped");
   assert.strictEqual(later.sources.report.ok, false);
+  assert.deepStrictEqual(later.sources.harris.tried, [HF_LISTS[1], HF_LISTS[0], HF_LISTS[2]].map((h) => [h, 0]), 'what was tried is kept, to see why, starting with the list that worked last time');
+});
+
+await t('a run with nothing new is spotted, so it is not published', async () => {
+  const again = await build({ prev: first, now: new Date('2026-11-09T01:00:00Z'), fetchText: site().fetchText, wait: 0 });
+  again.deals.forEach((d) => { d.votes += 7; });
+  again.sources.ozb.at = 'later';
+  assert.strictEqual(fingerprint(again), fingerprint(first), 'new times and votes alone are not news');
+  const cheaper = JSON.parse(JSON.stringify(again));
+  cheaper.specials[0].now -= 10;
+  assert.notStrictEqual(fingerprint(cheaper), fingerprint(first), 'a price change is');
+  const fewer = JSON.parse(JSON.stringify(again));
+  fewer.deals.pop();
+  assert.notStrictEqual(fingerprint(fewer), fingerprint(first), 'a deal ending is');
+  assert.notStrictEqual(fingerprint(first), fingerprint({}), 'the first run always publishes');
 });
 
 console.log(passed + ' groups passed');
