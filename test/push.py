@@ -5,6 +5,8 @@ import pathlib
 import subprocess
 import sys
 import time
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from playwright.sync_api import sync_playwright
 
@@ -195,6 +197,10 @@ try:
         # a tapped notification opens Deals
         a.goto(BASE + '?from=notification#deals'); a.wait_for_timeout(1500)
         check('Everything on special' in a.locator('#app').inner_text() and a.locator('h1.title').inner_text() == 'Deals' and a.evaluate('location.hash') == '', 'opening from a notification lands on Deals')
+        sale_day = (datetime.now(ZoneInfo('Australia/Sydney')).date() + timedelta(days=3)).isoformat()
+        a.goto(BASE + '?from=sale#cal=' + sale_day); a.wait_for_timeout(1500)
+        check(a.locator('h1.title').inner_text() == 'Calendar' and a.locator(f'.cal-day.sel[data-arg="{sale_day}"]').count() == 1 and a.evaluate('location.hash') == '',
+              'a sale-day pop-up opens the Calendar on that day')
 
         act(a, 'go', 'home'); act(a, 'go', 'settings'); act(a, 'pushoff'); a.wait_for_timeout(800)
         check(all(v is None or v.get('who') == 'b' for v in db(a)['hh/push']['subs'].values()) and 'Turn on for this phone' in a.locator('#pushCard').inner_text(), 'turned off: the subscription is removed')

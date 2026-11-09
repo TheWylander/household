@@ -120,7 +120,7 @@ export function plan({ push, deals, feed, now, mode = 'all' }) {
       const key = 'sale:' + s.id + '|' + d + (evening ? ':eve' : ':am');
       if (!keenOn(s, d) || sent[key]) return;
       const to = subs.filter((x) => wants(x.who, 'sale')).map((x) => x.id);
-      if (to.length) out.push({ key, to, title: (evening ? '📅 ' + s.store + ' sale tomorrow' : '🛒 ' + s.store + ' sale is on today'), body: [s.offer, s.where ? '📍 ' + s.where : ''].filter(Boolean).join('\n') || 'One of your sale days.', url: './#deals', tag: 'sale-' + s.id });
+      if (to.length) out.push({ key, to, title: (evening ? '📅 ' + s.store + ' sale tomorrow' : '🛒 ' + s.store + ' sale is on today'), body: [s.offer, s.where ? '📍 ' + s.where : ''].filter(Boolean).join('\n') || 'One of your sale days.', url: './#cal=' + d, tag: 'sale-' + s.id });
     });
   });
 

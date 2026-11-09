@@ -275,13 +275,14 @@ try:
         a.wait_for_timeout(600)
         check('All square' in text(a), "Robin's phone updates live")
 
-        # ---------- deals: everything on special first, then the watch list, sale days and OzBargain ----------
+        # ---------- deals: everything on special first, then the watch list and OzBargain ----------
         nxt = deals_fixture.next_second_saturday(TODAY)
         this_sat = deals_fixture.second_saturday(TODAY.year, TODAY.month)
         act(a, 'go', 'deals'); a.wait_for_timeout(500)
         t = text(a)
         cards = a.evaluate("[...document.querySelectorAll('#app .main > section, #app .main > button.card')].map((e) => e.id || e.className)")
-        check(cards[0] == 'spCard' and 'Everything on special' in t and 'Rarely this cheap' in t and 'Sale days' in t, 'Everything on special comes first: ' + ', '.join(cards[:4]))
+        check(cards[0] == 'spCard' and 'Everything on special' in t and 'Rarely this cheap' in t and 'Sale days' not in t and a.locator('[data-act="salemonth"]').count() == 0,
+              'Everything on special comes first, and sale days have moved to the Calendar: ' + ', '.join(cards[:4]))
         check(a.locator('.nav [data-arg="deals"]').count() == 1 and a.locator('.nav [data-arg="inbox"]').count() == 0, 'the tab bar has Deals where Inbox was')
         shops = ' | '.join(a.locator('#spShop option').all_inner_texts())
         check('All shops' in shops and 'Coles · 9' in shops and 'Woolies · 9' in shops and 'Harris Farm · 2' in shops and 'Umall · 1' in shops and a.locator('.specials .chip').count() == 0,
@@ -319,16 +320,23 @@ try:
         m = a.locator('#matchCard, .matches').first.inner_text()
         check('Tell it what we buy' in m, 'an empty watch list says what it is for')
         shot(a, 'p06-deals', full=True)
-        act(a, 'salemonth'); a.wait_for_timeout(300)
-        check(a.locator('.dialog #saleMonth').count() == 1 and 'Lucky Mart' in a.locator('.dialog').inner_text(), 'sale days open as a panel, with the Lucky Mart idea')
+        # sale days live in the Calendar now
+        act(a, 'go', 'cal'); a.wait_for_timeout(400)
+        check(a.locator('#saleMonth').count() == 1 and 'Sale days in ' in a.locator('#saleMonth').inner_text() and 'Lucky Mart' in a.locator('#saleMonth').inner_text(),
+              'the Calendar has the sale days for the month, with the Lucky Mart idea')
         act(a, 'saleidea', 'luckymart'); a.wait_for_timeout(400)
         sale = a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals']")['sales'][0]
         check(sale['store'] == 'Lucky Mart' and sale['rule'] == {'k': 'nth', 'n': 2, 'dow': 6} and sale['keen'] is True, 'Lucky Mart saved as the 2nd Saturday of every month, keen')
-        cell = a.locator(f'.dialog .cal-day[data-arg="{this_sat.isoformat()}"]')
-        check('sale' in (cell.get_attribute('class') or '') and 'Lucky' in cell.inner_text(), f'the month marks {this_sat} for Lucky Mart')
-        shot(a, 'p06b-sale-month')
-        close(a)
-        check('Next: Lucky Mart' in a.locator('[data-act="salemonth"].card').inner_text(), 'the Sale days row shows the next one')
+        cell = a.locator(f'.cal .cal-day[data-arg="{this_sat.isoformat()}"]')
+        cls = cell.get_attribute('class') or ''
+        check('sale' in cls and ('keen' in cls) == (this_sat >= TODAY) and 'Lucky Mart sale, keen' in (cell.get_attribute('aria-label') or '') and cell.locator('.dot.keen').count() == 1
+              and "Sale day we're keen on" in a.locator('.cal .legend').inner_text(), f'the calendar marks {this_sat} for Lucky Mart, with a key')
+        check('Lucky Mart' in a.locator('#saleMonth').inner_text() and a.locator('#saleMonth .keen-btn').count() >= (1 if this_sat >= TODAY else 0), 'and lists it under the month')
+        act(a, 'selday', this_sat.isoformat()); a.wait_for_timeout(300)
+        day = a.locator('#dayCard').inner_text()
+        check('Lucky Mart' in day and a.locator('#dayCard [data-act="saleadd"]').count() == 1, 'picking the day shows its sale, with a way to add another')
+        shot(a, 'p06b-sale-month', full=True)
+        act(a, 'go', 'deals'); a.wait_for_timeout(300)
         act(a, 'watchopen'); a.wait_for_timeout(200)
         a.fill('#watchIn', 'weetbix'); a.press('#watchIn', 'Enter'); a.wait_for_timeout(300)
         check(a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals'].watch") == ['weetbix'] and a.evaluate('document.activeElement.id') == 'watchIn', 'watch word saved, ready for the next one')
@@ -435,12 +443,16 @@ try:
         a.locator(f'.next-sale .keen-btn[data-arg$="|{nxt.isoformat()}"]').click(); a.wait_for_timeout(300)
         sale = a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals']")['sales'][0]
         check(sale['skip'] == [nxt.isoformat()] and nxt.isoformat() not in (a.locator('.next-sale .keen-btn').get_attribute('data-arg') or ''), 'not keen on one month, and Home moves on to the next')
-        act(a, 'salemonthgo'); a.wait_for_timeout(300)
-        if nxt.month != TODAY.month:
-            act(a, 'calmove', '1')
-        a.locator(f'.dialog .keen-btn[data-arg$="|{nxt.isoformat()}"]').first.click(); a.wait_for_timeout(300)
-        check(a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals']")['sales'][0]['skip'] == [], 'keen again, from All sale days')
-        close(a)
+        shown = a.locator('.next-sale [data-act="salecal"]').get_attribute('data-arg')
+        a.locator('.next-sale [data-act="salecal"]').click(); a.wait_for_timeout(400)
+        check(a.locator('h1.title').inner_text() == 'Calendar' and a.locator(f'.cal-day.sel[data-arg="{shown}"]').count() == 1 and 'Lucky Mart' in a.locator('#dayCard').inner_text(),
+              f'See it in the calendar opens the Calendar on that sale day ({shown})')
+        if shown[:7] != nxt.isoformat()[:7]:
+            act(a, 'calmove', '-1')
+        act(a, 'selday', nxt.isoformat()); a.wait_for_timeout(300)
+        a.locator(f'#dayCard .keen-btn[data-arg$="|{nxt.isoformat()}"]').first.click(); a.wait_for_timeout(300)
+        check(a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals']")['sales'][0]['skip'] == [], 'keen again, from the Calendar')
+        act(a, 'go', 'home')
 
         b.wait_for_timeout(300)
         act(b, 'go', 'deals'); b.wait_for_timeout(400)
@@ -450,9 +462,11 @@ try:
         act(b, 'shoplist'); b.wait_for_timeout(250)
         check('bread' in b.locator('.dialog').inner_text() and b.locator('.list-btn .list-n').inner_text() == '1', 'and the weekend list')
         close(b)
-        act(b, 'salemonth')
-        check('Lucky Mart' in b.locator('#saleMonth').inner_text(), "and the sale day")
-        act(b, 'saleadd')
+        act(b, 'go', 'cal'); b.wait_for_timeout(300)
+        if 'Lucky Mart' not in b.locator('#saleMonth').inner_text():
+            act(b, 'calmove', '1')
+        check('Lucky Mart' in b.locator('#saleMonth').inner_text(), "and the sale day, in the Calendar")
+        b.locator('#saleMonth [data-act="saleadd"]').click(); b.wait_for_timeout(200)
         act(b, 'salesave')
         check('Which shop is it at?' in b.locator('.dialog').inner_text(), 'a sale day needs a shop')
         b.fill('#saleStore', 'Tong Li'); b.fill('#saleOffer', '10% off')
@@ -463,7 +477,7 @@ try:
         act(b, 'salesave'); b.wait_for_timeout(400)
         sales = b.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals'].sales")
         check(len(sales) == 2 and sales[1]['store'] == 'Tong Li' and sales[1]['rule'] == {'k': 'monthly', 'day': 15}, 'a sale day of your own, on the 15th of each month')
-        check(b.locator('.dialog #saleMonth').count() == 1, 'and back to the month')
+        check(b.locator('.dialog').count() == 0 and b.locator('#saleMonth').count() == 1, 'and back to the Calendar')
         if b.locator(f'[data-act="saleopen"][data-arg="{sales[1]["id"]}"]').count() == 0:
             act(b, 'calmove', '1')
         b.locator(f'[data-act="saleopen"][data-arg="{sales[1]["id"]}"]').first.click(); b.wait_for_timeout(200)
@@ -473,20 +487,16 @@ try:
         act(b, 'salesave'); b.wait_for_timeout(400)
         sales = b.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals'].sales")
         check(sales[1]['rule'] == {'k': 'once', 'date': once}, 'changed to a one-off sale tomorrow')
-        close(b)
         act(b, 'go', 'home'); b.wait_for_timeout(300)
         notes = b.locator('.notice').all_inner_texts()
         check(any('Tong Li sale is tomorrow' in n and '10% off' in n for n in notes), 'a heads-up the day before a sale day: ' + ' | '.join(n.replace('\n', ' ') for n in notes))
         check('Tong Li' in b.locator('.next-sale').inner_text() and 'Tomorrow' in b.locator('.next-sale').inner_text(), 'and it is the next sale day on Home')
         b.locator('.notice:has-text("Tong Li") [data-act="noticex"]').click(); b.wait_for_timeout(200)
         check(not any('Tong Li' in n for n in b.locator('.notice').all_inner_texts()), 'closed')
-        act(b, 'salemonthgo'); b.wait_for_timeout(200)
-        if b.locator(f'.dialog [data-act="saleopen"][data-arg="{sales[1]["id"]}"]').count() == 0:
-            act(b, 'calmove', '1')
-        b.locator(f'.dialog [data-act="saleopen"][data-arg="{sales[1]["id"]}"]').first.click(); b.wait_for_timeout(200)
+        b.locator('.next-sale [data-act="salecal"]').click(); b.wait_for_timeout(300)
+        b.locator(f'#dayCard [data-act="saleopen"][data-arg="{sales[1]["id"]}"]').first.click(); b.wait_for_timeout(200)
         act(b, 'saledel'); b.wait_for_timeout(400)
-        check(len(b.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals'].sales")) == 1, 'removed')
-        close(b)
+        check(len(b.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals'].sales")) == 1 and b.locator('.dialog').count() == 0, 'removed, from its day in the Calendar')
         act(b, 'go', 'home')
 
         # ---------- a login that isn't one of the two ----------

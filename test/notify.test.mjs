@@ -46,7 +46,7 @@ await t('the evening before a sale day', () => {
   assert.deepStrictEqual(titles, ['🔔 Notifications are on', '📅 Lucky Mart sale tomorrow', '🏷️ Check out the top weekly specials']);
   assert.deepStrictEqual(p.out[0].body.split('\n').map((l) => l.slice(0, 2)), ['💸', '📅', '🏷️'.slice(0, 2)], 'the welcome lists each kind of pop-up, one per line');
   const sale = p.out[1];
-  assert.deepStrictEqual([sale.to, sale.body, sale.url, sale.key], [['p1', 'p2'], 'Up to 20% off\n📍 Shop 2, 2 Wilkes Ave, Artarmon', './#deals', 'sale:s1|2026-11-14:eve']);
+  assert.deepStrictEqual([sale.to, sale.body, sale.url, sale.key], [['p1', 'p2'], 'Up to 20% off\n📍 Shop 2, 2 Wilkes Ave, Artarmon', './#cal=2026-11-14', 'sale:s1|2026-11-14:eve'], 'tapping it opens the Calendar on the sale day');
   const sp = p.out[2];
   assert.deepStrictEqual(sp.to, ['p1'], 'the second person turned specials off');
   assert.strictEqual(sp.body, 'Sanitarium Weet-Bix 575g · $2.50 at Coles\n20% off Everything In-Store at Tokyo Mart', 'one per line with the price; watch words match a deal by its shop, and the half-price post is left out');

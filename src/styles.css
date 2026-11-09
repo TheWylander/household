@@ -546,11 +546,13 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
 @media (prefers-reduced-motion: reduce) { .enter .main > *, .enter .meter span, .enter .hbar-fill, .enter .col-fill, .enter .pc-line { animation: none !important; } }
 
 /* ---------- deals ---------- */
+/* Sale days are diamonds, so they never look like a spend's dots: coral when we're keen, an outline when not. */
+.dot.sale, .dot.keen { width: 7px; height: 7px; border-radius: 1.5px; transform: rotate(45deg); margin: 0 1px; }
 .dot.sale { border: 2px solid var(--ink); background: var(--card); }
-.dot.keen { background: var(--marigold); box-shadow: 0 0 0 1.5px var(--ink); }
+.dot.keen { background: var(--coral); box-shadow: 0 0 0 1.5px var(--ink); }
 .cal-day.sale .v { color: var(--ink); max-width: 100%; overflow: hidden; text-overflow: clip; }
-.cal-day.keen { background: var(--marigold-soft); }
-.cal-day.keen.sel { background: var(--marigold-soft); }
+.cal-day.keen { background: var(--coral-soft); }
+.cal-day.keen.sel { background: var(--coral-soft); }
 .cal-day.past.sale .v { color: var(--ink2); }
 .sale-list { margin: 0; padding: 0; list-style: none; }
 .sale-row { display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px dashed var(--line); }
