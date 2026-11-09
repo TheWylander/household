@@ -160,6 +160,14 @@ try:
         fonts(ctx)
         TODAY = datetime.now(ZoneInfo('Australia/Sydney')).date()
         ctx.add_init_script("window.HH_DEALS_URL = '%s';" % deals_fixture.URL)
+        # a stand-in for the phone's keyboard: window.__kb(px) shrinks the visible area the way an iPhone keyboard does
+        ctx.add_init_script("""(() => {
+          const fake = new EventTarget(); let h = null;
+          Object.defineProperties(fake, { height: { get: () => (h == null ? window.innerHeight : h) }, width: { get: () => window.innerWidth },
+            offsetTop: { get: () => 0 }, offsetLeft: { get: () => 0 }, scale: { get: () => 1 } });
+          window.__kb = (px) => { h = px ? window.innerHeight - px : null; fake.dispatchEvent(new Event('resize')); };
+          Object.defineProperty(window, 'visualViewport', { get: () => fake, configurable: true });
+        })();""")
         ctx.route(deals_fixture.URL, lambda r: r.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'},
                                                          body=json.dumps(deals_fixture.feed(TODAY.isoformat()))))
 
@@ -266,23 +274,24 @@ try:
         cards = a.evaluate("[...document.querySelectorAll('#app .main > section, #app .main > button.card')].map((e) => e.id || e.className)")
         check(cards[0] == 'spCard' and 'Everything on special' in t and 'Rarely this cheap' in t and 'Sale days' in t, 'Everything on special comes first: ' + ', '.join(cards[:4]))
         check(a.locator('.nav [data-arg="deals"]').count() == 1 and a.locator('.nav [data-arg="inbox"]').count() == 0, 'the tab bar has Deals where Inbox was')
-        chips = a.locator('.store-chips').inner_text()
-        check('Coles' in chips and 'Woolies' in chips and 'Harris Farm' in chips, 'specials from Coles, Woolies and Harris Farm: ' + chips.replace('\n', ' '))
+        shops = ' | '.join(a.locator('#spShop option').all_inner_texts())
+        check('All shops' in shops and 'Coles · 9' in shops and 'Woolies · 9' in shops and 'Harris Farm · 2' in shops and a.locator('.specials .chip').count() == 0,
+              'specials from Coles, Woolies and Harris Farm, picked from a drop-down rather than pills: ' + shops)
         rare = a.locator('.sp-rare .sp-row').all_inner_texts()
         check(len(rare) == 3 and 'Vittoria' in rare[0] and 'First time at half price' in rare[0] and 'First time in 15 weeks' in rare[1], 'Rarely this cheap: the three not half price for longest')
-        aisles = a.locator('.aisle-chips').inner_text().replace('\n', ' ')
-        check('Pantry 18' in aisles and 'Fresh 2' in aisles, 'aisles with how many in each: ' + aisles)
+        aisles = ' | '.join(a.locator('#spCat option').all_inner_texts())
+        check('All categories' in aisles and 'Pantry · 18' in aisles and 'Fresh · 2' in aisles, 'categories with how many in each: ' + aisles)
         check(a.locator('[data-act="spmore"]').inner_text() == 'See all 20 specials', 'a button for the lot')
         act(a, 'spmore')
         check(a.locator('#spList .sp-row').count() == 20 and a.evaluate('window.__xss') is None and a.locator('.specials img').count() == 0 and '<img src=x' in text(a), 'every special, and text from the deals file shows as text and never runs')
         check(a.locator('.specials a[href^="javascript"]').count() == 0, 'only links to the stores and OzBargain')
         act(a, 'spmore')
         check(a.locator('.sp-rare').count() == 1, 'Show fewer goes back to the picks')
-        act(a, 'spaisle', 'fresh')
+        a.select_option('#spCat', 'fresh'); a.wait_for_timeout(250)
         fresh = a.locator('#spList .sp-row').all_inner_texts()
         check(len(fresh) == 2 and all('Harris Farm' in r for r in fresh), 'pick an aisle')
-        act(a, 'spaisle', 'fresh')
-        check(a.locator('.sp-rare').count() == 1, 'tap it again for every aisle')
+        a.select_option('#spCat', 'all'); a.wait_for_timeout(250)
+        check(a.locator('.sp-rare').count() == 1, 'All categories goes back to the picks')
         m = a.locator('#matchCard, .matches').first.inner_text()
         check('Tell it what we buy' in m, 'an empty watch list says what it is for')
         shot(a, 'p06-deals', full=True)
@@ -307,15 +316,16 @@ try:
         act(a, 'spwatch'); a.wait_for_timeout(200)
         rows = a.locator('#spList .sp-row')
         check(rows.count() == 1 and 'Weet-Bix' in rows.first.inner_text() and 'On our list' in rows.first.inner_text(), 'See all matches filters the specials to the watch list')
+        check(a.input_value('#spCat') == 'watch', 'and the category drop-down says Our watch list')
         act(a, 'spwatch')
         a.locator('#spQ').press_sequentially('coffee'); a.wait_for_timeout(200)
         rows = a.locator('#spList .sp-row')
         check(rows.count() == 1 and 'Vittoria' in rows.first.inner_text() and a.evaluate('document.activeElement.id') == 'spQ', 'search filters as you type and keeps the keyboard up')
         a.fill('#spQ', ''); a.dispatch_event('#spQ', 'input'); a.wait_for_timeout(200)
-        act(a, 'spstore', 'Harris Farm')
+        a.select_option('#spShop', 'Harris Farm'); a.wait_for_timeout(250)
         hf_rows = a.locator('#spList .sp-row').all_inner_texts()
         check(len(hf_rows) == 2 and all('Harris Farm' in r for r in hf_rows), 'pick a shop')
-        act(a, 'spstore', 'all')
+        a.select_option('#spShop', 'all'); a.wait_for_timeout(250)
         # ---------- the weekend shopping list, from the + on each special ----------
         wb = a.locator('#matchCard .sp-add')
         check(wb.count() == 1 and a.locator('#spList .sp-add').count() >= 3, 'a + on the watch list match and on each special')
@@ -350,6 +360,14 @@ try:
         shot(a, 'p08b-shop-list')
         act(a, 'listclear'); a.wait_for_timeout(250)
         check([i['n'] for i in a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals'].list")] == ['bread'], 'clear the ticked ones')
+        # ---------- the phone's keyboard: what's behind it hides, and the sheet sits on top of it ----------
+        kb_state = "(() => { const d = document.querySelector('.dialog'), n = document.querySelector('.nav'); return { open: document.documentElement.classList.contains('kb-open'), bottom: getComputedStyle(d).bottom, nav: getComputedStyle(n).visibility }; })()"
+        a.locator('#listIn').focus(); a.evaluate('window.__kb(320)'); a.wait_for_timeout(200)
+        st = a.evaluate(kb_state)
+        check(st == {'open': True, 'bottom': '320px', 'nav': 'hidden'}, 'with the keyboard up, the sheet sits on top of it and the tab bar hides: ' + str(st))
+        a.evaluate('window.__kb(0)'); a.locator('#listIn').blur(); a.wait_for_timeout(200)
+        st = a.evaluate(kb_state)
+        check(st == {'open': False, 'bottom': '0px', 'nav': 'visible'}, 'and back when it goes: ' + str(st))
         close(a)
         ozb = a.locator('.ozb-list').inner_text()
         check(ozb.index('Tony') < ozb.index('Iceberg') and '44' in ozb and 'Sushi Rice' not in ozb and '191 More' not in ozb and 'Ended last week' not in ozb, 'OzBargain deals for our shops, most votes first, without the half-price post or ended deals')

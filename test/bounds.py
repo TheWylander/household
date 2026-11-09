@@ -156,7 +156,7 @@ try:
             a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
             act(a, 'spmore'); act(a, 'ozball'); audit(a, 'deals with a sale day, a watch list and every special', width)
             act(a, 'spwatch'); audit(a, 'deals, just the watch list', width)
-            act(a, 'spwatch'); act(a, 'spaisle', 'pantry'); audit(a, 'deals, one aisle', width)
+            act(a, 'spwatch'); a.select_option('#spCat', 'pantry'); a.wait_for_timeout(200); audit(a, 'deals, one aisle', width)
             act(a, 'go', 'home'); a.wait_for_timeout(200)
             check(a.locator('.notice').count() == 2, f'{width}px: two heads-ups on Home')
             audit(a, 'home with two heads-ups', width)

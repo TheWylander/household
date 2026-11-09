@@ -15,7 +15,7 @@
   --nav-bottom: max(8px, calc(var(--sab) - 16px));
 }
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; color-scheme: light; }
+html { -webkit-text-size-adjust: 100%; color-scheme: light; background: var(--ground); }
 body { margin: 0; min-height: 100vh; background: var(--ground); color: var(--ink); font: 400 16px/1.45 var(--body); -webkit-font-smoothing: antialiased; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
@@ -576,9 +576,10 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
 .chip[aria-pressed="true"] .n { color: inherit; }
 .watch-add { display: flex; gap: 8px; margin-top: 10px; }
 .watch-add .input { flex: 1; min-width: 0; }
-.store-chips { margin: 0 0 10px; }
 .sp-when { margin: -6px 0 10px; }
-.sp-search { margin-bottom: 4px; }
+.sp-search { margin-bottom: 0; }
+.sp-filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; margin: 8px 0 4px; }
+.sp-sel { min-height: 46px; padding-left: 12px; padding-right: 32px; background-position: right 10px center; font-weight: 600; color: var(--ink); text-overflow: ellipsis; }
 .sp-list, .ozb-list { margin: 6px 0 0; padding: 0; list-style: none; }
 .sp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 10px 0; border-top: 1px dashed var(--line); }
 .sp-row:first-child { border-top: 0; }
@@ -627,7 +628,6 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
 .hscroll { flex-wrap: nowrap; overflow-x: auto; margin-right: -16px; padding-right: 16px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .hscroll::-webkit-scrollbar { display: none; }
 .hscroll > * { flex: none; }
-.aisle-chips { margin: 10px -16px 0 0; }
 .chip.hit { background: var(--marigold); border-color: var(--ink); }
 .chip.hit .ic { width: 14px; height: 14px; }
 .sp-sec { margin: 18px 0 0; padding-bottom: 4px; border-bottom: 2px solid var(--ink); font-weight: 800; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
@@ -730,3 +730,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
 
 /* Phones 380px and up (an iPhone Pro is 402) get narrower page margins, so cards and lists use more of the screen. */
 @media (min-width: 380px) { .main { padding-left: 12px; padding-right: 12px; } }
+
+/* While the phone's keyboard is up (keyboardWatch in app.js): what sits behind it is hidden, and a sheet sits on top of it. */
+.kb-open .nav, .kb-open .savebar { visibility: hidden; }
+.kb-open .dialog { bottom: var(--kb, 0px); max-height: calc(var(--vvh, 90vh) - 12px); border-bottom: 2px solid var(--ink); border-radius: 28px; padding-bottom: 18px; }

@@ -2303,16 +2303,23 @@
     all.forEach((x) => { counts[x.s] = (counts[x.s] || 0) + 1; });
     const visits = shopVisits(), stores = Object.keys(counts).sort((a, b) => (visits[b] || 0) - (visits[a] || 0) || counts[b] - counts[a]);
     if (S.spStore !== 'all' && !counts[S.spStore]) S.spStore = 'all';
-    const chip = (act, v, label, n, on) => '<button class="chip sm" data-act="' + act + '" data-arg="' + esc(v) + '" aria-pressed="' + on + '">' + esc(label) + ' <span class="n">' + n + '</span></button>';
-    const base = spBase(), ac = {};
-    base.forEach((x) => { const a = aisleOf(x); ac[a] = (ac[a] || 0) + 1; });
+    /* Search, then two drop-downs: the shop, and the category (with our watch list as one of them). */
+    const D = dealsCfg(), q = String(S.spQuery || '').trim().toLowerCase();
+    const pre = all.filter((x) => (S.spStore === 'all' || x.s === S.spStore) && (!q || (x.n + ' ' + x.cat).toLowerCase().indexOf(q) >= 0)), ac = {};
+    pre.forEach((x) => { const a = aisleOf(x); ac[a] = (ac[a] || 0) + 1; });
+    const wn = D.watch.length ? pre.filter((x) => L.watchHits(x.n, D.watch).length).length : 0;
     if (S.spAisle !== 'all' && !ac[S.spAisle]) S.spAisle = 'all';
     const aisles = AISLES.map((a) => [a[0], a[1]]).concat([['other', 'Other']]).filter((a) => ac[a[0]]);
-    const ours = S.spWatch ? '<button class="chip sm hit" data-act="spwatch" aria-pressed="true">On our list <span class="n">' + base.length + '</span><span aria-hidden="true">' + icon('close') + '</span><span class="sr">, show everything</span></button>' : '';
+    const opt = (v, label, n, on) => '<option value="' + esc(v) + '"' + (on ? ' selected' : '') + '>' + esc(label) + (n == null ? '' : ' · ' + n) + '</option>';
+    const cat = S.spWatch ? 'watch' : S.spAisle;
     return '<section class="card bold specials" id="spCard">' + head(all.length) +
-      '<div class="chips hscroll store-chips" role="group" aria-label="Shop">' + chip('spstore', 'all', 'All', all.length, S.spStore === 'all') + stores.map((s) => chip('spstore', s, shopLabel(s), counts[s], S.spStore === s)).join('') + '</div>' +
       '<label class="sr" for="spQ">Search specials</label><input class="input sp-search" id="spQ" type="search" placeholder="Search ' + all.length + ' specials" autocomplete="off" enterkeyhint="search" data-bind="spQuery" data-input="spsearch" value="' + esc(S.spQuery) + '">' +
-      (ours || aisles.length > 1 ? '<div class="chips hscroll aisle-chips" role="group" aria-label="Aisle">' + ours + aisles.map((a) => chip('spaisle', a[0], a[1], ac[a[0]], S.spAisle === a[0])).join('') + '</div>' : '') +
+      '<div class="sp-filters">' +
+      '<label class="sr" for="spShop">Shop</label><select class="input sp-sel" id="spShop" data-change="spshopsel">' + opt('all', 'All shops', null, S.spStore === 'all') +
+        stores.map((x) => opt(x, shopLabel(x), counts[x], S.spStore === x)).join('') + '</select>' +
+      '<label class="sr" for="spCat">Category</label><select class="input sp-sel" id="spCat" data-change="spcatsel">' + opt('all', 'All categories', null, cat === 'all') +
+        (D.watch.length ? opt('watch', 'Our watch list', wn, cat === 'watch') : '') + aisles.map((a) => opt(a[0], a[1], ac[a[0]], cat === a[0])).join('') + '</select>' +
+      '</div>' +
       '<div id="spList">' + spListHtml() + '</div></section>';
   }
   /* For each word on the watch list, what matches it this week: specials first, best first, then OzBargain posts. */
@@ -3661,6 +3668,8 @@
       const l = document.getElementById('dateLbl'); if (l) l.textContent = L.fmtDay(S.add.date);
     },
     importfile: (el) => { const f = el.files && el.files[0]; importFile(f); el.value = ''; },
+    spshopsel: (el) => { S.spStore = el.value || 'all'; S.spAll = false; render(); },
+    spcatsel: (el) => { const v = el.value || 'all'; S.spWatch = v === 'watch'; S.spAisle = v === 'watch' ? 'all' : v; S.spAll = false; render(); },
     rcpfile: (el) => { const f = el.files && el.files[0]; el.value = ''; startReceipt(f); },
     remember: (el) => { upsert('hh/settings', { remember: !!el.checked }, defaults()); },
     dirty: () => { S.draftSaved = false; },
@@ -3930,6 +3939,31 @@
   const paceTrack = (ev) => { if (!S.pace) return; if (paceAt(ev)) S.paceOn = true; else if (S.paceOn) paceReset(); };
   document.addEventListener('pointermove', paceTrack);
   document.addEventListener('pointerdown', paceTrack);
+  /* ---------- the phone's keyboard ----------
+     On iPhone the keyboard is see-through and slides over the bottom of the app instead of making room, so the tab bar
+     and save bar end up behind it, cut off. While it's up they're hidden, and an open sheet sits on top of it. */
+  (function keyboardWatch() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const docEl = document.documentElement;
+    const typing = () => { const a = document.activeElement; return !!a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !/^(checkbox|radio|file|button|submit|range|color)$/.test(a.type || ''); };
+    let last = '';
+    const update = () => {
+      const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      const open = typing() && kb > 120 && (vv.scale || 1) < 1.05;
+      const key = open + '|' + kb + '|' + Math.round(vv.height);
+      if (key === last) return;
+      last = key;
+      docEl.classList.toggle('kb-open', open);
+      docEl.style.setProperty('--kb', (open ? kb : 0) + 'px');
+      docEl.style.setProperty('--vvh', Math.round(vv.height) + 'px');
+    };
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    document.addEventListener('focusin', () => setTimeout(update, 60));
+    document.addEventListener('focusout', () => setTimeout(update, 60));
+    update();
+  })();
   document.addEventListener('keydown', (ev) => {
     const t = ev.target, typing = t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
     if (ev.key === 'Escape' && S.dialog) { ev.preventDefault(); closeDialog(); return; }
