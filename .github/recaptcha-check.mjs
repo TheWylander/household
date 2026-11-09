@@ -1,4 +1,4 @@
-/* One-off: loads the live app, sets up App Check with its reCAPTCHA key exactly as receipt reading does, asks for a
+/* One-off (run 2, debug-token route): loads the live app, sets up App Check with its reCAPTCHA key exactly as receipt reading does, asks for a
    one-use token, and prints what happened, plus any error reCAPTCHA shows inside its own frames. Prints no tokens. */
 import { chromium } from 'playwright-core';
 
@@ -10,7 +10,7 @@ const logs = [];
 page.on('console', (m) => logs.push('console ' + m.type() + ': ' + m.text()));
 page.on('pageerror', (e) => logs.push('pageerror: ' + e.message));
 page.on('requestfailed', (r) => { if (/recaptcha|appcheck/.test(r.url())) logs.push('request failed: ' + r.url().split('?')[0] + ' ' + (r.failure() && r.failure().errorText)); });
-page.on('response', (r) => { if (/appcheck|recaptcha\/(enterprise|api2)\/(reload|clr|anchor)/.test(r.url())) logs.push('response ' + r.status() + ': ' + r.url().split('?')[0]); });
+page.on('response', async (r) => { if (/appcheck/.test(r.url())) { let b = ''; try { b = (await r.text()).replace(/\s+/g, ' ').slice(0, 200); } catch (e) {} logs.push('response ' + r.status() + ': ' + r.url().split('?')[0].replace(/.*\/apps\//, 'apps/') + ' ' + b); } });
 await page.goto(site, { waitUntil: 'load' });
 await page.waitForTimeout(1500);
 const out = await page.evaluate(async () => {
@@ -18,7 +18,9 @@ const out = await page.evaluate(async () => {
   try {
     const A = await import('./firebase-app.js'), AC = await import('./firebase-app-check.js');
     const app = A.initializeApp(window.HH_FIREBASE, 'diag');
-    const ac = AC.initializeAppCheck(app, { provider: new AC.ReCaptchaEnterpriseProvider(window.HH_APPCHECK), isTokenAutoRefreshEnabled: false });
+    // the household-token route: a made-up debug token, which Google should turn down at its debug-token exchange
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = '00000000-0000-4000-8000-000000000000';
+    const ac = AC.initializeAppCheck(app, { provider: new AC.CustomProvider({ getToken: () => Promise.reject(new Error('unused')) }), isTokenAutoRefreshEnabled: false });
     try { const t = await AC.getLimitedUseToken(ac); res.appCheck = 'got a token (' + String(t.token).length + ' chars)'; }
     catch (e) { res.appCheck = 'error ' + (e.code || '') + ': ' + e.message; }
   } catch (e) { res.load = 'error: ' + e.message; }
