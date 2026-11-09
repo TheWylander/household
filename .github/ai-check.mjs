@@ -1,4 +1,4 @@
-/* One-off: tries each route Firebase AI Logic offers this project and prints what comes back,
+/* One-off (run 2, after App Check enforcement): tries each route Firebase AI Logic offers this project and prints what comes back,
    to tell apart "Gemini Developer API not set up", "Agent Platform set up instead" and "App Check needed". */
 import { readFile } from 'node:fs/promises';
 
