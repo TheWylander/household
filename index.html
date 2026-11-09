@@ -623,6 +623,84 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
 .push-setup ol { margin: 6px 0 6px; padding-left: 20px; }
 .push-setup li { margin: 4px 0; overflow-wrap: anywhere; }
 
+/* ---------- deals, rearranged ---------- */
+.hscroll { flex-wrap: nowrap; overflow-x: auto; margin-right: -16px; padding-right: 16px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.hscroll::-webkit-scrollbar { display: none; }
+.hscroll > * { flex: none; }
+.aisle-chips { margin: 10px -16px 0 0; }
+.chip.hit { background: var(--marigold); border-color: var(--ink); }
+.chip.hit .ic { width: 14px; height: 14px; }
+.sp-rare { margin-top: 14px; padding: 12px 12px 4px; border-radius: 18px; background: var(--track); }
+.sp-rare-t { margin: 0; font-weight: 800; }
+.sp-rare .hint { margin: 2px 0 0; }
+.sp-tags { display: flex; flex-wrap: wrap; gap: 0 6px; }
+.tag.rare { margin-top: 4px; background: var(--fern-soft); border-color: var(--fern); color: var(--fern); }
+.matches { background: var(--marigold-soft); border-color: var(--ink); box-shadow: 0 4px 0 var(--ink); }
+.match-head { display: flex; align-items: center; gap: 10px; }
+.match-head .k { margin: 0; }
+.matches h2 { font-size: 26px; line-height: 1.08; margin: 10px 0 6px; }
+.matches .muted strong { color: var(--ink); }
+.match-list { list-style: none; margin: 14px 0 0; padding: 2px 12px; background: var(--card); border: 2px solid var(--ink); border-radius: 18px; }
+.match-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 0; border-top: 1px dashed var(--dash); }
+.match-row:first-child { border-top: 0; }
+.match-main { display: flex; flex-direction: column; min-width: 0; }
+.match-n { font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+a.match-n { text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.match-meta { display: flex; align-items: center; gap: 7px; min-width: 0; margin-top: 3px; font-size: 13px; font-weight: 600; color: var(--ink2); }
+.match-meta > span:last-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wpill { flex: none; padding: 0 8px; border-radius: 999px; border: 1.5px solid var(--ink); background: var(--marigold); color: var(--ink); font-weight: 800; white-space: nowrap; }
+.wpill .n { font-weight: 600; }
+.match-none { margin: 10px 2px 0; }
+.match-btns { display: flex; gap: 10px; margin-top: 16px; }
+.match-btns .btn { flex: 1; min-width: 0; padding: 0 14px; }
+.match-btns .btn .ic { width: 18px; height: 18px; }
+.ozb-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+.ozb-main { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.votes { display: inline-flex; align-items: center; gap: 3px; flex: none; padding: 3px 9px 3px 6px; border-radius: 999px; border: 2px solid var(--ink); background: var(--card); font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.votes .ic { width: 15px; height: 15px; }
+.dlg-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.dialog .dlg-head h2 { margin: 0; }
+.dialog .cal { margin: 4px 0 0; }
+.dialog .cal-head h3 { margin: 0; font-size: 20px; }
+.sale-sec { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line); }
+.sale-sec h3 { margin: 0 0 6px; font-size: 18px; }
+.next-sale .card-head { align-items: center; margin-bottom: 4px; }
+.next-sale .card-head .k { margin: 0; }
+.next-sale h2 { font-size: 26px; }
+.pill { flex: none; padding: 3px 11px; border-radius: 999px; border: 2px solid var(--ink); background: var(--marigold); font-size: 13px; font-weight: 800; white-space: nowrap; }
+.ns-when { margin-top: 2px; font-weight: 700; }
+.ns-where { display: flex; align-items: flex-start; gap: 6px; margin-top: 6px; font-size: 14px; font-weight: 600; color: var(--ink2); }
+.ns-where .ic { width: 18px; height: 18px; margin-top: 1px; }
+.ns-act { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+
+/* ---------- receipts ---------- */
+.snap-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.snap-head h2 { font-size: 24px; }
+.snap .muted { margin-bottom: 14px; }
+.snap .btn .ic, .snap-add .ic { width: 20px; height: 20px; }
+.snap-add { margin: 0 0 16px; }
+.rcp-busy { text-align: center; padding: 18px 8px 10px; }
+.rcp-busy .muted { margin-top: 4px; }
+.spin { display: inline-block; width: 34px; height: 34px; margin-bottom: 10px; border-radius: 50%; border: 4px solid var(--track); border-top-color: var(--ink); animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.4s; } }
+.rcp-top { display: flex; align-items: center; gap: 14px; margin: 4px 0 14px; color: var(--line); }
+.rcp-slip { width: 62px; height: 84px; flex: none; }
+.rcp-top .k { margin: 0; color: var(--ink2); }
+.rcp-total { margin: 2px 0 4px; font: 800 36px/1 var(--display); letter-spacing: -0.03em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.dialog .seg { margin: 4px 0 10px; }
+.rcp-k { margin: 6px 0 2px; }
+.rcp-list { list-style: none; margin: 0; padding: 0; }
+.rcp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 4px 0; border-top: 1px dashed var(--dash); }
+.rcp-row:first-child { border-top: 0; }
+.rcp-n { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rcp-p { font-weight: 800; font-variant-numeric: tabular-nums; }
+.rcp-who { min-width: 84px; max-width: 120px; min-height: 40px; padding: 0 10px; border-radius: 999px; border: 2px solid var(--input); background: var(--card); color: var(--ink); font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rcp-who.own { border-color: var(--ink); background: var(--cobalt-soft); }
+.rcp-sum { margin-top: 12px; padding: 10px 12px; border-radius: 16px; background: var(--marigold-soft); border: 2px solid var(--ink); }
+.rcp-sum-t { font-weight: 700; }
+.rcp-sum .muted { margin-top: 2px; font-size: 14px; }
+
 </style>
 </head>
 <body>
@@ -1277,6 +1355,11 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
     duo: '<circle cx="8.5" cy="12" r="5.5"/><circle cx="15.5" cy="12" r="5.5"/>',
     chart: '<path d="M4 20h16"/><path d="M7 16.5V12M12 16.5V6.5M17 16.5V9.5"/>',
     bell: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z"/><path d="M10 20.6a2.1 2.1 0 0 0 4 0"/>',
+    up: '<path d="M12 19V6M6 11.5 12 5.5l6 6"/>',
+    pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+    camera: '<path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.4-2h4.6l1.4 2h1.8A2.5 2.5 0 0 1 20 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5z"/><circle cx="12" cy="12.5" r="3.6"/>',
+    image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 16.5 15 11l-8 8.5"/>',
+    pin: '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/>',
     tag: '<path d="M3.5 12.3V4.5a1 1 0 0 1 1-1h7.8l8.2 8.2a1.6 1.6 0 0 1 0 2.2l-6.1 6.1a1.6 1.6 0 0 1-2.2 0z"/><circle cx="8.3" cy="8.3" r="1.6"/>',
     gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3 5.5 5.5"/><circle cx="12" cy="12" r="6.3"/>'
   };
@@ -1297,7 +1380,9 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
       ['check', 'Tidy categories.', 'In Insights, tap a category to see every spend in it, and move any that belong somewhere else.'],
       ['star', 'Fun fact.', 'A little fact about how we spend, a new one each time you open the app.'],
       ['arrow', 'Swipe through months.', 'Swipe left or right in Insights and the Calendar. Numbers count up and charts grow as each screen opens.'],
-      ['tag', 'Deals.', "Deals has its own tab: sale days like Lucky Mart's monthly sale, plus this week's Coles, Woolies and Harris Farm specials, updated every Wednesday. Add things we buy to the watch list, and Home gives us a heads-up when they're cheap or a sale day is tomorrow."],
+      ['tag', 'Deals.', "Deals has its own tab. Everything on special this week is at the top, from Coles, Woolies and Harris Farm, with filters by shop and aisle and the things that are rarely this cheap. Below it, the best deal for each thing on our watch list, then sale days and OzBargain."],
+      ['cal', 'Next sale day.', "Home shows the next sale day we're keen on, like Lucky Mart's monthly sale, with the address and a Keen button."],
+      ['plus', 'Snap a receipt.', "Tap the plus, then Snap a receipt. The app reads the shop, total and every item. Tap anything that's just one person's, and it adds the spends."],
       ['gear', 'Upload.', 'Bringing in the Westpac statement and Splitwise files has moved to Settings, under Upload. Spends to check still show on Home.'],
       ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up the evening before a sale day we're keen on, and on Wednesdays when something on the watch list is on special."]
     ] }
@@ -1319,7 +1404,7 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
     photos: null, photoBusy: null, photoErr: null, newsShown: false, newsDoc: null, newsEdit: null, newsId: null, factN: 0,
     enterKey: null, enterAt: 0, enterDir: 0, enterDirNow: 0, countsShown: {},
     pushDoc: null, pushBusy: false, pushNote: null,
-    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, spStore: 'all', spQuery: '', spAll: false, ozbAll: false, watchNew: '',
+    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, spStore: 'all', spAisle: 'all', spWatch: false, spQuery: '', spAll: false, ozbAll: false, watchNew: '',
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -1338,7 +1423,7 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
       categories: [],
       goal: { name: '', target: null, saved: 0 },
       card: PRESET && PRESET.card ? clone(PRESET.card) : { name: '', holder: 'b', program: '', earns: null, rates: null, ratio: 1, rate: null },
-      home: { week: true, goal: true, spot: true, recap: true, soon: true, fact: true, deals: true }, bills: [], billsHide: [],
+      home: { week: true, goal: true, spot: true, recap: true, soon: true, fact: true, sale: true, deals: true }, bills: [], billsHide: [],
       spot: { type: 'note', text: '', date: '' },
       remember: true, scheme: 'warm',
       moves: {},
@@ -1789,7 +1874,7 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
       if (due) { S.newsShown = true; S.dialog = { type: 'news', id: due.id }; }
     }
     const nav = ['home', 'cal', 'deals', 'insights', 'settings', 'upload', 'custom', 'profile', 'newsedit', 'recap', 'tab'].indexOf(S.view) >= 0;
-    const sw = S.view === 'insights' || S.view === 'recap' ? (S.insMode === 'year' ? 'insyear' : 'recapmove') : S.view === 'cal' || S.view === 'deals' ? 'calmove' : '';
+    const sw = S.view === 'insights' || S.view === 'recap' ? (S.insMode === 'year' ? 'insyear' : 'recapmove') : S.view === 'cal' ? 'calmove' : '';
     return bn + '<main class="main' + (nav ? '' : ' no-nav') + '" style="' + meVars() + '"' + (sw ? ' data-swipe="' + sw + '"' : '') + '>' + viewFor(S.view) + '</main>' +
       (nav ? '<div data-live="nav">' + navBar() + '</div>' : '') + dialogHtml();
   }
@@ -1842,7 +1927,7 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
     if (!S.settings || !S.me || S.welcomePreview) return 'pre';
     let k = S.view === 'recap' ? 'insights' : S.view;
     if (k === 'insights') k += '|' + S.insMode + '|' + S.recapOffset + '|' + S.insYearOff;
-    if ((k === 'cal' || k === 'deals') && S.cal) k += '|' + S.cal.y + '-' + S.cal.m;
+    if (k === 'cal' && S.cal) k += '|' + S.cal.y + '-' + S.cal.m;
     return k;
   }
   let countRaf = 0;
@@ -2025,6 +2110,7 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
       out += '<button class="card row-card attn" data-act="go" data-arg="newsedit"><span><span class="k">Note for ' + esc(nm(other(S.me))) + '</span><span class="row-t">Claude\'s draft for ' + esc(dateY(waiting.date)) + ' is ready</span></span>' + icon('arrow') + '</button>';
     }
     out += balanceCard();
+    if (C.home.sale !== false) out += nextSaleCard();
     if (C.home.fact !== false) out += factCard();
     if (C.home.soon !== false) out += comingUpCard();
     if (C.home.deals !== false) out += onSpecialCard();
@@ -2250,6 +2336,7 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
     return '<header class="top sheet"><button class="icon-btn" data-act="closeadd" aria-label="Close">' + icon('close') + '</button>' +
       '<h1 class="title sm">' + (A.id ? 'Edit spend' : 'Add a spend') + '</h1>' +
       '<label class="date-chip"><span id="dateLbl">' + esc(L.fmtDay(A.date)) + '</span><input type="date" id="addDate" value="' + A.date + '" data-change="adddate" aria-label="Date of the spend"></label></header>' +
+      (!A.id && snapReady() ? '<label class="btn btn-secondary btn-block file-btn snap-add">' + icon('camera') + 'Snap a receipt<input type="file" accept="image/*" data-change="rcpfile" aria-label="Snap a receipt"></label>' : '') +
       '<section class="amount-box" aria-live="polite"><p class="amt-total" id="amtTotal">' + L.fmt(r.ok ? r.total : 0) + '</p><p class="amt-expr" id="amtExpr">' + esc(exprLine(A, r)) + '</p></section>' +
       (A.locked ? '<p class="hint" style="text-align:center;margin:-6px 0 16px">' + esc(A.orig.parts ? A.orig.parts.map((x) => nm(x.payer) + ' ' + L.fmt(x.amount)).join(', ') : '') + '</p>' : keypad()) +
       linesCard(A) +
@@ -2394,13 +2481,180 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
     initCal(date); S.view = 'cal'; render(); window.scrollTo(0, 0);
   }
 
+  /* ---------- receipts ---------- */
+  /* Snap a receipt: Gemini reads the shop, date, total and each item, through Firebase AI Logic on Google's free tier.
+     You check it, mark anything that's just one person's, and it saves the spends. The photo isn't kept anywhere, and
+     nothing else in the app goes to Gemini. Things that are just the payer's own are left out, since they aren't shared;
+     things that are just the other person's are saved as a spend they owe in full. */
+  const AI_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
+  let aiLoad = null;
+  function aiModel(name, schema) {
+    aiLoad = aiLoad || Promise.all([import('./firebase-app.js'), import('./firebase-ai.js')]).then((m) => {
+      const A = m[0], AI = m[1], app = A.getApps().filter((x) => x.name === 'hh-ai')[0] || A.initializeApp(window.HH_FIREBASE, 'hh-ai');
+      return { AI, ai: AI.getAI(app, { backend: new AI.GoogleAIBackend() }) };
+    }, (e) => { aiLoad = null; throw e; });
+    return aiLoad.then((x) => x.AI.getGenerativeModel(x.ai, { model: name, generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0 } }));
+  }
+  const RECEIPT_PROMPT = 'This is a photo of a shop receipt from Australia. Read it. Give the shop, the date, the total paid, the best category from the list, and every item bought with what it finally cost. ' +
+    'Leave out subtotals, GST, savings, payment, card and change lines. If it is not a receipt, give a total of 0 and no items.';
+  function receiptSchema() {
+    const C = cfg(), cats = C.categories.concat(C.categories.indexOf('Other') >= 0 ? [] : ['Other']);
+    return { type: 'object', properties: {
+      shop: { type: 'string', description: 'The shop, as on the receipt, with the suburb if it is printed. For example: Coles Artarmon.' },
+      date: { type: 'string', description: 'The date of the purchase as YYYY-MM-DD, or empty if it is not printed.' },
+      total: { type: 'number', description: 'The total paid, in dollars.' },
+      category: { type: 'string', enum: cats },
+      items: { type: 'array', items: { type: 'object', properties: {
+        name: { type: 'string', description: 'What it is, shortened the way a person would say it.' },
+        price: { type: 'number', description: 'What this line cost in dollars, after any discount printed under it.' } }, required: ['name', 'price'] } }
+    }, required: ['shop', 'date', 'total', 'category', 'items'] };
+  }
+  /* Tries the newest small model, and the one before it if that one isn't there. */
+  function readReceipt(data) {
+    const go = (i) => aiModel(AI_MODELS[i], receiptSchema()).then((model) => model.generateContent([RECEIPT_PROMPT, { inlineData: { mimeType: 'image/jpeg', data } }]))
+      .then((r) => JSON.parse(r.response.text()), (e) => {
+        const st = e && e.customErrorData && e.customErrorData.status;
+        if (i + 1 < AI_MODELS.length && (st === 404 || /not found|is not supported/i.test(String((e && e.message) || '')))) return go(i + 1);
+        throw e;
+      });
+    return go(0);
+  }
+  function receiptError(e) {
+    const code = e && e.code, st = e && e.customErrorData && e.customErrorData.status, msg = String((e && e.message) || '');
+    if (code === 'api-not-enabled' || /api-not-enabled|has not been used|is disabled/i.test(msg)) return 'Receipt reading isn\'t switched on yet. In the Firebase console, open AI Logic, tap Get started, and choose the Gemini Developer API.';
+    if (/are blocked|API_KEY_SERVICE_BLOCKED/i.test(msg)) return 'The app\'s Firebase key isn\'t allowed to use Gemini yet. In the Google Cloud console, open Credentials, edit the Browser key, and add the Firebase AI Logic API.';
+    if (st === 429 || /quota|exhausted/i.test(msg)) return 'Gemini\'s free limit is used up for now. Type this one in, or try again later.';
+    if (e && e.photo) return 'That photo couldn\'t be opened. Try another one.';
+    if ((code === 'fetch-error' && !st) || navigator.onLine === false || /failed to fetch|networkerror|load failed|importing a module/i.test(msg)) return 'Couldn\'t reach Gemini. Check your connection and try again.';
+    return 'Couldn\'t read that receipt. Try a clearer photo, or type it in.';
+  }
+  /* A smaller JPEG is plenty for reading, and quicker to send. */
+  function shrinkPhoto(file) {
+    return new Promise((res, rej) => {
+      const url = URL.createObjectURL(file), img = new Image(), fail = () => { URL.revokeObjectURL(url); const e = new Error('photo'); e.photo = true; rej(e); };
+      img.onload = () => {
+        const k = Math.min(1, 1600 / Math.max(img.naturalWidth || 1, img.naturalHeight || 1)), w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        try { c.getContext('2d').drawImage(img, 0, 0, w, h); } catch (e) { fail(); return; }
+        URL.revokeObjectURL(url);
+        res(c.toDataURL('image/jpeg', 0.82).split(',')[1]);
+      };
+      img.onerror = fail;
+      img.src = url;
+    });
+  }
+  function receiptForm(j) {
+    const C = cfg(), t = today(), cents = (v) => Math.round((typeof v === 'number' ? v : parseFloat(String(v == null ? '' : v).replace(/[^0-9.-]/g, ''))) * 100) || 0;
+    const items = (Array.isArray(j && j.items) ? j.items : []).slice(0, 60).map((x) => ({ name: String((x && x.name) || '').trim().replace(/\s+/g, ' ').slice(0, 60) || 'Item', c: cents(x && x.price), who: 'shared' })).filter((x) => x.c > 0);
+    const total = cents(j && j.total) || items.reduce((a, x) => a + x.c, 0);
+    if (total <= 0) return null;
+    const d = String((j && j.date) || ''), cats = C.categories.concat(C.categories.indexOf('Other') >= 0 ? [] : ['Other']);
+    const cat = cats.indexOf(j && j.category) >= 0 ? j.category : cats.indexOf('Groceries') >= 0 ? 'Groceries' : 'Other';
+    return { shop: String((j && j.shop) || '').trim().replace(/\s+/g, ' ').slice(0, 60) || 'Receipt', date: ISO_DAY.test(d) && d <= t && d >= L.addDays(t, -400) ? d : t,
+      total: (total / 100).toFixed(2), category: cat, payer: S.me === 'b' ? 'b' : 'a', onCard: (S.me === 'b' ? 'b' : 'a') === holder(), items };
+  }
+  function startReceipt(file) {
+    if (!file) return;
+    const tok = uid('r');
+    S.dialog = { type: 'receipt', tok, busy: true, err: null, form: null, error: null };
+    render();
+    const mine = () => S.dialog && S.dialog.tok === tok;
+    shrinkPhoto(file).then(readReceipt).then((j) => {
+      if (!mine()) return;
+      const f = receiptForm(j);
+      S.dialog.busy = false;
+      if (f) S.dialog.form = f; else S.dialog.err = 'That doesn\'t look like a receipt. Try another photo, or type it in.';
+      render();
+    }, (e) => {
+      if (!mine()) return;
+      S.dialog.busy = false; S.dialog.err = receiptError(e); render();
+    });
+  }
+  function receiptSums(f) {
+    const total = Math.round(parseFloat(String(f.total || '').replace(/[^0-9.]/g, '')) * 100) || 0, payer = f.payer, other = payer === 'a' ? 'b' : 'a';
+    const sum = (who) => f.items.filter((x) => x.who === who).reduce((a, x) => a + x.c, 0);
+    const mine = sum(payer), theirs = sum(other);
+    return { total, payer, other, mine, theirs, shared: total - mine - theirs };
+  }
+  function receiptSumHtml(f) {
+    const s = receiptSums(f), C = cfg();
+    if (s.total <= 0) return '<p class="rcp-sum-t">Enter the total.</p>';
+    if (s.shared < 0) return '<p class="rcp-sum-t">The things marked as one person\'s add up to more than the total.</p>';
+    const parts = [];
+    if (s.shared) parts.push('Shared ' + L.fmt(s.shared));
+    if (s.theirs) parts.push('Just ' + nm(s.other) + ' ' + L.fmt(s.theirs));
+    if (s.mine) parts.push('Just ' + nm(s.payer) + ' ' + L.fmt(s.mine) + ', left out');
+    const owes = (s.shared ? L.splitOwed(s.shared, C.splitA, 'r')[s.other] : 0) + s.theirs;
+    return '<p class="rcp-sum-t">' + esc(parts.join(' · ')) + '</p>' + (owes ? '<p class="muted">So ' + esc(nm(s.other)) + ' owes ' + esc(nm(s.payer)) + ' ' + L.fmt(owes) + ' for this one</p>' : '');
+  }
+  const RECEIPT_SLIP = '<svg class="rcp-slip" viewBox="0 0 62 84" aria-hidden="true"><path d="M4 2h54v76l-6.75-4-6.75 4-6.75-4-6.75 4-6.75-4-6.75 4-6.75-4L4 78z" fill="#fff" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>' +
+    '<path d="M12 14h30M12 24h38M12 32h24M12 40h34M12 48h20M12 60h38" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity=".35"/></svg>';
+  function receiptDialog(d) {
+    const head = '<div class="dlg-head"><h2 id="dlgT">Check the receipt</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>';
+    if (d.busy) return head + '<div class="rcp-busy" role="status"><span class="spin" aria-hidden="true"></span><p><strong>Reading the receipt</strong></p><p class="muted">Gemini is reading the shop, the total and each item. It takes a few seconds.</p></div>';
+    if (d.err) {
+      return head + '<p class="err-text" role="alert">' + esc(d.err) + '</p><div class="dialog-actions">' +
+        '<label class="btn btn-secondary file-btn">Another photo<input type="file" accept="image/*" data-change="rcpfile" aria-label="Choose another photo of the receipt"></label>' +
+        '<button class="btn btn-primary" data-act="rcptype">Type it in</button></div>';
+    }
+    const f = d.form, s = receiptSums(f), C = cfg(), H = holder(), cats = C.categories.concat(C.categories.indexOf('Other') >= 0 ? [] : ['Other']);
+    const who = (x) => (x === 'shared' ? 'Shared' : 'Just ' + nm(x));
+    const rows = f.items.map((x, i) => '<li class="rcp-row"><span class="rcp-n">' + esc(x.name) + '</span><span class="rcp-p">' + L.fmt(x.c) + '</span>' +
+      '<button class="rcp-who' + (x.who !== 'shared' ? ' own' : '') + '" data-act="rcpitem" data-arg="' + i + '" aria-label="' + esc(x.name) + ': ' + esc(who(x.who)) + '. Tap to change">' + esc(who(x.who)) + '</button></li>').join('');
+    const n = (s.shared > 0 ? 1 : 0) + (s.theirs > 0 ? 1 : 0);
+    return head + '<div class="rcp-top">' + RECEIPT_SLIP + '<div><p class="k">Read from your photo</p><p class="rcp-total">' + L.fmt(s.total) + '</p><p class="k">' + f.items.length + (f.items.length === 1 ? ' item' : ' items') + '</p></div></div>' +
+      '<div class="row2"><label class="field"><span>Shop</span><input class="input" id="rcpShop" maxlength="60" autocomplete="off" data-bind="dialog.form.shop" value="' + esc(f.shop) + '"></label>' +
+      '<label class="field"><span>Date</span><input class="input" id="rcpDate" type="date" data-bind="dialog.form.date" value="' + esc(f.date) + '"></label></div>' +
+      '<div class="row2"><label class="field"><span>Total</span><input class="input" id="rcpTotal" inputmode="decimal" autocomplete="off" data-bind="dialog.form.total" data-input="rcpsum" value="' + esc(f.total) + '"></label>' +
+      '<label class="field"><span>Category</span><select class="input" id="rcpCat" data-bind="dialog.form.category">' + cats.map((c) => '<option' + (c === f.category ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select></label></div>' +
+      '<div class="seg" role="group" aria-label="Who paid">' + segBtn('rcppaid', 'a', f.payer === 'a', nm('a') + ' paid', 'a') + segBtn('rcppaid', 'b', f.payer === 'b', nm('b') + ' paid', 'b') + '</div>' +
+      '<label class="check-row"><input type="checkbox" id="rcpCard" data-bind="dialog.form.onCard"' + (f.onCard ? ' checked' : '') + '> On ' + esc(poss(nm(H))) + ' ' + esc(cardLabel()) + '</label>' +
+      (rows ? '<p class="k rcp-k">Tap anything that\'s just one person\'s</p><ul class="rcp-list">' + rows + '</ul>' : '') +
+      '<div class="rcp-sum" id="rcpSum" aria-live="polite">' + receiptSumHtml(f) + '</div>' +
+      (d.error ? '<p class="err-text" role="alert">' + esc(d.error) + '</p>' : '') +
+      '<div class="dialog-actions"><button class="btn btn-primary" data-act="rcpsave">' + (n === 2 ? 'Add 2 spends' : 'Add the spend') + '</button></div>';
+  }
+  function saveReceipt() {
+    const d = S.dialog, f = d && d.form;
+    if (!f) return;
+    const s = receiptSums(f), C = cfg(), shop = String(f.shop || '').trim().replace(/\s+/g, ' ').slice(0, 60) || 'Receipt';
+    const stop = (m) => { d.error = m; render(); };
+    if (s.total <= 0) return stop('Enter the total.');
+    if (!ISO_DAY.test(f.date || '')) return stop('Pick the date.');
+    if (s.shared < 0) return stop('The things marked as one person\'s add up to more than the total.');
+    if (s.shared <= 0 && s.theirs <= 0) return stop('Everything here is just ' + poss(nm(s.payer)) + ', so there\'s nothing to share.');
+    const made = [], mk = (amount, list, title, splitA) => {
+      const fits = list.length > 1 && list.reduce((a, x) => a + x.c, 0) === amount;
+      made.push(makeEntry({ id: uid('m'), kind: 'expense', source: 'manual', status: 'shared', date: f.date, title, amount, items: fits ? list.map((x) => x.c) : null,
+        notes: fits ? list.map((x) => x.name) : null, payer: s.payer, onCard: !!f.onCard, splitA, category: f.category || 'Other' }));
+    };
+    if (s.shared > 0) mk(s.shared, f.items.filter((x) => x.who === 'shared'), shop, C.splitA);
+    if (s.theirs > 0) mk(s.theirs, f.items.filter((x) => x.who === s.other), (shop + ', just ' + nm(s.other)).slice(0, 80), s.other === 'a' ? 100 : 0);
+    const map = {};
+    made.forEach((e) => { map[e.id] = e; });
+    putEntries(f.date.slice(0, 7), map).then((ok) => { if (ok) toast(made.length === 1 ? 'Saved ' + L.fmt(made[0].amount) + ' from ' + shop : 'Saved ' + made.length + ' spends from ' + shop); });
+    S.dialog = null;
+    if (S.view === 'add') { const back = (S.add && S.add.from) || 'home'; S.add = null; S.view = back; }
+    render();
+  }
+  const snapReady = () => !S.readOnly && S.mode === 'firebase';
+  function snapCard() {
+    if (!snapReady()) return '';
+    return '<section class="card bold snap"><div class="snap-head"><span class="news-ic" aria-hidden="true">' + icon('camera') + '</span><h2>Snap a receipt</h2></div>' +
+      '<p class="muted">The app reads the shop, date, total and every item. You check it, mark anything that\'s just one person\'s, and it adds the spends.</p>' +
+      '<label class="btn btn-primary btn-block file-btn">' + icon('camera') + 'Take a photo<input type="file" accept="image/*" capture="environment" data-change="rcpfile" aria-label="Take a photo of a receipt"></label>' +
+      '<label class="btn btn-secondary btn-block file-btn" style="margin-top:12px">' + icon('image') + 'Choose from photos<input type="file" accept="image/*" data-change="rcpfile" aria-label="Choose a photo of a receipt"></label>' +
+      '<p class="hint" style="margin-top:12px">Receipt photos go to Google\'s Gemini to be read. The app doesn\'t keep them, and nothing else in the app goes to Gemini.</p></section>';
+  }
+
   /* ---------- upload: statements, Splitwise files, and spends to check ---------- */
   function viewUpload() {
     const H = holder(), C = cfg(), hn = nm(H);
     const pend = pendingAll().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : (a.createdAt || 0) - (b.createdAt || 0)));
     const groups = {};
     pend.forEach((e) => { (groups[e.date] = groups[e.date] || []).push(e); });
-    let out = '<header class="top"><div><button class="back-link" data-act="go" data-arg="settings">' + icon('left') + 'Settings</button><p class="eyebrow">' + esc(poss(hn)) + ' ' + esc(cardLabel()) + '</p><h1 class="title">Upload</h1></div></header>';
+    let out = '<header class="top"><div><button class="back-link" data-act="go" data-arg="settings">' + icon('left') + 'Settings</button><p class="eyebrow">' + esc(poss(hn)) + ' ' + esc(cardLabel()) + '</p><h1 class="title">Upload</h1></div></header>' + snapCard();
     if (!S.readOnly) {
       out += '<section class="card bold"><h2 style="font-size:21px;margin-bottom:6px">Bring in ' + esc(poss(hn)) + ' card spends</h2>' +
         '<p class="muted" style="margin-bottom:14px">Export a CSV from Westpac, then choose the file here. Anything you\'ve already brought in is skipped, so overlapping dates are fine.</p>' +
@@ -2998,9 +3252,6 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
       const next = billNext(b, t), d = daysTo(t, next);
       if (d <= 45) rows.push({ when: next, due: d < 0, name: b.name, sub: EVERY_LABEL[b.every], amount: b.amount });
     });
-    saleDays(t, L.addDays(t, 14)).forEach((o) => {
-      if (o.keen) rows.push({ when: o.date, name: o.sale.store + ' sale', sub: [o.sale.offer, o.sale.where.split(', ').pop()].filter(Boolean).join(' · '), sale: true });
-    });
     return rows.sort((a, b) => (a.when < b.when ? -1 : a.when > b.when ? 1 : (b.due ? 1 : 0) - (a.due ? 1 : 0)));
   }
   function comingUpCard() {
@@ -3009,13 +3260,13 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
     if (!rows.length) {
       return '<section class="card soon"><div class="card-head"><h2>Coming up</h2>' + add + '</div><p class="muted">Bills that repeat in your spends show up here before they\'re due. Add ones you pay on a schedule, like strata or insurance.</p></section>';
     }
-    const month = rows.filter((r) => !r.rent && !r.sale && daysTo(t, r.when) <= 30).reduce((a, r) => a + r.amount, 0);
+    const month = rows.filter((r) => !r.rent && daysTo(t, r.when) <= 30).reduce((a, r) => a + r.amount, 0);
     return '<section class="card soon"><div class="card-head"><h2>Coming up</h2>' + add + '</div>' +
       (month ? '<p class="muted soon-sum">About ' + L.fmtRound(month) + ' in bills over the next 30 days.</p>' : '') +
       '<ul class="soon-list">' + rows.map((r) => '<li class="soon-row"><span class="soon-when' + (r.due ? ' due' : '') + '">' + esc(r.due ? 'Looks due' : whenLabel(r.when, t)) + '</span>' +
         '<span class="soon-main"><span class="soon-n">' + esc(r.name) + '</span><span class="k">' + esc(r.sub) + '</span>' +
         (r.key && !S.readOnly ? '<button class="link sm soon-x" data-act="billhide" data-arg="' + esc(r.key) + '">Not a bill</button>' : '') + '</span>' +
-        (r.sale ? '<span class="soon-a"><span class="soon-tag">Keen</span></span></li>' : '<span class="soon-a">' + (r.approx ? '<span class="sr">about </span><span aria-hidden="true">~</span>' : '') + L.fmtRound(r.amount) + '</span></li>')).join('') + '</ul></section>';
+        '<span class="soon-a">' + (r.approx ? '<span class="sr">about </span><span aria-hidden="true">~</span>' : '') + L.fmtRound(r.amount) + '</span></li>').join('') + '</ul></section>';
   }
   function billsDialog(d) {
     const C = cfg(), t = today(), F = d.form;
@@ -3137,33 +3388,58 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
     });
     return n;
   }
-  function lastLabel(s) {
-    s = String(s || '').trim();
-    if (!s) return '';
-    if (/never|first/i.test(s)) return 'First time at half price';
-    const m = /^(.*?)\s*@\s*(WW|CL|Woolworths|Coles)$/i.exec(s);
-    return 'Last half price ' + (m ? m[1] + ' at ' + (/^(ww|woolworths)$/i.test(m[2]) ? 'Woolies' : 'Coles') : s);
+  /* How rare this price is: the half-price list notes when each item was last half price. */
+  function rareWeeks(x) {
+    const s = String(x.last || '').trim();
+    if (!s || x.src === 'hf') return 0;
+    if (/never|first/i.test(s)) return 99;
+    return L.weeksSince(s) || 0;
   }
-  function spFiltered() {
+  const rareLabel = (w) => (w >= 99 ? 'First time at half price' : 'First time in ' + w + ' weeks');
+  /* Aisles, from the categories on the half-price list. Everything from Harris Farm counts as fresh. */
+  const AISLES = [['pantry', 'Pantry', /^(pantry|bakery|deli|dairy, eggs & fridge|poultry, meat & seafood|meat & seafood)$/i], ['fresh', 'Fresh', null],
+    ['snacks', 'Snacks', /^snacks & confectionery$/i], ['drinks', 'Drinks', /^(drinks|beer, wine & spirits|liquor)$/i], ['freezer', 'Freezer', /^freezer$/i],
+    ['cleaning', 'Cleaning', /^(cleaning & maintenance|household|home & lifestyle|pet)$/i], ['health', 'Health and beauty', /^(health & beauty|personal care|baby)$/i]];
+  function aisleOf(x) {
+    if (x.src === 'hf') return 'fresh';
+    for (let i = 0; i < AISLES.length; i++) if (AISLES[i][2] && AISLES[i][2].test(x.cat || '')) return AISLES[i][0];
+    return 'other';
+  }
+  /* Specials after the shop, watch-list and search filters, before the aisle one. */
+  function spBase() {
     const D = dealsCfg(), q = String(S.spQuery || '').trim().toLowerCase();
     let list = specialsNow();
     if (S.spStore !== 'all') list = list.filter((x) => x.s === S.spStore);
+    if (S.spWatch) list = list.filter((x) => L.watchHits(x.n, D.watch).length);
     if (q) list = list.filter((x) => (x.n + ' ' + x.cat).toLowerCase().indexOf(q) >= 0);
-    return L.sortSpecials(list, D.watch);
+    return list;
+  }
+  function spFiltered() {
+    const list = S.spAisle === 'all' ? spBase() : spBase().filter((x) => aisleOf(x) === S.spAisle);
+    return L.sortSpecials(list, dealsCfg().watch);
   }
   function spRow(x, words) {
-    const hit = L.watchHits(x.n, words).length > 0;
+    const hit = L.watchHits(x.n, words).length > 0, w = rareWeeks(x);
     const name = x.link ? '<a class="sp-n" href="' + esc(x.link) + '" target="_blank" rel="noopener">' + esc(x.n) + '</a>' : '<span class="sp-n">' + esc(x.n) + '</span>';
-    return '<li class="sp-row' + (hit ? ' hit' : '') + '"><span class="sp-main">' + name + '<span class="k">' + esc([shopLabel(x.s), x.cat, lastLabel(x.last)].filter(Boolean).join(' · ')) + '</span>' +
-      (hit ? '<span class="tag hit">On our list</span>' : '') + '</span>' +
+    return '<li class="sp-row' + (hit ? ' hit' : '') + '"><span class="sp-main">' + name + '<span class="k">' + esc([shopLabel(x.s), x.cat].filter(Boolean).join(' · ')) + '</span>' +
+      (hit || w >= 8 ? '<span class="sp-tags">' + (hit ? '<span class="tag hit">On our list</span>' : '') + (w >= 8 ? '<span class="tag rare">' + esc(rareLabel(w)) + '</span>' : '') + '</span>' : '') + '</span>' +
       '<span class="sp-price"><span class="sp-now">' + L.fmt(x.now) + '</span>' + (x.was > x.now ? '<s class="sp-was"><span class="sr">was </span>' + L.fmt(x.was) + '</s>' : '') +
       (x.off ? '<span class="sp-off">' + x.off + '% off</span>' : x.src === 'hf' ? '<span class="sp-off">Special</span>' : '') + '</span></li>';
   }
+  /* With no filter on, a few rarely-cheap picks and a button for the lot; otherwise the list itself. */
   function spListHtml() {
-    const D = dealsCfg(), list = spFiltered(), shown = S.spAll ? list.slice(0, 500) : list.slice(0, 12);
-    if (!list.length) return '<p class="muted sp-none">' + (String(S.spQuery || '').trim() ? 'Nothing on special matches that this week.' : 'Nothing here this week.') + '</p>';
+    const D = dealsCfg(), list = spFiltered(), q = String(S.spQuery || '').trim();
+    if (!list.length) return '<p class="muted sp-none">' + (q ? 'Nothing on special matches that this week.' : 'Nothing here this week.') + '</p>';
+    if (!S.spAll && !q && S.spAisle === 'all' && !S.spWatch) {
+      const rare = list.filter((x) => rareWeeks(x) >= 8).sort((a, b) => rareWeeks(b) - rareWeeks(a) || b.off - a.off).slice(0, 3);
+      return (rare.length ? '<div class="sp-rare"><p class="sp-rare-t">Rarely this cheap</p><p class="hint">Not half price for months, so worth stocking up.</p><ul class="sp-list">' + rare.map((x) => spRow(x, D.watch)).join('') + '</ul></div>'
+        : '<ul class="sp-list">' + list.slice(0, 5).map((x) => spRow(x, D.watch)).join('') + '</ul>') +
+        '<button class="btn btn-secondary btn-block sp-more" data-act="spmore">See all ' + list.length + ' specials</button>';
+    }
+    const shown = S.spAll ? list.slice(0, 500) : list.slice(0, 40);
     return '<ul class="sp-list">' + shown.map((x) => spRow(x, D.watch)).join('') + '</ul>' +
-      (list.length > 12 ? '<button class="btn btn-secondary btn-block sp-more" data-act="spmore">' + (S.spAll ? 'Show fewer' : 'Show all ' + list.length) + '</button>' : '');
+      (list.length > shown.length ? '<button class="btn btn-secondary btn-block sp-more" data-act="spmore">Show all ' + list.length + '</button>'
+        : S.spAll && !q && S.spAisle === 'all' && !S.spWatch ? '<button class="btn btn-secondary btn-block sp-more" data-act="spmore">Show fewer</button>' : '');
   }
   function agoLabel(iso) {
     const t = Date.parse(iso || '');
@@ -3173,50 +3449,107 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
     const d = new Date(t), day = L.ymd(d), hm = d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' }).replace(/\s/g, '').toLowerCase();
     return day === today() ? 'at ' + hm + ' today' : day === L.addDays(today(), -1) ? 'yesterday at ' + hm : 'on ' + L.fmtDay(day);
   }
-  function specialsCard() {
-    const F = S.feed, D = dealsCfg(), t = today();
-    const head = '<div class="card-head"><h2>Specials this week</h2></div>';
-    const watch = '<div class="watch"><p class="k">Our watch list</p>' +
-      (D.watch.length ? '<div class="chips">' + D.watch.map((w) => '<button class="chip sm" data-act="watchdel" data-arg="' + esc(w) + '">' + esc(w) + '<span aria-hidden="true">' + icon('close') + '</span><span class="sr">, remove</span></button>').join('') + '</div>'
-        : '<p class="hint">Add things you buy, like coffee or Weet-Bix. Specials on them go to the top, and Home tells you when they\'re cheap.</p>') +
-      (S.readOnly ? '' : '<div class="watch-add"><label class="sr" for="watchIn">Add to the watch list</label><input class="input" id="watchIn" maxlength="30" placeholder="Add something we buy" autocomplete="off" enterkeyhint="done" data-bind="watchNew" data-enter="watchadd" value="' + esc(S.watchNew) + '">' +
-        '<button class="btn btn-secondary btn-small" data-act="watchadd">Add</button></div>') + '</div>';
+  function feedWhy() {
+    return !dealsUrl() ? 'Specials show here in the app on your phones.' : S.feedBusy || !S.feedAt ? 'Getting this week\'s specials.'
+      : S.feedErr === 'none' ? 'The deals job hasn\'t run yet. It runs every Wednesday morning, when the specials change.' : 'This week\'s specials couldn\'t be reached. Check your connection.';
+  }
+  /* Everything on special this week, with shop and aisle filters and a search. */
+  function everythingCard() {
+    const F = S.feed;
+    const head = (n) => '<div class="card-head"><h2>Everything on special</h2>' + (n ? '<span class="k">' + n + ' this week</span>' : '') + '</div>';
     if (!F) {
-      const why = !dealsUrl() ? 'Specials show here in the app on your phones.' : S.feedBusy || !S.feedAt ? 'Getting this week\'s specials.'
-        : S.feedErr === 'none' ? 'The deals job hasn\'t run yet. It runs every Wednesday morning, when the specials change.' : 'This week\'s specials couldn\'t be reached. Check your connection.';
-      return '<section class="card specials">' + head + '<p class="muted">' + esc(why) + '</p>' +
-        (S.feedErr === 'net' || S.feedErr === 'bad' ? '<button class="link sm" data-act="feedretry">Try again</button>' : '') + watch + '</section>';
+      return '<section class="card bold specials" id="spCard">' + head(0) + '<p class="muted">' + esc(feedWhy()) + '</p>' +
+        (S.feedErr === 'net' || S.feedErr === 'bad' ? '<button class="link sm" data-act="feedretry">Try again</button>' : '') + '</section>';
     }
-    const all = specialsNow(), rep = F.sources.report, hf = F.sources.harris, wk = rep.to >= t ? rep : hf.to >= t ? hf : null;
+    const all = specialsNow();
+    if (!all.length) return '<section class="card bold specials" id="spCard">' + head(0) + '<p class="muted">This week\'s specials haven\'t come through yet. They update on Wednesdays.</p></section>';
     const counts = {};
     all.forEach((x) => { counts[x.s] = (counts[x.s] || 0) + 1; });
     const visits = shopVisits(), stores = Object.keys(counts).sort((a, b) => (visits[b] || 0) - (visits[a] || 0) || counts[b] - counts[a]);
     if (S.spStore !== 'all' && !counts[S.spStore]) S.spStore = 'all';
-    const chip = (v, label, n) => '<button class="chip sm" data-act="spstore" data-arg="' + esc(v) + '" aria-pressed="' + (S.spStore === v) + '">' + esc(label) + ' <span class="n">' + n + '</span></button>';
-    const when = wk ? (wk.from > t ? 'Starts ' + L.fmtDay(wk.from) + ', to ' : wk.from ? L.fmtDay(wk.from) + ' to ' : 'Until ') + L.fmtDay(wk.to) + ' · NSW · new ones every Wednesday' : 'New ones every Wednesday';
-    const srcs = [];
+    const chip = (act, v, label, n, on) => '<button class="chip sm" data-act="' + act + '" data-arg="' + esc(v) + '" aria-pressed="' + on + '">' + esc(label) + ' <span class="n">' + n + '</span></button>';
+    const base = spBase(), ac = {};
+    base.forEach((x) => { const a = aisleOf(x); ac[a] = (ac[a] || 0) + 1; });
+    if (S.spAisle !== 'all' && !ac[S.spAisle]) S.spAisle = 'all';
+    const aisles = AISLES.map((a) => [a[0], a[1]]).concat([['other', 'Other']]).filter((a) => ac[a[0]]);
+    const ours = S.spWatch ? '<button class="chip sm hit" data-act="spwatch" aria-pressed="true">On our list <span class="n">' + base.length + '</span><span aria-hidden="true">' + icon('close') + '</span><span class="sr">, show everything</span></button>' : '';
+    return '<section class="card bold specials" id="spCard">' + head(all.length) +
+      '<div class="chips hscroll store-chips" role="group" aria-label="Shop">' + chip('spstore', 'all', 'All', all.length, S.spStore === 'all') + stores.map((s) => chip('spstore', s, shopLabel(s), counts[s], S.spStore === s)).join('') + '</div>' +
+      '<label class="sr" for="spQ">Search specials</label><input class="input sp-search" id="spQ" type="search" placeholder="Search ' + all.length + ' specials" autocomplete="off" enterkeyhint="search" data-bind="spQuery" data-input="spsearch" value="' + esc(S.spQuery) + '">' +
+      (ours || aisles.length > 1 ? '<div class="chips hscroll aisle-chips" role="group" aria-label="Aisle">' + ours + aisles.map((a) => chip('spaisle', a[0], a[1], ac[a[0]], S.spAisle === a[0])).join('') + '</div>' : '') +
+      '<div id="spList">' + spListHtml() + '</div></section>';
+  }
+  /* For each word on the watch list, what matches it this week: specials first, best first, then OzBargain posts. */
+  function watchByWord() {
+    const D = dealsCfg(), F = S.feed, t = today();
+    if (!F) return [];
+    const sp = specialsNow(), deals = F.deals.filter((d) => !d.hp && (!d.to || d.to >= t));
+    return D.watch.map((w) => {
+      const hits = L.sortSpecials(sp.filter((x) => L.watchHits(x.n, [w]).length), [w]);
+      const dh = deals.filter((d) => L.watchHits(d.t + ' ' + d.s, [w]).length).map((d) => ({ n: d.t, s: L.storeName(d.s), link: d.link, deal: true, now: 0, was: 0 }));
+      return { w, hits: hits.concat(dh), sp: hits.length };
+    });
+  }
+  const thingsLine = (on) => (on.length === 1 ? cap1(on[0].w) + ' is on special' : on.length + ' things we buy are on special');
+  /* The watch list's best deal for each word. */
+  function matchesCard() {
+    const D = dealsCfg();
+    if (!D.watch.length) {
+      return '<section class="card matches"><p class="k">Our watch list</p><h2>Tell it what we buy</h2><p class="muted">Add things like coffee or Weet-Bix. When one is on special it shows here, goes to the top of the specials, and our phones pop up on Wednesday.</p>' +
+        (S.readOnly ? '' : '<button class="btn btn-secondary btn-block" style="margin-top:14px" data-act="watchopen">Add to the watch list</button>') + '</section>';
+    }
+    if (!S.feed) return '';
+    const by = watchByWord(), on = by.filter((x) => x.hits.length), none = by.filter((x) => !x.hits.length);
+    const m = on.reduce((a, x) => a + x.sp, 0), save = on.reduce((a, x) => a + (x.hits[0].was > x.hits[0].now ? x.hits[0].was - x.hits[0].now : 0), 0);
+    const rows = on.map((x) => {
+      const h = x.hits[0], name = h.link ? '<a class="match-n" href="' + esc(h.link) + '" target="_blank" rel="noopener">' + esc(h.n) + '</a>' : '<span class="match-n">' + esc(h.n) + '</span>';
+      return '<li class="match-row"><span class="match-main">' + name + '<span class="match-meta"><span class="wpill">' + esc(x.w) + ' <span class="n">' + x.hits.length + '</span></span>' +
+        '<span>' + esc([shopLabel(h.s), h.was > h.now ? 'was ' + L.fmt(h.was) : ''].filter(Boolean).join(' · ')) + '</span></span></span>' +
+        '<span class="sp-price">' + (h.now ? '<span class="sp-now">' + L.fmt(h.now) + '</span>' : '') + '<span class="sp-off">' + (h.deal ? 'Deal' : h.off ? h.off + '% off' : 'Special') + '</span></span></li>';
+    }).join('');
+    return '<section class="card matches" id="matchCard"><div class="match-head"><span class="news-ic" aria-hidden="true">' + icon('tag') + '</span><p class="k">On our watch list this week</p></div>' +
+      '<h2>' + esc(on.length ? thingsLine(on) : 'Nothing we buy is on special this week') + '</h2>' +
+      '<p class="muted">' + (on.length ? m + (m === 1 ? ' match' : ' matches') + (save ? '. The top pick of each saves <strong>' + L.fmt(save) + '</strong> on the usual price.' : '.') : 'New specials come in on Wednesday.') + '</p>' +
+      (rows ? '<ul class="match-list">' + rows + '</ul>' : '') +
+      (none.length && on.length ? '<p class="hint match-none">Nothing on special for ' + esc(listNames(none.map((x) => x.w))) + '.</p>' : '') +
+      '<div class="match-btns">' + (m ? '<button class="btn btn-secondary" data-act="spwatch">See all ' + m + (m === 1 ? ' match' : ' matches') + '</button>' : '') +
+      (S.readOnly ? '' : '<button class="btn btn-secondary" data-act="watchopen">' + icon('pencil') + 'Edit list</button>') + '</div></section>';
+  }
+  function watchDialog() {
+    const D = dealsCfg(), count = {};
+    watchByWord().forEach((x) => { count[x.w] = x.hits.length; });
+    return '<div class="dlg-head"><h2 id="dlgT">Our watch list</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>' +
+      '<p class="muted">Things we buy. When one is on special it goes to the top of Deals, and our phones pop up on Wednesday.' + (S.feed ? ' The number is this week\'s matches.' : '') + '</p>' +
+      '<div class="watch">' + (D.watch.length ? '<div class="chips">' + D.watch.map((w) => '<button class="chip sm' + (count[w] ? ' hit' : '') + '" data-act="watchdel" data-arg="' + esc(w) + '">' + esc(w) +
+        (count[w] ? ' <span class="n">' + count[w] + '</span>' : '') + '<span aria-hidden="true">' + icon('close') + '</span><span class="sr">, remove</span></button>').join('') + '</div>'
+        : '<p class="hint">Nothing on it yet. Add things you buy, like coffee or Weet-Bix.</p>') +
+      (S.readOnly ? '' : '<div class="watch-add"><label class="sr" for="watchIn">Add to the watch list</label><input class="input" id="watchIn" maxlength="30" placeholder="Add something we buy" autocomplete="off" enterkeyhint="done" data-bind="watchNew" data-enter="watchadd" value="' + esc(S.watchNew) + '">' +
+        '<button class="btn btn-secondary btn-small" data-act="watchadd">Add</button></div>') + '</div>' +
+      '<div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
+  }
+  function dealsFoot() {
+    const F = S.feed;
+    if (!F) return '';
+    const rep = F.sources.report, hf = F.sources.harris, srcs = [];
     if (rep.ok || rep.stale) srcs.push('Coles and Woolies from the weekly half-price list posted on ' + (rep.link ? '<a href="' + esc(rep.link) + '" target="_blank" rel="noopener">OzBargain</a>' : 'OzBargain'));
     if (hf.ok || hf.stale) srcs.push('Harris Farm from its online specials');
-    return '<section class="card specials">' + head + '<p class="muted sp-when">' + esc(when) + '</p>' + watch +
-      (all.length ? '<div class="chips store-chips" role="group" aria-label="Shop">' + chip('all', 'All', all.length) + stores.map((s) => chip(s, shopLabel(s), counts[s])).join('') + '</div>' +
-        '<label class="sr" for="spQ">Search specials</label><input class="input sp-search" id="spQ" type="search" placeholder="Search specials" autocomplete="off" enterkeyhint="search" data-bind="spQuery" data-input="spsearch" value="' + esc(S.spQuery) + '">' +
-        '<div id="spList">' + spListHtml() + '</div>'
-        : '<p class="muted">This week\'s specials haven\'t come through yet. They update on Wednesdays.</p>') +
-      (srcs.length ? '<p class="hint sp-src">' + srcs.join('. ') + '. Updated ' + esc(agoLabel(F.updated)) + '. Prices can differ by store.</p>' : '') + '</section>';
+    return srcs.length ? '<p class="hint sp-src">' + srcs.join('. ') + '. Updated ' + esc(agoLabel(F.updated)) + '. Prices can differ by store.</p>' : '';
   }
-  /* OzBargain deals at your shops, or matching your watch list. */
+  /* OzBargain deals at our shops or on the watch list, most votes first. */
   function ozbCard() {
     const F = S.feed, t = today();
     if (!F || !F.deals.length) return '';
     const D = dealsCfg(), shops = /^(Coles|Woolworths|Harris Farm|ALDI|Costco|IGA|Lucky Mart)$/;
-    const list = F.deals.filter((d) => !d.hp && (!d.to || d.to >= t)).map((d) => Object.assign({ shop: L.storeName(d.s) }, d));
-    const mine = list.filter((d) => shops.test(d.shop) || L.watchHits(d.t + ' ' + d.s, D.watch).length);
-    const shown = S.ozbAll ? list.slice(0, 40) : mine.slice(0, 6);
+    const list = F.deals.filter((d) => !d.hp && (!d.to || d.to >= t)).map((d) => Object.assign({ shop: L.storeName(d.s), ours: L.watchHits(d.t + ' ' + d.s, D.watch).length > 0 }, d))
+      .sort((a, b) => (b.votes || 0) - (a.votes || 0));
     if (!list.length) return '';
-    return '<section class="card specials"><div class="card-head"><h2>From OzBargain</h2></div><p class="muted">Deals people have posted for the shops you use.</p>' +
-      (shown.length ? '<ul class="ozb-list">' + shown.map((d) => '<li class="ozb-row">' + (d.link ? '<a class="ozb-t" href="' + esc(d.link) + '" target="_blank" rel="noopener">' + esc(d.t) + '</a>' : '<span class="ozb-t">' + esc(d.t) + '</span>') +
-        '<span class="k">' + esc([shopLabel(d.shop || d.s), d.to ? 'until ' + L.fmtDay(d.to) : '', d.votes > 0 ? d.votes + ' votes' : ''].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul>'
-        : '<p class="muted" style="margin-top:8px">Nothing for your shops right now.</p>') +
+    const mine = list.filter((d) => shops.test(d.shop) || d.ours), shown = S.ozbAll ? list.slice(0, 40) : mine.slice(0, 5);
+    return '<section class="card specials ozb"><div class="card-head"><h2>From OzBargain</h2><span class="k">' + list.length + (list.length === 1 ? ' deal' : ' deals') + '</span></div>' +
+      '<p class="muted">Deals people posted for the shops we use, most votes first.</p>' +
+      (shown.length ? '<ul class="ozb-list">' + shown.map((d) => '<li class="ozb-row"><span class="ozb-main">' + (d.link ? '<a class="ozb-t" href="' + esc(d.link) + '" target="_blank" rel="noopener">' + esc(d.t) + '</a>' : '<span class="ozb-t">' + esc(d.t) + '</span>') +
+        '<span class="k">' + esc([shopLabel(d.shop || d.s), d.to ? 'ends ' + L.fmtDay(d.to) : ''].filter(Boolean).join(' · ')) + '</span>' + (d.ours ? '<span class="tag hit">On our list</span>' : '') + '</span>' +
+        (d.votes > 0 ? '<span class="votes">' + icon('up') + d.votes + '<span class="sr"> votes</span></span>' : '') + '</li>').join('') + '</ul>'
+        : '<p class="muted" style="margin-top:8px">Nothing for our shops right now.</p>') +
       (list.length > shown.length || S.ozbAll ? '<button class="link sm" style="margin-top:8px" data-act="ozball">' + (S.ozbAll ? 'Just our shops' : 'See all ' + list.length + ' grocery deals') + '</button>' : '') + '</section>';
   }
   function saleRow(o, t) {
@@ -3232,19 +3565,34 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
   }
   function saleMonthCard(c) {
     const first = ymKey(c.y, c.m) + '-01', last = ymKey(c.y, c.m) + '-' + L.pad(L.daysInMonth(c.y, c.m)), t = today(), list = saleDays(first, last);
-    return '<section class="card" id="saleMonth"><div class="card-head"><h2>Sale days in ' + L.MONTHS_FULL[c.m] + '</h2></div>' +
+    return '<section class="sale-sec" id="saleMonth"><h3>In ' + L.MONTHS_FULL[c.m] + '</h3>' +
       (list.length ? '<ul class="sale-list">' + list.map((o) => saleRow(o, t)).join('') + '</ul>'
         : '<p class="muted">' + (dealsCfg().sales.length ? 'No sale days this month.' : 'Add the days your shops run sales, like a monthly 20% off Saturday. Mark the ones you\'re keen on and they show on Home.') + '</p>') +
       saleIdeaHtml() + (S.readOnly ? '' : '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="saleadd">' + icon('plus') + 'Add a sale day</button>') + '</section>';
   }
   function saleDayCard(d) {
     const list = saleDays(d, d), t = today();
-    return '<section class="card" id="dayCard"><div class="card-head"><h2>' + esc(L.fmtDayLong(d)) + '</h2></div>' +
+    return '<section class="sale-sec" id="dayCard"><h3>' + esc(L.fmtDayLong(d)) + '</h3>' +
       (list.length ? '<ul class="sale-list">' + list.map((o) => saleRow(o, t)).join('') + '</ul>' : '<p class="muted">No sale days on this day.</p>') +
       (L.parseYmd(d).getDay() === 3 ? '<p class="hint">New Coles and Woolies specials start today.</p>' : '') +
       (S.readOnly ? '' : '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="saleadd" data-arg="' + d + '">' + icon('plus') + 'Add a sale day on this day</button>') + '</section>';
   }
+  /* The Deals tab: everything on special first, then the watch list, sale days and OzBargain. */
   function dealsView() {
+    const F = S.feed, t = today(), rep = F && F.sources.report, hf = F && F.sources.harris;
+    const wk = F ? (rep.to >= t ? rep : hf.to >= t ? hf : null) : null;
+    const eyebrow = wk && wk.from && wk.to ? 'Specials ' + L.fmtDay(wk.from) + ' to ' + L.fmtDay(wk.to) : 'Sale days and specials';
+    return '<header class="top"><div><p class="eyebrow">' + esc(eyebrow) + '</p><h1 class="title">Deals</h1></div>' +
+      '<button class="icon-btn" data-act="salemonth" aria-label="Sale days by month">' + icon('cal') + '</button></header>' +
+      everythingCard() + matchesCard() + saleDaysRow() + ozbCard() + dealsFoot();
+  }
+  function saleDaysRow() {
+    const D = dealsCfg(), t = today(), next = saleDays(t, L.addDays(t, 120))[0];
+    return '<button class="card row-card" data-act="salemonth"><span class="row-lead"><span class="news-ic" aria-hidden="true">' + icon('cal') + '</span><span><span class="k">Sale days</span><span class="row-t">' +
+      esc(next ? 'Next: ' + next.sale.store + ', ' + L.fmtDay(next.date) : D.sales.length ? 'None in the next few months' : 'Add the days your shops have sales') + '</span></span></span>' + icon('arrow') + '</button>';
+  }
+  /* The month of sale days, in a panel. */
+  function monthDialog() {
     if (!S.cal) initCal();
     const c = S.cal, t = today(), ym = ymKey(c.y, c.m);
     const first = ym + '-01', last = ym + '-' + L.pad(L.daysInMonth(c.y, c.m)), by = {};
@@ -3252,30 +3600,40 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
     const cells = L.monthGrid(c.y, c.m).map((d) => {
       if (!d) return '<span class="cal-day pad" aria-hidden="true"></span>';
       const list = by[d] || [], keen = list.some((o) => o.keen);
-      const cls = ['cal-day', list.length ? 'sale' : '', keen && d >= t ? 'keen' : '', d === t ? 'today' : '', d === c.sel ? 'sel' : '', d > t ? 'future' : '', d < t ? 'past' : ''].filter(Boolean).join(' ');
+      const cls = ['cal-day', list.length ? 'sale' : '', keen && d >= t ? 'keen' : '', d === t ? 'today' : '', d === c.sel && c.picked ? 'sel' : '', d > t ? 'future' : '', d < t ? 'past' : ''].filter(Boolean).join(' ');
       const label = L.fmtDayLong(d) + list.map((o) => ', ' + o.sale.store + ' sale' + (o.keen ? ', keen' : '')).join('');
       const short = list.length ? list[0].sale.store.split(' ')[0].slice(0, 6) : '';
-      return '<button class="' + cls + '" data-act="selday" data-arg="' + d + '" aria-label="' + esc(label) + '" aria-pressed="' + (d === c.sel) + '">' +
+      return '<button class="' + cls + '" data-act="selday" data-arg="' + d + '" aria-label="' + esc(label) + '" aria-pressed="' + (d === c.sel && !!c.picked) + '">' +
         '<span class="n">' + L.parseYmd(d).getDate() + '</span><span class="v">' + esc(short) + '</span>' +
         '<span class="dots">' + (list.length ? '<i class="dot ' + (keen ? 'keen' : 'sale') + '"></i>' : '') + '</span></button>';
     }).join('');
-    return '<header class="top"><div><p class="eyebrow">Sale days and specials</p><h1 class="title">Deals</h1></div></header>' +
-      '<section class="card cal bold"><div class="cal-head"><button class="icon-btn" data-act="calmove" data-arg="-1" aria-label="Previous month">' + icon('left') + '</button>' +
-      '<h2>' + L.MONTHS_FULL[c.m] + ' ' + c.y + '</h2><button class="icon-btn" data-act="calmove" data-arg="1" aria-label="Next month">' + icon('right') + '</button></div>' +
+    return '<div class="dlg-head"><h2 id="dlgT">Sale days</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>' +
+      '<div class="cal"><div class="cal-head"><button class="icon-btn" data-act="calmove" data-arg="-1" aria-label="Previous month">' + icon('left') + '</button>' +
+      '<h3>' + L.MONTHS_FULL[c.m] + ' ' + c.y + '</h3><button class="icon-btn" data-act="calmove" data-arg="1" aria-label="Next month">' + icon('right') + '</button></div>' +
       '<div class="cal-dow" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>' +
       '<div class="cal-grid">' + cells + '</div>' +
       '<div class="legend"><span><i class="dot keen"></i>Sale day we\'re keen on</span><span><i class="dot sale"></i>Sale day</span></div>' +
-      (ym === t.slice(0, 7) ? '' : '<p style="margin-top:6px"><button class="link sm" data-act="caltoday">Back to this month</button></p>') + '</section>' +
-      (c.sel && c.sel.slice(0, 7) === ym && (c.picked || saleDays(c.sel, c.sel).length) ? saleDayCard(c.sel) : '') + saleMonthCard(c) + specialsCard() + ozbCard();
+      (ym === t.slice(0, 7) ? '' : '<p style="margin-top:6px"><button class="link sm" data-act="caltoday">Back to this month</button></p>') + '</div>' +
+      (c.sel && c.sel.slice(0, 7) === ym && c.picked ? saleDayCard(c.sel) : '') + saleMonthCard(c);
   }
-  /* Home: the specials this week on your watch list. */
+  /* Home: the next sale day, keen ones first. */
+  function nextSaleCard() {
+    const t = today(), list = saleDays(t, L.addDays(t, 120)), o = list.filter((x) => x.keen)[0] || list[0];
+    if (!o) return '';
+    const s = o.sale, n = daysTo(t, o.date), when = n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : 'In ' + n + ' days';
+    return '<section class="card next-sale" aria-label="Next sale day"><div class="card-head"><p class="k">Next sale day</p><span class="pill">' + when + '</span></div>' +
+      '<h2>' + esc(s.store) + '</h2><p class="ns-when">' + esc([L.fmtDayLong(o.date), s.offer].filter(Boolean).join(' · ')) + '</p>' +
+      (s.where ? '<p class="ns-where">' + icon('pin') + '<span>' + esc(s.where) + '</span></p>' : '') +
+      '<div class="ns-act">' + (S.readOnly ? '' : '<button class="keen-btn" data-act="salekeen" data-arg="' + esc(s.id + '|' + o.date) + '" aria-pressed="' + o.keen + '" aria-label="Keen on ' + esc(s.store) + ', ' + esc(L.fmtDayLong(o.date)) + '">' +
+        (o.keen ? icon('check') + 'We\'re keen' : 'Keen?') + '</button>') + '<button class="link" data-act="salemonthgo">All sale days</button></div></section>';
+  }
+  /* Home: how many things on the watch list are on special. */
   function onSpecialCard() {
     if (!S.feed || notices().some((n) => n.kind === 'sp')) return '';
-    const hits = watchHitsNow();
-    if (!hits.length) return '';
-    const names = hits.slice(0, 2).map((x) => x.n.split(' ').slice(0, 4).join(' ') + ' at ' + shopLabel(x.s));
+    const on = watchByWord().filter((x) => x.hits.length);
+    if (!on.length) return '';
     return '<button class="card row-card hot" data-act="godeals"><span class="row-lead"><span class="news-ic" aria-hidden="true">' + icon('tag') + '</span><span><span class="k">On special this week</span>' +
-      '<span class="row-t">' + esc(names.join(', ') + (hits.length > 2 ? ' and ' + (hits.length - 2) + ' more' : '')) + '</span></span></span>' + icon('arrow') + '</button>';
+      '<span class="row-t">' + esc(thingsLine(on)) + '</span></span></span>' + icon('arrow') + '</button>';
   }
   /* ---------- in-app notices ---------- */
   /* A heads-up at the top of Home when something's new: specials on your watch list when a new week's specials land,
@@ -3312,9 +3670,10 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
     const pop = since < 600 && at - S.enterAt > 300 && !reduceMotion();
     let eyebrow, title, sub, go = '';
     if (n.kind === 'sp') {
+      const on = watchByWord().filter((x) => x.hits.length), tops = on.map((x) => x.hits[0]);
       eyebrow = 'New this week';
-      title = n.hits.length === 1 ? 'Something on our list is on special' : n.hits.length + ' things on our list are on special';
-      sub = n.hits.slice(0, 2).map((x) => x.n.split(' ').slice(0, 4).join(' ') + ' at ' + shopLabel(x.s)).join(', ') + (n.hits.length > 2 ? ' and ' + (n.hits.length - 2) + ' more' : '');
+      title = on.length ? thingsLine(on) : 'Something on our list is on special';
+      sub = tops.slice(0, 2).map((x) => x.n.split(' ').slice(0, 4).join(' ') + ' at ' + shopLabel(x.s)).join(', ') + (tops.length > 2 ? ' and ' + (tops.length - 2) + ' more' : '');
       go = '<button class="btn btn-secondary btn-small" data-act="noticego" data-arg="' + esc(n.key) + '">See them</button>';
     } else {
       const s = n.o.sale;
@@ -3647,7 +4006,7 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
         ratio: String(C.card.ratio || 3),
         pointsBal: C.card.pointsBal != null ? C.card.pointsBal.toLocaleString('en-AU') : '', pointsAsOf: C.card.pointsAsOf || ''
       },
-      home: { week: C.home.week !== false, goal: C.home.goal !== false, spot: C.home.spot !== false, recap: C.home.recap !== false, soon: C.home.soon !== false, fact: C.home.fact !== false, deals: C.home.deals !== false },
+      home: { week: C.home.week !== false, goal: C.home.goal !== false, spot: C.home.spot !== false, recap: C.home.recap !== false, soon: C.home.soon !== false, fact: C.home.fact !== false, sale: C.home.sale !== false, deals: C.home.deals !== false },
       spot: { type: C.spot.type === 'countdown' ? 'countdown' : 'note', text: String(C.spot.text || ''), date: String(C.spot.date || '') },
       budgetSkip: C.budgetSkip.slice(), cardFrom: C.cardFrom, scheme: C.scheme,
       welcome: { note: C.welcome.note || (S.me ? defaultNote(other(S.me)) : '') },
@@ -3696,7 +4055,7 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
         categories: D.categories.slice(0, 30),
         goal: { name: String(D.goal.name || '').trim().slice(0, 40), target: target.v, saved: saved.v || 0 },
         card: { name: String(D.card.name || '').trim().slice(0, 40), holder: D.card.holder === 'a' ? 'a' : 'b', program: D.card.earns ? L.CARD_PRESETS[D.card.earns].program : cfg().card.program, earns: D.card.earns || null, rates, ratio, rate: null, pointsBal, pointsAsOf },
-        home: { week: !!D.home.week, goal: !!D.home.goal, spot: !!D.home.spot, recap: !!D.home.recap, soon: !!D.home.soon, fact: !!D.home.fact, deals: !!D.home.deals },
+        home: { week: !!D.home.week, goal: !!D.home.goal, spot: !!D.home.spot, recap: !!D.home.recap, soon: !!D.home.soon, fact: !!D.home.fact, sale: !!D.home.sale, deals: !!D.home.deals },
         spot: { type: D.spot.type, text: String(D.spot.text || '').trim().slice(0, 60), date: spotDate },
         budgetSkip: D.budgetSkip.filter((c) => typeof c === 'string').slice(0, 30),
         scheme: SCHEMES[D.scheme] ? D.scheme : 'warm',
@@ -3763,7 +4122,7 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
       '<label class="field"><span>As of</span><input class="input" id="dpasof" type="date" data-bind="draft.card.pointsAsOf" data-change="dirty" value="' + esc(D.card.pointsAsOf) + '"' + ro + '></label></div>' +
       '<p class="hint" style="margin:-6px 0 16px">From a statement or the bank app. Insights adds an estimate for card spends after that date.</p>' +
       '<label class="field" style="margin:0"><span>Bring in card spends from</span><input class="input" id="dcfrom" type="date" data-bind="draft.cardFrom" data-change="dirty" value="' + esc(D.cardFrom) + '"' + ro + '><p class="hint">Westpac imports leave out card spends before this date. Leave it empty to bring in everything.</p></label></section>';
-    out += '<section class="card"><div class="card-head"><h2>Home screen</h2></div>' + sw('week', 'Last 7 days') + sw('goal', 'Our goal') + sw('spot', 'Your spot') + sw('fact', 'Fun fact') + sw('soon', 'Coming up') + sw('deals', 'Specials on our watch list') + sw('recap', 'Insights link') + '</section>';
+    out += '<section class="card"><div class="card-head"><h2>Home screen</h2></div>' + sw('week', 'Last 7 days') + sw('goal', 'Our goal') + sw('spot', 'Your spot') + sw('fact', 'Fun fact') + sw('soon', 'Coming up') + sw('sale', 'Next sale day') + sw('deals', 'Specials on our watch list') + sw('recap', 'Insights link') + '</section>';
     out += '<section class="card"><div class="card-head"><h2>Your spot</h2></div><p class="muted" style="margin-bottom:12px">A space on Home for whatever you like: a note to each other or a countdown.</p>' +
       '<fieldset><legend class="sr">Type</legend><div class="seg">' + segBtn('cspot', 'note', D.spot.type === 'note', 'Note') + segBtn('cspot', 'countdown', D.spot.type === 'countdown', 'Countdown') + '</div></fieldset>' +
       '<label class="field"><span>' + (D.spot.type === 'countdown' ? 'Counting down to' : 'Note') + '</span><input class="input" id="dstext" maxlength="60" placeholder="' + (D.spot.type === 'countdown' ? 'Our holiday' : 'No takeaway this week') + '" data-bind="draft.spot.text" data-change="dirty" value="' + esc(D.spot.text) + '"' + ro + '></label>' +
@@ -4040,7 +4399,11 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
 
   /* ---------- dialogs ---------- */
   function openDialog(d) { S.dialog = d; render(); }
-  function closeDialog() { if (S.dialog && S.dialog.type === 'news' && !S.dialog.preview) markNewsSeen(S.dialog.id); S.dialog = null; render(); }
+  function closeDialog() {
+    if (S.dialog && S.dialog.type === 'news' && !S.dialog.preview) markNewsSeen(S.dialog.id);
+    S.dialog = S.dialog && S.dialog.back ? { type: S.dialog.back } : null;
+    render();
+  }
   function markNewsSeen(id) {
     if (!S.me || S.readOnly || !id || isEditor()) return;
     const C = cfg();
@@ -4081,6 +4444,12 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
       body = billsDialog(d);
     } else if (d.type === 'sale') {
       body = saleDialog(d);
+    } else if (d.type === 'watch') {
+      body = watchDialog();
+    } else if (d.type === 'salemonth') {
+      body = monthDialog();
+    } else if (d.type === 'receipt') {
+      body = receiptDialog(d);
     } else if (d.type === 'inscat') {
       body = insCatDialog(d);
     } else if (d.type === 'news') {
@@ -4230,6 +4599,23 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
     godeals: () => go('deals'),
     feedretry: () => { loadFeed(true); render(); },
     spstore: (v) => { S.spStore = v || 'all'; S.spAll = false; render(); },
+    spaisle: (v) => { S.spAisle = S.spAisle === v ? 'all' : (v || 'all'); S.spAll = false; render(); },
+    spwatch: () => {
+      S.spWatch = !S.spWatch; S.spAll = false; S.spAisle = 'all'; render();
+      if (S.spWatch) { const c = document.getElementById('spCard'); if (c) c.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' }); }
+    },
+    watchopen: () => openDialog({ type: 'watch' }),
+    salemonth: () => { if (!S.cal) initCal(); else S.cal.picked = false; openDialog({ type: 'salemonth' }); },
+    salemonthgo: () => { go('deals'); ACT.salemonth(); },
+    rcptype: () => { S.dialog = null; if (S.view === 'add') render(); else openAdd({ from: S.view === 'upload' ? 'upload' : 'home' }); },
+    rcpitem: (i) => {
+      const f = S.dialog && S.dialog.form, x = f && f.items[Number(i)];
+      if (!x) return;
+      const order = ['shared', f.payer, f.payer === 'a' ? 'b' : 'a'];
+      x.who = order[(order.indexOf(x.who) + 1) % 3]; S.dialog.error = null; render();
+    },
+    rcppaid: (p) => { const f = S.dialog && S.dialog.form; if (!f) return; f.payer = p === 'b' ? 'b' : 'a'; S.dialog.error = null; render(); },
+    rcpsave: () => saveReceipt(),
     spmore: () => { S.spAll = !S.spAll; render(); if (!S.spAll) { const el = document.getElementById('spList'); if (el) el.scrollIntoView({ block: 'nearest' }); } },
     ozball: () => { S.ozbAll = !S.ozbAll; render(); },
     watchadd: () => {
@@ -4252,8 +4638,8 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
       saveDeals({ sales: D.sales.concat([sale]) }).then((ok) => { if (ok) toast('Added ' + x.store + '. Next one is ' + L.fmtDay(nextSale(sale, t))); });
       render();
     },
-    saleadd: (d) => openDialog({ type: 'sale', id: null, form: saleForm(null, ISO_DAY.test(d || '') ? d : null), error: null }),
-    saleopen: (id) => { const s = dealsCfg().sales.filter((x) => x.id === id)[0]; if (s) openDialog({ type: 'sale', id, form: saleForm(s), error: null }); },
+    saleadd: (d) => openDialog({ type: 'sale', id: null, form: saleForm(null, ISO_DAY.test(d || '') ? d : null), error: null, back: S.dialog && S.dialog.type === 'salemonth' ? 'salemonth' : null }),
+    saleopen: (id) => { const s = dealsCfg().sales.filter((x) => x.id === id)[0]; if (s) openDialog({ type: 'sale', id, form: saleForm(s), error: null, back: S.dialog && S.dialog.type === 'salemonth' ? 'salemonth' : null }); },
     salesave: () => {
       const d = S.dialog, F = d && d.form;
       if (!F) return;
@@ -4267,13 +4653,13 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
       if (base && JSON.stringify(base.rule) !== JSON.stringify(rule)) { sale.skip = []; sale.on = []; }
       if (base && base.keen !== sale.keen) { sale.skip = []; sale.on = []; }
       saveDeals({ sales: base ? D.sales.map((x) => (x.id === base.id ? sale : x)) : D.sales.concat([sale]) }).then((ok) => { if (ok) toast(base ? 'Saved ' + store : 'Added ' + store); });
-      S.dialog = null; render();
+      S.dialog = d.back ? { type: d.back } : null; render();
     },
     saledel: () => {
       const d = S.dialog, D = dealsCfg(), s = d && D.sales.filter((x) => x.id === d.id)[0];
       if (!s) return;
       saveDeals({ sales: D.sales.filter((x) => x.id !== s.id) }).then((ok) => { if (ok) toast('Removed ' + s.store); });
-      S.dialog = null; render();
+      S.dialog = d.back ? { type: d.back } : null; render();
     },
     salekeen: (arg) => {
       const i = arg.lastIndexOf('|'), id = arg.slice(0, i), date = arg.slice(i + 1), D = dealsCfg();
@@ -4379,6 +4765,7 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
       const l = document.getElementById('dateLbl'); if (l) l.textContent = L.fmtDay(S.add.date);
     },
     importfile: (el) => { const f = el.files && el.files[0]; importFile(f); el.value = ''; },
+    rcpfile: (el) => { const f = el.files && el.files[0]; el.value = ''; startReceipt(f); },
     remember: (el) => { upsert('hh/settings', { remember: !!el.checked }, defaults()); },
     dirty: () => { S.draftSaved = false; },
     swfiles: (el) => {
@@ -4429,7 +4816,8 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
       if (el && S.dialog && S.dialog.type === 'splitwise') el.innerHTML = swResultHtml(swPreview(S.dialog));
     },
     swtrimrefresh: () => swTrimRefresh(),
-    spsearch: () => { S.spAll = false; const el = document.getElementById('spList'); if (el) el.innerHTML = spListHtml(); }
+    spsearch: () => { S.spAll = false; const el = document.getElementById('spList'); if (el) el.innerHTML = spListHtml(); },
+    rcpsum: () => { const el = document.getElementById('rcpSum'); if (el && S.dialog && S.dialog.form) el.innerHTML = receiptSumHtml(S.dialog.form); }
   };
 
   /* ---------- Splitwise ---------- */
