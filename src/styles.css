@@ -528,7 +528,6 @@ input[type="date"].input::-webkit-datetime-edit { padding: 0; }
 @media (prefers-reduced-motion: reduce) { .enter .main > *, .enter .meter span, .enter .hbar-fill, .enter .col-fill, .enter .pc-line { animation: none !important; } }
 
 /* ---------- deals ---------- */
-.cal-mode { margin: 0 0 16px; }
 .dot.sale { border: 2px solid var(--ink); background: var(--card); }
 .dot.keen { background: var(--marigold); box-shadow: 0 0 0 1.5px var(--ink); }
 .cal-day.sale .v { color: var(--ink); max-width: 100%; overflow: hidden; text-overflow: clip; }

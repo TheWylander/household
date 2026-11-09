@@ -52,7 +52,6 @@
     home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/>',
     cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
-    inbox: '<path d="M4 13.5 6.5 5h11L20 13.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 13.5h4.5l1 2.5h5l1-2.5H20"/>',
     sliders: '<path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/>',
     close: '<path d="M6 6l12 12M18 6 6 18"/>',
     left: '<path d="M15 5l-7 7 7 7"/>',
@@ -84,7 +83,8 @@
       ['check', 'Tidy categories.', 'In Insights, tap a category to see every spend in it, and move any that belong somewhere else.'],
       ['star', 'Fun fact.', 'A little fact about how we spend, a new one each time you open the app.'],
       ['arrow', 'Swipe through months.', 'Swipe left or right in Insights and the Calendar. Numbers count up and charts grow as each screen opens.'],
-      ['tag', 'Deals.', "The Calendar has a Deals view: sale days like Lucky Mart's monthly sale, plus this week's Coles, Woolies and Harris Farm specials, updated every Wednesday. Add things we buy to the watch list, and Home gives us a heads-up when they're cheap or a sale day is tomorrow."],
+      ['tag', 'Deals.', "Deals has its own tab: sale days like Lucky Mart's monthly sale, plus this week's Coles, Woolies and Harris Farm specials, updated every Wednesday. Add things we buy to the watch list, and Home gives us a heads-up when they're cheap or a sale day is tomorrow."],
+      ['gear', 'Upload.', 'Bringing in the Westpac statement and Splitwise files has moved to Settings, under Upload. Spends to check still show on Home.'],
       ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up the evening before a sale day we're keen on, and on Wednesdays when something on the watch list is on special."]
     ] }
   ];
@@ -105,7 +105,7 @@
     photos: null, photoBusy: null, photoErr: null, newsShown: false, newsDoc: null, newsEdit: null, newsId: null, factN: 0,
     enterKey: null, enterAt: 0, enterDir: 0, enterDirNow: 0, countsShown: {},
     pushDoc: null, pushBusy: false, pushNote: null,
-    calMode: 'spend', dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, spStore: 'all', spQuery: '', spAll: false, ozbAll: false, watchNew: '',
+    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, spStore: 'all', spQuery: '', spAll: false, ozbAll: false, watchNew: '',
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -417,7 +417,7 @@
     try { S.feed = cleanFeed(JSON.parse(lsGet('hh.deals') || 'null')); } catch (e) { S.feed = null; }
     /* A tapped notification opens Deals. */
     if (location.hash === '#deals') {
-      S.view = 'cal'; S.calMode = 'deals';
+      S.view = 'deals';
       try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* fine either way */ }
     }
     setTimeout(() => loadFeed(), 1200);
@@ -574,8 +574,8 @@
       const due = newsDue();
       if (due) { S.newsShown = true; S.dialog = { type: 'news', id: due.id }; }
     }
-    const nav = ['home', 'cal', 'inbox', 'insights', 'settings', 'custom', 'profile', 'newsedit', 'recap', 'tab'].indexOf(S.view) >= 0;
-    const sw = S.view === 'insights' || S.view === 'recap' ? (S.insMode === 'year' ? 'insyear' : 'recapmove') : S.view === 'cal' ? 'calmove' : '';
+    const nav = ['home', 'cal', 'deals', 'insights', 'settings', 'upload', 'custom', 'profile', 'newsedit', 'recap', 'tab'].indexOf(S.view) >= 0;
+    const sw = S.view === 'insights' || S.view === 'recap' ? (S.insMode === 'year' ? 'insyear' : 'recapmove') : S.view === 'cal' || S.view === 'deals' ? 'calmove' : '';
     return bn + '<main class="main' + (nav ? '' : ' no-nav') + '" style="' + meVars() + '"' + (sw ? ' data-swipe="' + sw + '"' : '') + '>' + viewFor(S.view) + '</main>' +
       (nav ? '<div data-live="nav">' + navBar() + '</div>' : '') + dialogHtml();
   }
@@ -628,7 +628,7 @@
     if (!S.settings || !S.me || S.welcomePreview) return 'pre';
     let k = S.view === 'recap' ? 'insights' : S.view;
     if (k === 'insights') k += '|' + S.insMode + '|' + S.recapOffset + '|' + S.insYearOff;
-    if (k === 'cal' && S.cal) k += '|' + S.cal.y + '-' + S.cal.m + '|' + S.calMode;
+    if ((k === 'cal' || k === 'deals') && S.cal) k += '|' + S.cal.y + '-' + S.cal.m;
     return k;
   }
   let countRaf = 0;
@@ -687,9 +687,10 @@
   function viewFor(v) {
     switch (v) {
       case 'cal': return viewCal();
+      case 'deals': return dealsView();
       case 'add': return S.add ? viewAdd() : viewHome();
       case 'tab': return viewTab();
-      case 'inbox': return viewInbox();
+      case 'upload': return viewUpload();
       case 'recap':
       case 'insights': return viewInsights();
       case 'settings': return viewSettings();
@@ -753,12 +754,11 @@
     return '<button type="button" data-act="' + act + '" data-arg="' + esc(val) + '" aria-pressed="' + (pressed ? 'true' : 'false') + '"' + style + '>' + esc(label) + '</button>';
   }
   function navBar() {
-    const n = pendingAll().length;
     const item = (v, ic, label, extra) => '<button class="nav-i' + (S.view === v ? ' on' : '') + '" data-act="go" data-arg="' + v + '"' + (S.view === v ? ' aria-current="page"' : '') + '>' + icon(ic) + '<span>' + label + '</span>' + (extra || '') + '</button>';
     const fresh = notices().some((x) => x.kind === 'sp');
-    return '<nav class="nav" aria-label="Main">' + item('home', 'home', 'Home') + item('cal', 'cal', 'Calendar', fresh ? '<span class="dot-badge" aria-hidden="true"></span><span class="sr">, new specials</span>' : '') +
+    return '<nav class="nav" aria-label="Main">' + item('home', 'home', 'Home') + item('cal', 'cal', 'Calendar') +
       (S.readOnly ? '' : '<button class="nav-add" data-act="add" aria-label="Add a spend">' + icon('plus') + '</button>') +
-      item('inbox', 'inbox', 'Inbox', n ? '<span class="badge"><span class="sr">, </span>' + n + '<span class="sr"> to check</span></span>' : '') +
+      item('deals', 'tag', 'Deals', fresh ? '<span class="dot-badge" aria-hidden="true"></span><span class="sr">, new specials</span>' : '') +
       item('insights', 'chart', 'Insights') + '</nav>';
   }
   function viewLoading() {
@@ -803,7 +803,7 @@
     }
     const n = pendingAll().length;
     if (n) {
-      out += '<button class="card row-card attn" data-act="go" data-arg="inbox"><span class="row-lead"><span class="count">' + n + '</span>' +
+      out += '<button class="card row-card attn" data-act="go" data-arg="upload"><span class="row-lead"><span class="count">' + n + '</span>' +
         '<span><span class="row-t">' + (n === 1 ? 'spend' : 'spends') + ' to check</span><span class="k">From ' + esc(poss(nm(holder()))) + ' card</span></span></span>' + icon('arrow') + '</button>';
     }
     const waiting = isEditor() && !S.readOnly && RELEASES.length ? noteFor(RELEASES[0].id) : null;
@@ -821,7 +821,7 @@
       out += '<button class="card row-card" data-act="go" data-arg="recap"><span><span class="k">Insights</span><span class="row-t">Where ' + esc(L.periodLabel(L.shiftPeriod(p, -1), t)) + ' went</span></span>' + icon('arrow') + '</button>';
     }
     if (!S.entries.length) {
-      out += '<section class="card note-card"><h2>Start with one spend</h2><p>Tap the plus to add what you spent today, or bring in ' + esc(poss(nm(holder()))) + ' card statement from the Inbox.</p></section>';
+      out += '<section class="card note-card"><h2>Start with one spend</h2><p>Tap the plus to add what you spent today, or bring in ' + esc(poss(nm(holder()))) + ' card statement from Settings, under Upload.</p></section>';
     }
     return out;
   }
@@ -872,8 +872,6 @@
   }
   function viewCal() {
     if (!S.cal) initCal();
-    const modeSeg = '<div class="seg cal-mode" role="group" aria-label="Show">' + segBtn('calmode', 'spend', S.calMode !== 'deals', 'Spending') + segBtn('calmode', 'deals', S.calMode === 'deals', 'Deals') + '</div>';
-    if (S.calMode === 'deals') return dealsView(modeSeg);
     const c = S.cal, t = today(), ym = ymKey(c.y, c.m), H = holder();
     const info = {};
     S.entries.forEach((e) => {
@@ -894,7 +892,7 @@
     }).join('');
     const isThisMonth = ym === t.slice(0, 7);
     return '<header class="top"><div><p class="eyebrow">Every spend, day by day</p><h1 class="title">Calendar</h1></div>' +
-      '<button class="link" data-act="go" data-arg="recap">Insights</button></header>' + modeSeg +
+      '<button class="link" data-act="go" data-arg="recap">Insights</button></header>' +
       '<section class="card cal bold"><div class="cal-head"><button class="icon-btn" data-act="calmove" data-arg="-1" aria-label="Previous month">' + icon('left') + '</button>' +
       '<h2>' + L.MONTHS_FULL[c.m] + ' ' + c.y + '</h2><button class="icon-btn" data-act="calmove" data-arg="1" aria-label="Next month">' + icon('right') + '</button></div>' +
       '<div class="cal-dow" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>' +
@@ -919,7 +917,7 @@
     return null;
   }
   function entryRow(e, ctx) {
-    const H = holder(), id = esc(e.id), inInbox = ctx === 'inbox';
+    const H = holder(), id = esc(e.id), inUpload = ctx === 'upload';
     if (e.kind === 'settlement') {
       const from = e.payer === 'a' || e.payer === 'b' ? e.payer : (e.paid && e.paid.a ? 'a' : 'b');
       return '<li class="entry"><div class="e-row"><span class="av settle" aria-hidden="true">' + icon('check') + '</span><div class="e-main"><p class="e-title">' + esc(nm(from)) + ' paid ' + esc(nm(other(from))) + '</p><p class="e-meta">Settling up</p></div>' +
@@ -941,7 +939,7 @@
     if (e.orig && e.orig.currency) sub += '<p class="e-sub">' + esc(fmtForeign(e.orig)) + '</p>';
     let tag = '', actions = '';
     if (e.status === 'check') {
-      tag = inInbox ? '' : '<span class="tag chk">To check</span>';
+      tag = inUpload ? '' : '<span class="tag chk">To check</span>';
       if (!S.readOnly) actions = '<div class="e-actions"><button class="btn btn-small btn-secondary" data-act="mark" data-arg="' + id + '|shared">Shared</button><button class="btn btn-small btn-ghost" data-act="mark" data-arg="' + id + '|personal">Just ' + esc(poss(nm(H))) + '</button></div>';
     } else if (e.status === 'personal') {
       tag = '<span class="tag">Just ' + esc(poss(nm(H))) + '</span>';
@@ -953,7 +951,7 @@
     }
     const dim = e.status === 'personal' || e.status === 'dupe';
     return '<li class="entry' + (dim ? ' dim' : '') + '"><div class="e-row">' + av(payerOf(e)) + '<div class="e-main"><p class="e-title">' + esc(e.title || 'Spend') + '</p>' +
-      '<p class="e-meta">' + esc(inInbox ? (e.category || 'Other') : (e.category || 'Other') + ' · ' + src) + '</p>' + sub + tag + '</div>' +
+      '<p class="e-meta">' + esc(inUpload ? (e.category || 'Other') : (e.category || 'Other') + ' · ' + src) + '</p>' + sub + tag + '</div>' +
       '<div class="e-right"><p class="e-amt">' + L.fmt(e.amount) + '</p>' + (S.readOnly ? '' : '<button class="link sm" data-act="edit" data-arg="' + id + '">Edit</button>') + '</div></div>' + actions + '</li>';
   }
 
@@ -1182,13 +1180,13 @@
     initCal(date); S.view = 'cal'; render(); window.scrollTo(0, 0);
   }
 
-  /* ---------- inbox and import ---------- */
-  function viewInbox() {
+  /* ---------- upload: statements, Splitwise files, and spends to check ---------- */
+  function viewUpload() {
     const H = holder(), C = cfg(), hn = nm(H);
     const pend = pendingAll().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : (a.createdAt || 0) - (b.createdAt || 0)));
     const groups = {};
     pend.forEach((e) => { (groups[e.date] = groups[e.date] || []).push(e); });
-    let out = '<header class="top"><div><p class="eyebrow">' + esc(poss(hn)) + ' ' + esc(cardLabel()) + '</p><h1 class="title">Inbox</h1></div></header>';
+    let out = '<header class="top"><div><button class="back-link" data-act="go" data-arg="settings">' + icon('left') + 'Settings</button><p class="eyebrow">' + esc(poss(hn)) + ' ' + esc(cardLabel()) + '</p><h1 class="title">Upload</h1></div></header>';
     if (!S.readOnly) {
       out += '<section class="card bold"><h2 style="font-size:21px;margin-bottom:6px">Bring in ' + esc(poss(hn)) + ' card spends</h2>' +
         '<p class="muted" style="margin-bottom:14px">Export a CSV from Westpac, then choose the file here. Anything you\'ve already brought in is skipped, so overlapping dates are fine.</p>' +
@@ -1221,7 +1219,7 @@
       const list = groups[d];
       out += '<section class="card"><div class="group-head"><h2>' + esc(L.fmtDay(d)) + ' <span class="muted" style="font-family:var(--body);font-size:16px">' + L.fmt(sumAmt(list)) + '</span></h2>' +
         (S.readOnly || list.length < 2 ? '' : '<button class="btn btn-small btn-secondary" data-act="shareday" data-arg="' + d + '">Share whole day</button>') + '</div>' +
-        '<ul class="list">' + list.map((e) => entryRow(e, 'inbox')).join('') + '</ul></section>';
+        '<ul class="list">' + list.map((e) => entryRow(e, 'upload')).join('') + '</ul></section>';
     });
     return out;
   }
@@ -2032,7 +2030,8 @@
       (L.parseYmd(d).getDay() === 3 ? '<p class="hint">New Coles and Woolies specials start today.</p>' : '') +
       (S.readOnly ? '' : '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="saleadd" data-arg="' + d + '">' + icon('plus') + 'Add a sale day on this day</button>') + '</section>';
   }
-  function dealsView(modeSeg) {
+  function dealsView() {
+    if (!S.cal) initCal();
     const c = S.cal, t = today(), ym = ymKey(c.y, c.m);
     const first = ym + '-01', last = ym + '-' + L.pad(L.daysInMonth(c.y, c.m)), by = {};
     saleDays(first, last).forEach((o) => { (by[o.date] = by[o.date] || []).push(o); });
@@ -2046,7 +2045,7 @@
         '<span class="n">' + L.parseYmd(d).getDate() + '</span><span class="v">' + esc(short) + '</span>' +
         '<span class="dots">' + (list.length ? '<i class="dot ' + (keen ? 'keen' : 'sale') + '"></i>' : '') + '</span></button>';
     }).join('');
-    return '<header class="top"><div><p class="eyebrow">Sale days and specials</p><h1 class="title">Calendar</h1></div></header>' + modeSeg +
+    return '<header class="top"><div><p class="eyebrow">Sale days and specials</p><h1 class="title">Deals</h1></div></header>' +
       '<section class="card cal bold"><div class="cal-head"><button class="icon-btn" data-act="calmove" data-arg="-1" aria-label="Previous month">' + icon('left') + '</button>' +
       '<h2>' + L.MONTHS_FULL[c.m] + ' ' + c.y + '</h2><button class="icon-btn" data-act="calmove" data-arg="1" aria-label="Next month">' + icon('right') + '</button></div>' +
       '<div class="cal-dow" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>' +
@@ -2393,6 +2392,9 @@
   function viewSettings() {
     const fb = S.mode === 'firebase', them = esc(nm(other(S.me || 'a')));
     let out = '<header class="top"><div><p class="eyebrow">Our household</p><h1 class="title">Settings</h1></div></header>';
+    const waiting = pendingAll().length;
+    out += '<button class="card row-card' + (waiting ? ' attn' : '') + '" data-act="go" data-arg="upload"><span class="row-lead">' + (waiting ? '<span class="count">' + waiting + '<span class="sr"> to check</span></span>' : '') +
+      '<span><span class="row-t">Upload</span><span class="k">' + esc(poss(nm(holder()))) + ' Westpac statement and Splitwise files</span></span></span>' + icon('arrow') + '</button>';
     out += '<button class="card row-card" data-act="go" data-arg="profile"><span class="row-lead"><span class="duo" aria-hidden="true">' + av('a') + av('b') + '</span><span><span class="row-t">Profiles</span><span class="k">Photos, names and colours</span></span></span>' + icon('arrow') + '</button>';
     out += '<button class="card row-card" data-act="go" data-arg="custom"><span><span class="row-t">Customise</span><span class="k">Look, budget, rent, card and categories</span></span>' + icon('arrow') + '</button>';
     if (isEditor() && RELEASES.length) {
@@ -2895,7 +2897,8 @@
     if ((S.view === 'custom' || S.view === 'profile') && v !== S.view && draftDirty()) { openDialog({ type: 'leave', to: v }); return; }
     if (v === 'custom' || v === 'profile') { S.draft = makeDraft(); S.draftSaved = false; S.photoErr = null; }
     if (v === 'newsedit') { S.newsEdit = null; S.newsId = null; }
-    if (v === 'cal' && !S.cal) initCal();
+    if (v === 'cal' || v === 'deals') { if (!S.cal) initCal(); else if (v !== S.view) S.cal.picked = false; }
+    if (v === 'deals') loadFeed();
     if (v === 'recap') { S.recapOffset = S.view === 'home' ? -1 : 0; S.insMode = 'month'; v = 'insights'; }
     else if (v === 'insights' && S.view !== 'insights') { S.recapOffset = 0; S.insYearOff = 0; S.insSel = null; S.insDay = null; }
     if (v !== 'add') S.add = null;
@@ -3010,8 +3013,7 @@
     pushoff: () => pushOff(),
     noticex: (k) => { markSeen(k); render(); },
     noticego: (k) => { markSeen(k); ACT.godeals(); },
-    calmode: (m) => { S.calMode = m === 'deals' ? 'deals' : 'spend'; if (S.cal) S.cal.picked = false; if (S.calMode === 'deals') loadFeed(); render(); },
-    godeals: () => { if (!S.cal) initCal(); S.calMode = 'deals'; loadFeed(); go('cal'); },
+    godeals: () => go('deals'),
     feedretry: () => { loadFeed(true); render(); },
     spstore: (v) => { S.spStore = v || 'all'; S.spAll = false; render(); },
     spmore: () => { S.spAll = !S.spAll; render(); if (!S.spAll) { const el = document.getElementById('spList'); if (el) el.scrollIntoView({ block: 'nearest' }); } },
@@ -3224,7 +3226,7 @@
   }
   function stagedCard() {
     const P = S.impParsed;
-    if (S.impBad && !S.readOnly && S.view === 'home') return '<button class="card row-card attn" data-act="go" data-arg="inbox"><span><span class="k">Splitwise history</span><span class="row-t">Choose your Splitwise files in the Inbox</span></span>' + icon('arrow') + '</button>';
+    if (S.impBad && !S.readOnly && S.view === 'home') return '<button class="card row-card attn" data-act="go" data-arg="upload"><span><span class="k">Splitwise history</span><span class="row-t">Choose your Splitwise files in Upload</span></span>' + icon('arrow') + '</button>';
     if (!P || S.readOnly) return '';
     const fresh = P.groups.reduce((n, g) => n + g.rows.filter((r) => !S.byId[r.id]).length, 0);
     if (!fresh) return '';
@@ -3315,7 +3317,7 @@
   }
 
   /* ---------- trimming Splitwise history ---------- */
-  /* Once Splitwise history is in, the Inbox shows what came across and lets you drop anything older than a date.
+  /* Once Splitwise history is in, Upload shows what came across and lets you drop anything older than a date.
      Only entries that came from Splitwise are touched. Removed ones are left as empty markers, so choosing
      the same file again doesn't bring them back. */
   function swHistoryCard() {

@@ -256,9 +256,10 @@ try:
         # ---------- deals: sale days, specials and the watch list ----------
         nxt = deals_fixture.next_second_saturday(TODAY)
         this_sat = deals_fixture.second_saturday(TODAY.year, TODAY.month)
-        act(a, 'go', 'cal'); act(a, 'calmode', 'deals'); a.wait_for_timeout(500)
+        act(a, 'go', 'deals'); a.wait_for_timeout(500)
         t = text(a)
-        check('Sale days in' in t and 'Lucky Mart' in t and 'Specials this week' in t, 'Calendar has a Deals view with the Lucky Mart idea and specials')
+        check('Sale days in' in t and 'Lucky Mart' in t and 'Specials this week' in t, 'Deals has its own tab with the Lucky Mart idea and specials')
+        check('Spending' not in a.locator('header.top').inner_text() and a.locator('.nav [data-arg="deals"]').count() == 1 and a.locator('.nav [data-arg="inbox"]').count() == 0, 'the tab bar has Deals where Inbox was')
         chips = a.locator('.store-chips').inner_text()
         check('Coles' in chips and 'Woolies' in chips and 'Harris Farm' in chips, 'specials from Coles, Woolies and Harris Farm: ' + chips.replace('\n', ' '))
         check(a.evaluate('window.__xss') is None and a.locator('.specials img').count() == 0 and '<img src=x' in t, 'text from the deals file shows as text and never runs')
@@ -291,7 +292,7 @@ try:
         act(a, 'go', 'home'); a.wait_for_timeout(300)
         note = a.locator('.notice').first.inner_text() if a.locator('.notice').count() else ''
         check('Something on our list is on special' in note and 'Sanitarium Weet-Bix 575g at Coles' in note and 'On special this week' not in text(a), 'a heads-up at the top of Home for a watch-list special')
-        check(a.locator('.nav [data-arg="cal"] .dot-badge').count() == 1, 'and a dot on Calendar')
+        check(a.locator('.nav [data-arg="deals"] .dot-badge').count() == 1, 'and a dot on Deals')
         a.locator('.notice [data-act="noticex"]').first.click(); a.wait_for_timeout(200)
         t = text(a)
         check(a.locator('.notice').count() == 0 and 'On special this week' in t and 'Sanitarium Weet-Bix 575g at Coles' in t and a.locator('.nav .dot-badge').count() == 0, 'closed, it settles into the row on Home')
@@ -313,10 +314,9 @@ try:
             act(a, 'calmove', '1')
         a.locator(f'.keen-btn[data-arg$="|{nxt.isoformat()}"]').first.click(); a.wait_for_timeout(300)
         check(a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals']")['sales'][0]['skip'] == [], 'keen again')
-        act(a, 'calmode', 'spend')
 
         b.wait_for_timeout(300)
-        act(b, 'go', 'cal'); act(b, 'calmode', 'deals'); b.wait_for_timeout(400)
+        act(b, 'go', 'deals'); b.wait_for_timeout(400)
         check('Lucky Mart' in b.locator('#saleMonth').inner_text() and 'weetbix' in b.locator('.watch').inner_text(), "Jules's phone has the sale day and the watch list")
         act(b, 'saleadd')
         act(b, 'salesave')
@@ -336,12 +336,12 @@ try:
         act(b, 'salesave'); b.wait_for_timeout(400)
         sales = b.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals'].sales")
         check(sales[1]['rule'] == {'k': 'once', 'date': once}, 'changed to a one-off sale tomorrow')
-        act(b, 'calmode', 'spend'); act(b, 'go', 'home'); b.wait_for_timeout(300)
+        act(b, 'go', 'home'); b.wait_for_timeout(300)
         notes = b.locator('.notice').all_inner_texts()
         check(any('Tong Li sale is tomorrow' in n and '10% off' in n for n in notes), 'a heads-up the day before a sale day: ' + ' | '.join(n.replace('\n', ' ') for n in notes))
         b.locator('.notice:has-text("Tong Li") [data-act="noticex"]').click(); b.wait_for_timeout(200)
         check(not any('Tong Li' in n for n in b.locator('.notice').all_inner_texts()), 'closed')
-        act(b, 'go', 'cal'); act(b, 'calmode', 'deals'); b.wait_for_timeout(200)
+        act(b, 'go', 'deals'); b.wait_for_timeout(200)
         if b.locator('[data-act="caltoday"]').count():
             act(b, 'caltoday')
         if b.locator(f'[data-act="saleopen"][data-arg="{sales[1]["id"]}"]').count() == 0:
@@ -349,7 +349,7 @@ try:
         b.locator(f'[data-act="saleopen"][data-arg="{sales[1]["id"]}"]').first.click(); b.wait_for_timeout(200)
         act(b, 'saledel'); b.wait_for_timeout(400)
         check(len(b.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals'].sales")) == 1, 'removed')
-        act(b, 'calmode', 'spend'); act(b, 'go', 'home')
+        act(b, 'go', 'home')
 
         # ---------- a login that isn't one of the two ----------
         c = watch(ctx.new_page(), 'stranger')

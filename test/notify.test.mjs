@@ -43,12 +43,13 @@ await t('the evening before a sale day', () => {
   const p = plan({ push: push(), deals: deals(), feed, now: FRI_EVENING });
   assert.deepStrictEqual(p.subs.map((s) => s.id), ['p1', 'p2'], 'phones with an older key or removed are left out');
   const titles = p.out.map((n) => n.title);
-  assert.deepStrictEqual(titles, ['Notifications are on', 'Lucky Mart sale tomorrow', 'On special this week']);
+  assert.deepStrictEqual(titles, ['🔔 Notifications are on', '📅 Lucky Mart sale tomorrow', '🏷️ On special this week']);
+  assert.strictEqual(p.out[0].body.split('\n').length, 3, 'the welcome lists the three kinds of pop-up, one per line');
   const sale = p.out[1];
-  assert.deepStrictEqual([sale.to, sale.body, sale.url, sale.key], [['p1', 'p2'], 'Up to 20% off · Artarmon', './#deals', 'sale:s1|2026-11-14:eve']);
+  assert.deepStrictEqual([sale.to, sale.body, sale.url, sale.key], [['p1', 'p2'], 'Up to 20% off\n📍 Shop 2, 2 Wilkes Ave, Artarmon', './#deals', 'sale:s1|2026-11-14:eve']);
   const sp = p.out[2];
   assert.deepStrictEqual(sp.to, ['p1'], 'the second person turned specials off');
-  assert.strictEqual(sp.body, 'Sanitarium Weet-Bix 575g at Coles, 20% off Everything In-Store at Tokyo Mart', 'watch words match a deal by its shop, and the half-price post is left out');
+  assert.strictEqual(sp.body, 'Sanitarium Weet-Bix 575g · $2.50 at Coles\n20% off Everything In-Store at Tokyo Mart', 'one per line with the price; watch words match a deal by its shop, and the half-price post is left out');
   assert.deepStrictEqual(p.out[0].to, ['p1'], 'only the new phone is welcomed');
 });
 
@@ -57,13 +58,17 @@ await t('the morning of, and nothing twice', () => {
   pp.subs.p1.welcomed = true;
   pp.sent = { 'sale:s1|2026-11-14:eve': 1, 'sp:2026-11-11': ['Sanitarium Weet-Bix 575g', '20% off Everything In-Store'] };
   const p = plan({ push: pp, deals: deals(), feed, now: SAT_MORNING });
-  assert.deepStrictEqual(p.out.map((n) => n.title), ['Lucky Mart sale is on today']);
+  assert.deepStrictEqual(p.out.map((n) => n.title), ['🛒 Lucky Mart sale is on today']);
   pp.sent['sale:s1|2026-11-14:am'] = 1;
   assert.deepStrictEqual(plan({ push: pp, deals: deals(), feed, now: SAT_MORNING }).out, []);
   const more = JSON.parse(JSON.stringify(feed));
   more.specials.push({ s: 'Woolworths', n: 'Weetbix Bites 510g', now: 400, was: 800, off: 50, src: 'hp' });
   const p2 = plan({ push: pp, deals: deals(), feed: more, now: SAT_MORNING });
-  assert.deepStrictEqual([p2.out[0].title, p2.out[0].body], ['More on special this week', 'Weetbix Bites 510g at Woolies']);
+  assert.deepStrictEqual([p2.out[0].title, p2.out[0].body], ['🏷️ More on special this week', 'Weetbix Bites 510g · $4.00 at Woolies']);
+  const lots = JSON.parse(JSON.stringify(feed));
+  ['Weet-Bix Kids', 'Weet-Bix Blends', 'Weet-Bix Gold', 'Weet-Bix Protein'].forEach((n) => lots.specials.push({ s: 'Coles', n, now: 300, was: 600, off: 50, src: 'hp' }));
+  const big = plan({ push: push(), deals: deals(), feed: lots, now: FRI_EVENING }).out.filter((n) => n.tag === 'specials')[0].body.split('\n');
+  assert.deepStrictEqual([big.length, big[3]], [4, '+ 3 more in the app'], 'six hits: three lines and how many more');
 });
 
 await t("not keen, skipped, or not today: no pop-up", () => {
@@ -95,7 +100,7 @@ await t('sending: what gets written back', async () => {
     return { ok: true };
   };
   const r = await run({ push: pp, deals: deals(), feed, now: FRI_EVENING, send });
-  assert.deepStrictEqual(calls, [['p1', 'Notifications are on', 'KEY'], ['p1', 'Lucky Mart sale tomorrow', 'KEY'], ['p2', 'Lucky Mart sale tomorrow', 'KEY'], ['p1', 'On special this week', 'KEY']]);
+  assert.deepStrictEqual(calls, [['p1', '🔔 Notifications are on', 'KEY'], ['p1', '📅 Lucky Mart sale tomorrow', 'KEY'], ['p2', '📅 Lucky Mart sale tomorrow', 'KEY'], ['p1', '🏷️ On special this week', 'KEY']]);
   assert.deepStrictEqual(r.write.subs, { p1: { welcomed: true }, p2: null }, 'welcomed, and a phone that has gone is removed');
   assert.deepStrictEqual(Object.keys(r.write.sent).sort(), ['sale:s1|2026-11-14:eve', 'sp:2026-11-11']);
   assert.deepStrictEqual(r.write.drop, ['sale:s1|2026-08-01:eve']);

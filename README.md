@@ -20,7 +20,7 @@ This `source` branch holds the code. The `main` branch holds the built site that
 
 ## Deals
 
-The Calendar's Deals view reads `deals.json` from the `deals` branch. A GitHub Actions job (`.github/workflows/deals.yml` on `main`) rebuilds it every Wednesday for free, publishing only when something is new, from public sources: OzBargain's grocery RSS feeds, the weekly Catalogue Half-Price Report posted on OzBargain (every Coles and Woolworths half-price item in the NSW catalogue), and Harris Farm's online specials. It needs no secrets. The file holds the same store specials for everyone; each phone filters it against its own watch list, which stays in Firebase. Run it by hand from the Actions tab with "Run workflow". Harris Farm's "was" prices are often per kilo, so its specials show at the special price only.
+The Deals tab reads `deals.json` from the `deals` branch. A GitHub Actions job (`.github/workflows/deals.yml` on `main`) rebuilds it every Wednesday for free, publishing only when something is new, from public sources: OzBargain's grocery RSS feeds, the weekly Catalogue Half-Price Report posted on OzBargain (every Coles and Woolworths half-price item in the NSW catalogue), and Harris Farm's online specials. It needs no secrets. The file holds the same store specials for everyone; each phone filters it against its own watch list, which stays in Firebase. Run it by hand from the Actions tab with "Run workflow". Harris Farm's "was" prices are often per kilo, so its specials show at the special price only.
 
 ## Phone notifications
 
