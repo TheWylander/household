@@ -1,4 +1,4 @@
-# One-off: checks receipt reading works through Firebase AI Logic for this project. Removed after it has run.
+# One-off: checks receipt reading works through Firebase AI Logic for this project. Removed after it has run. (second try)
 name: Gemini check
 on:
   push:
