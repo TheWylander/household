@@ -1,4 +1,4 @@
-/* One-off (run 3, after the AI Logic setup): tries each route Firebase AI Logic offers this project and prints what comes back,
+/* One-off (run 4, App Check token exchange): tries each route Firebase AI Logic offers this project and prints what comes back,
    to tell apart "Gemini Developer API not set up", "Agent Platform set up instead" and "App Check needed". */
 import { readFile } from 'node:fs/promises';
 
@@ -29,4 +29,18 @@ for (const [label, url] of routes) {
   } catch (e) {
     console.log('::notice::' + label + ' -> network error ' + String(e && e.message || e).slice(0, 200));
   }
+}
+
+// App Check: swap a made-up reCAPTCHA token, the way the app does, to see which step turns it down.
+try {
+  const r = await fetch('https://content-firebaseappcheck.googleapis.com/v1/projects/' + project + '/apps/' + appId + ':exchangeRecaptchaEnterpriseToken?key=' + apiKey, {
+    method: 'POST', headers: { 'content-type': 'application/json', referer: site },
+    body: JSON.stringify({ recaptcha_enterprise_token: 'made-up-token-for-a-check', limited_use: true })
+  });
+  const body = await r.text();
+  let m = body;
+  try { const j = JSON.parse(body); m = j.error ? (j.error.status || '') + ' ' + j.error.message + ' ' + JSON.stringify(j.error.details || []).slice(0, 300) : body; } catch (e) { /* keep the text */ }
+  console.log('::notice::App Check exchange (made-up token) -> ' + r.status + ' ' + String(m).replace(/\s+/g, ' ').slice(0, 600));
+} catch (e) {
+  console.log('::notice::App Check exchange -> network error ' + String(e && e.message || e).slice(0, 200));
 }
