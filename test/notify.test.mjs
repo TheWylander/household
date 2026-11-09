@@ -1,6 +1,6 @@
 /* What the notification job sends, and to whom, without Firebase or a push service. node test/notify.test.mjs */
 import assert from 'node:assert';
-import { plan, run, sydneyNow, weekKey, weekHits, oldKeys, webConfig, fromFs, toFs, fieldPath, toUpdate, job, runSummary } from '../src/github/notify.mjs';
+import { plan, run, sydneyNow, weekKey, weekHits, wordHits, specialsPop, oldKeys, webConfig, fromFs, toFs, fieldPath, toUpdate, job, runSummary } from '../src/github/notify.mjs';
 
 let passed = 0;
 async function t(name, fn) {
@@ -43,7 +43,7 @@ await t('the evening before a sale day', () => {
   const p = plan({ push: push(), deals: deals(), feed, now: FRI_EVENING });
   assert.deepStrictEqual(p.subs.map((s) => s.id), ['p1', 'p2'], 'phones with an older key or removed are left out');
   const titles = p.out.map((n) => n.title);
-  assert.deepStrictEqual(titles, ['🔔 Notifications are on', '📅 Lucky Mart sale tomorrow', '🏷️ On special this week']);
+  assert.deepStrictEqual(titles, ['🔔 Notifications are on', '📅 Lucky Mart sale tomorrow', '🏷️ 2 things we buy are on special']);
   assert.strictEqual(p.out[0].body.split('\n').length, 3, 'the welcome lists the three kinds of pop-up, one per line');
   const sale = p.out[1];
   assert.deepStrictEqual([sale.to, sale.body, sale.url, sale.key], [['p1', 'p2'], 'Up to 20% off\n📍 Shop 2, 2 Wilkes Ave, Artarmon', './#deals', 'sale:s1|2026-11-14:eve']);
@@ -67,8 +67,12 @@ await t('the morning of, and nothing twice', () => {
   assert.deepStrictEqual([p2.out[0].title, p2.out[0].body], ['🏷️ More on special this week', 'Weetbix Bites 510g · $4.00 at Woolies']);
   const lots = JSON.parse(JSON.stringify(feed));
   ['Weet-Bix Kids', 'Weet-Bix Blends', 'Weet-Bix Gold', 'Weet-Bix Protein'].forEach((n) => lots.specials.push({ s: 'Coles', n, now: 300, was: 600, off: 50, src: 'hp' }));
-  const big = plan({ push: push(), deals: deals(), feed: lots, now: FRI_EVENING }).out.filter((n) => n.tag === 'specials')[0].body.split('\n');
-  assert.deepStrictEqual([big.length, big[3]], [4, '+ 3 more in the app'], 'six hits: three lines and how many more');
+  const grouped = plan({ push: push(), deals: deals(), feed: lots, now: FRI_EVENING }).out.filter((n) => n.tag === 'specials')[0];
+  assert.deepStrictEqual(grouped.body.split('\n'), ['Sanitarium Weet-Bix 575g · $2.50 at Coles', '20% off Everything In-Store at Tokyo Mart'], 'five Weet-Bix specials make one line, with the best of them');
+  const six = plan({ push: push(), deals: { sales: [], watch: ['weetbix', 'tokyo mart', 'muffins', 'kids', 'blends', 'gold'] }, feed: lots, now: FRI_EVENING }).out.filter((n) => n.tag === 'specials')[0];
+  assert.deepStrictEqual([six.title, six.body.split('\n').length, six.body.split('\n')[3]], ['🏷️ 6 things we buy are on special', 4, '+ kids, blends and gold in the app'], 'six words: three lines and the rest by name');
+  const one = specialsPop(wordHits(feed, ['weetbix'], '2026-11-13'), false);
+  assert.deepStrictEqual(one, { title: '🏷️ Weetbix is on special', body: 'Sanitarium Weet-Bix 575g · $2.50 at Coles' }, 'one word says which');
 });
 
 await t("not keen, skipped, or not today: no pop-up", () => {
@@ -100,7 +104,7 @@ await t('sending: what gets written back', async () => {
     return { ok: true };
   };
   const r = await run({ push: pp, deals: deals(), feed, now: FRI_EVENING, send });
-  assert.deepStrictEqual(calls, [['p1', '🔔 Notifications are on', 'KEY'], ['p1', '📅 Lucky Mart sale tomorrow', 'KEY'], ['p2', '📅 Lucky Mart sale tomorrow', 'KEY'], ['p1', '🏷️ On special this week', 'KEY']]);
+  assert.deepStrictEqual(calls, [['p1', '🔔 Notifications are on', 'KEY'], ['p1', '📅 Lucky Mart sale tomorrow', 'KEY'], ['p2', '📅 Lucky Mart sale tomorrow', 'KEY'], ['p1', '🏷️ 2 things we buy are on special', 'KEY']]);
   assert.deepStrictEqual(r.write.subs, { p1: { welcomed: true }, p2: null }, 'welcomed, and a phone that has gone is removed');
   assert.deepStrictEqual(Object.keys(r.write.sent).sort(), ['sale:s1|2026-11-14:eve', 'sp:2026-11-11']);
   assert.deepStrictEqual(r.write.drop, ['sale:s1|2026-08-01:eve']);

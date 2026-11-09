@@ -104,7 +104,7 @@ try:
 
         # a tapped notification opens Deals
         a.goto(BASE + '?from=notification#deals'); a.wait_for_timeout(1500)
-        check('Sale days in' in a.locator('#app').inner_text() and a.evaluate('location.hash') == '', 'opening from a notification lands on Deals')
+        check('Everything on special' in a.locator('#app').inner_text() and a.locator('h1.title').inner_text() == 'Deals' and a.evaluate('location.hash') == '', 'opening from a notification lands on Deals')
 
         act(a, 'go', 'home'); act(a, 'go', 'settings'); act(a, 'pushoff'); a.wait_for_timeout(800)
         check(all(v is None for v in db(a)['hh/push']['subs'].values()) and 'Turn on for this phone' in a.locator('#pushCard').inner_text(), 'turned off: the subscription is removed')

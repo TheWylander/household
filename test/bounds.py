@@ -6,6 +6,7 @@ import json
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import ai_fake
 import deals_fixture
 import pathlib
 import subprocess
@@ -29,8 +30,12 @@ AUDIT = """() => {
     const r = el.getBoundingClientRect();
     if (r.width && (r.left < -1 || r.right > vw + 1)) bad.push(name(el) + ' runs off the screen (' + Math.round(r.left) + ' to ' + Math.round(r.right) + ')');
   });
+  document.querySelectorAll('.hscroll').forEach((el) => {
+    const r = el.getBoundingClientRect(), box = el.closest('.card, .dialog'), b = box ? box.getBoundingClientRect() : { left: 0, right: vw };
+    if (r.left < Math.max(0, b.left) - 1 || r.right > Math.min(vw, b.right) + 1) bad.push(name(el) + ' runs outside ' + (box ? name(box) : 'the screen'));
+  });
   document.querySelectorAll('input, select, textarea, button, .chip, .seg').forEach((el) => {
-    if (el.type === 'file' || el.type === 'hidden' || !seen(el) || el.closest('.nav') || el.closest('.date-chip')) return;
+    if (el.type === 'file' || el.type === 'hidden' || !seen(el) || el.closest('.nav') || el.closest('.date-chip') || el.closest('.hscroll')) return;
     const r = el.getBoundingClientRect();
     if (!r.width || !r.height) return;
     const box = el.parentElement && el.parentElement.closest('.card, .dialog, .hero, .kpi, .savebar');
@@ -71,6 +76,7 @@ try:
             ctx.route('**/firebase-config.js', lambda r: r.fulfill(status=200, content_type='text/javascript', body=TEST_CONFIG))
             ctx.route('**/firebase-*-compat.js', lambda r: r.fulfill(status=200, content_type='text/javascript', body='/* test double */'))
             ctx.route('https://fonts.googleapis.com/**', lambda r: r.abort())
+            ai_fake.route(ctx)
             ctx.add_init_script("window.HH_DEALS_URL = '%s';" % deals_fixture.URL)
             ctx.route(deals_fixture.URL, lambda r: r.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'},
                                                              body=json.dumps(deals_fixture.feed(datetime.now(ZoneInfo('Australia/Sydney')).date().isoformat()))))
@@ -118,25 +124,32 @@ try:
             a.fill('#billName', 'Strata levy for the building'); a.fill('#billAmt', '1516.25'); a.select_option('#billEvery', 'quarter'); a.fill('#billFrom', '2026-11-20')
             act(a, 'billadd'); a.wait_for_timeout(200)
             audit(a, 'regular bills dialog', width)
-            a.locator('.dialog [data-act="dlgclose"]').click(); a.wait_for_timeout(200); a.wait_for_timeout(200)
+            a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200); a.wait_for_timeout(200)
             check('Strata levy for the building' in a.locator('section.soon').inner_text(), f'{width}px: an added bill shows in Coming up')
             audit(a, 'home with Coming up', width)
             act(a, 'go', 'cal'); audit(a, 'calendar', width)
             act(a, 'go', 'deals'); a.wait_for_timeout(400); audit(a, 'deals', width)
+            act(a, 'salemonth'); a.wait_for_timeout(200); audit(a, 'sale days panel', width)
             act(a, 'saleidea', 'luckymart'); a.wait_for_timeout(200)
-            a.fill('#watchIn', 'weetbix'); a.press('#watchIn', 'Enter'); a.wait_for_timeout(200)
-            a.fill('#watchIn', 'a long watch word here'); a.press('#watchIn', 'Enter'); a.wait_for_timeout(200)
-            act(a, 'spmore'); act(a, 'ozball'); audit(a, 'deals with a sale day, a watch list and every special', width)
-            a.locator('.cal-day.sale').first.click(); a.wait_for_timeout(200); audit(a, 'deals with a sale day picked', width)
-            act(a, 'saleadd'); audit(a, 'sale day dialog', width)
+            a.locator('.dialog .cal-day.sale').first.click(); a.wait_for_timeout(200); audit(a, 'sale days panel with a day picked', width)
+            a.locator('.dialog [data-act="saleadd"]').first.click(); a.wait_for_timeout(200); audit(a, 'sale day dialog', width)
             a.select_option('#saleKind', 'once'); a.wait_for_timeout(200); audit(a, 'sale day dialog, one day', width)
-            a.locator('.dialog [data-act="dlgclose"]').click(); a.wait_for_timeout(200)
-            a.locator('[data-act="saleopen"]').first.click(); a.wait_for_timeout(200); audit(a, 'editing a sale day', width)
-            a.locator('.dialog [data-act="dlgclose"]').click(); a.wait_for_timeout(200)
-            act(a, 'saleadd'); a.fill('#saleStore', 'A shop with quite a long name'); a.fill('#saleOffer', '20% off everything in store')
+            a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
+            a.locator('.dialog [data-act="saleopen"]').first.click(); a.wait_for_timeout(200); audit(a, 'editing a sale day', width)
+            a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
+            a.locator('.dialog [data-act="saleadd"]').first.click(); a.fill('#saleStore', 'A shop with quite a long name'); a.fill('#saleOffer', '20% off everything in store')
             a.select_option('#saleKind', 'once'); a.wait_for_timeout(150)
             a.fill('#saleDate', (datetime.now(ZoneInfo('Australia/Sydney')).date() + timedelta(days=1)).isoformat()); a.wait_for_timeout(150)
             act(a, 'salesave'); a.wait_for_timeout(200)
+            a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
+            act(a, 'watchopen'); a.wait_for_timeout(200)
+            a.fill('#watchIn', 'weetbix'); a.press('#watchIn', 'Enter'); a.wait_for_timeout(200)
+            a.fill('#watchIn', 'a long watch word here'); a.press('#watchIn', 'Enter'); a.wait_for_timeout(200)
+            audit(a, 'watch list panel', width)
+            a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
+            act(a, 'spmore'); act(a, 'ozball'); audit(a, 'deals with a sale day, a watch list and every special', width)
+            act(a, 'spwatch'); audit(a, 'deals, just the watch list', width)
+            act(a, 'spwatch'); act(a, 'spaisle', 'pantry'); audit(a, 'deals, one aisle', width)
             act(a, 'go', 'home'); a.wait_for_timeout(200)
             check(a.locator('.notice').count() == 2, f'{width}px: two heads-ups on Home')
             audit(a, 'home with two heads-ups', width)
@@ -144,12 +157,17 @@ try:
                 a.locator('.notice [data-act="noticex"]').first.click(); a.wait_for_timeout(150)
             audit(a, 'home with a special and a sale day', width)
             act(a, 'go', 'settings'); act(a, 'go', 'upload'); audit(a, 'upload', width)
+            a.evaluate("(r) => { window.__aiReply = r; }", ai_fake.reply(datetime.now(ZoneInfo('Australia/Sydney')).date().isoformat()))
+            a.locator('input[data-change="rcpfile"]').first.set_input_files(str(ROOT / 'test' / 'photo-sample.png')); a.wait_for_timeout(900)
+            a.locator('.rcp-who').nth(4).click(); a.wait_for_timeout(150)
+            audit(a, 'checking a receipt', width)
+            a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
             act(a, 'go', 'insights'); audit(a, 'insights, month', width)
             act(a, 'insmode', 'year'); audit(a, 'insights, year', width)
             a.locator('[data-act="inscat"]').first.click(); a.wait_for_timeout(200)
             a.locator('[data-act="inscatopen"]').first.click(); a.wait_for_timeout(200)
             audit(a, 'category dialog with a spend open', width)
-            a.locator('.dialog [data-act="dlgclose"]').click(); a.wait_for_timeout(200)
+            a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
             act(a, 'go', 'home'); act(a, 'add'); act(a, 'go', 'tab')
             if a.locator('[data-act="tabstart"]').count():
                 act(a, 'tabstart')

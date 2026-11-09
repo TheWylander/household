@@ -38,10 +38,19 @@ export function weekHits(feed, watch, day) {
     .map((d) => ({ n: d.t, s: L.storeName(d.s) }));
   return specials.concat(deals);
 }
-/* One special per line, which fits four lines on an iPhone lock screen: up to four, or three and how many more. */
+/* For each watch word, what matches it: specials first, best first, then OzBargain posts. */
+export function wordHits(feed, watch, day) {
+  return (Array.isArray(watch) ? watch : []).map((w) => ({ w, hits: weekHits(feed, [w], day) })).filter((g) => g.hits.length);
+}
+const andList = (a) => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]);
 const itemLine = (h) => short(h.n) + (h.now > 0 ? ' · ' + L.fmt(h.now) : '') + (h.s ? ' at ' + shop(h.s) : '');
-const summary = (list) => (list.length > 4 ? list.slice(0, 3) : list).map(itemLine)
-  .concat(list.length > 4 ? ['+ ' + (list.length - 3) + ' more in the app'] : []).join('\n');
+/* One line per thing we buy, with its best deal. Four lines fit on an iPhone lock screen: up to four, or three and the rest by name. */
+export function specialsPop(groups, more) {
+  const title = more ? 'More on special this week' : groups.length === 1 ? groups[0].w.charAt(0).toUpperCase() + groups[0].w.slice(1) + ' is on special' : groups.length + ' things we buy are on special';
+  const shown = groups.length > 4 ? groups.slice(0, 3) : groups;
+  const body = shown.map((g) => itemLine(g.hits[0])).concat(groups.length > 4 ? ['+ ' + andList(groups.slice(3).map((g) => g.w)) + ' in the app'] : []).join('\n');
+  return { title: '🏷️ ' + title, body };
+}
 
 /* Everything to send on this run, and which phones it goes to. */
 export function plan({ push, deals, feed, now }) {
@@ -73,7 +82,8 @@ export function plan({ push, deals, feed, now }) {
   if (hits.length) {
     const before = Array.isArray(sent[wk]) ? sent[wk] : [], fresh = hits.filter((h) => before.indexOf(h.n) < 0);
     const to = subs.filter((x) => wants(x.who, 'specials')).map((x) => x.id);
-    if (fresh.length && to.length) out.push({ key: wk, names: hits.map((h) => h.n).slice(0, 60), to, title: before.length ? '🏷️ More on special this week' : '🏷️ On special this week', body: summary(fresh), url: './#deals', tag: 'specials' });
+    const names = fresh.map((h) => h.n), groups = wordHits(feed, D.watch, day).map((g) => ({ w: g.w, hits: g.hits.filter((h) => names.indexOf(h.n) >= 0) })).filter((g) => g.hits.length);
+    if (groups.length && to.length) out.push(Object.assign({ key: wk, names: hits.map((h) => h.n).slice(0, 60), to, url: './#deals', tag: 'specials' }, specialsPop(groups, before.length > 0)));
   }
   return { day, hour, subs, out };
 }

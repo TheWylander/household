@@ -98,10 +98,18 @@ if not tgz.exists():
     tgz.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(['npm', 'pack', 'firebase@' + FIREBASE_VERSION, '--pack-destination', str(tgz.parent)], check=True, stdout=subprocess.DEVNULL)
 import tarfile
+# Receipt reading uses Firebase AI Logic. It's an ES module, loaded only when a receipt is snapped, and points at the
+# app module next to it rather than at Google's CDN.
+AI_VENDOR = ['firebase-app.js', 'firebase-ai.js']
 with tarfile.open(tgz) as t:
-    for f in VENDOR:
+    for f in VENDOR + AI_VENDOR:
         text = t.extractfile('package/' + f).read().decode('utf-8')
         text = '\n'.join(line for line in text.split('\n') if not line.startswith('//# sourceMappingURL='))
+        if f == 'firebase-ai.js':
+            cdn = 'https://www.gstatic.com/firebasejs/%s/firebase-app.js' % FIREBASE_VERSION
+            assert text.count(cdn) == 1, 'the AI module should import the app module once'
+            text = text.replace(cdn, './firebase-app.js')
+            assert 'gstatic.com' not in text
         (site / f).write_text(text)
 (site / 'FIREBASE-LICENSE.txt').write_text(
     'Firebase JavaScript SDK %s, Copyright Google LLC.\nLicensed under the Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0\n' % FIREBASE_VERSION)

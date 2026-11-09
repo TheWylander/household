@@ -6,7 +6,7 @@ This `source` branch holds the code. The `main` branch holds the built site that
 
 1. Edit `src/`: `app.js` for screens and behaviour, `logic.js` for money maths and CSV parsing, `styles.css` for the look.
 2. Build with `python3 build.py` (Python with Pillow; it fetches the Firebase SDK from npm the first time). The site lands in `pwa/site/`.
-3. Test with `node test/logic.test.js`, `node test/deals_job.test.mjs`, `node test/notify.test.mjs`, `python3 test/e2e_pwa.py`, `python3 test/bounds.py`, `python3 test/motion.py` and `python3 test/push.py` (Playwright and Chrome). Bounds checks every screen at 320px and 390px wide; motion checks entrances, count-ups and swipes. The other tests run with reduced motion so they read final values.
+3. Test with `node test/logic.test.js`, `node test/deals_job.test.mjs`, `node test/notify.test.mjs`, `python3 test/e2e_pwa.py`, `python3 test/bounds.py`, `python3 test/motion.py`, `python3 test/push.py` and `python3 test/receipt.py` (Playwright and Chrome). Bounds checks every screen at 320px and 390px wide; motion checks entrances, count-ups and swipes. The other tests run with reduced motion so they read final values.
 4. Deploy: copy everything in `pwa/site/` to the root of `main`, keeping `README.md` and `.nojekyll`. Also copy `src/github/deals.mjs` to `.github/deals/deals.mjs`, `src/github/deals.yml` to `.github/workflows/deals.yml`, `src/github/notify.mjs` and `src/logic.js` to `.github/notify/`, and `src/github/notify.yml` to `.github/workflows/notify.yml`. Then commit and push. Pages updates in about a minute. Close the app fully and reopen it to get the new version.
 5. Add a draft note at the top of `RELEASES` in `src/app.js` for anything worth noticing. Whoever set the app up reviews it in Settings, Notes for the other person, edits it and decides when it's shown. The other person sees it once.
 
@@ -21,6 +21,12 @@ This `source` branch holds the code. The `main` branch holds the built site that
 ## Deals
 
 The Deals tab reads `deals.json` from the `deals` branch. A GitHub Actions job (`.github/workflows/deals.yml` on `main`) rebuilds it every Wednesday for free, publishing only when something is new, from public sources: OzBargain's grocery RSS feeds, the weekly Catalogue Half-Price Report posted on OzBargain (every Coles and Woolworths half-price item in the NSW catalogue), and Harris Farm's online specials. It needs no secrets. The file holds the same store specials for everyone; each phone filters it against its own watch list, which stays in Firebase. Run it by hand from the Actions tab with "Run workflow". Harris Farm's "was" prices are often per kilo, so its specials show at the special price only.
+
+The tab puts everything on special first, with filters by shop and aisle, a search, and "Rarely this cheap" (items the half-price list says haven't been half price for 8 weeks or more). Below that: the best deal for each word on the watch list (edited in a panel), the sale days (a month panel behind the calendar button), and OzBargain posts for our shops, most votes first. Home shows the next sale day.
+
+## Receipts
+
+"Snap a receipt" (in Upload, and on the + screen) sends the photo to Gemini through Firebase AI Logic, using the Gemini Developer API's free tier, which needs the Firebase project to stay on the no-cost Spark plan. Gemini returns the shop, date, total, a category and each item as JSON; you check it, tap anything that's just one person's, and it saves the spends. Things that are just the payer's are left out; things that are just the other person's are saved as a spend they owe in full. The photo isn't stored. The AI module (`firebase-ai.js`) and the modular app module are copied from the Firebase npm package at build time and load only when a receipt is snapped. One-time setup: Firebase console, AI Logic, Get started, Gemini Developer API. The model names are in `AI_MODELS` in `src/app.js`; if the first isn't available, the next one is tried.
 
 ## Phone notifications
 
