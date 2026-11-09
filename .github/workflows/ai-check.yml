@@ -1,4 +1,5 @@
-# One-off: asks Firebase AI Logic which Gemini setup this project has. Lives on its own branch, which is deleted after it runs.
+# One-off: opens the live app in Chrome and asks App Check for a token the way a phone does, to see why reCAPTCHA fails.
+# Lives on its own branch, which is deleted after it runs.
 name: AI Logic check
 on:
   push:
@@ -8,11 +9,13 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Ask each Gemini route for a one-word reply
-        run: node .github/ai-check.mjs
+      - name: Playwright library only (the runner's own Chrome does the browsing)
+        run: npm i --no-save --no-audit --no-fund playwright-core@1
+      - name: Ask App Check for a token on the live app
+        run: node .github/recaptcha-check.mjs
