@@ -1,5 +1,6 @@
 """Snap a receipt: the photo goes to Gemini (stood in for here), the check-and-split panel, the spends it saves,
-and what happens when Gemini isn't switched on, has hit its limit, or the newest model isn't there."""
+and what happens when Gemini isn't switched on, has hit its limit, or the newest model isn't there.
+Then App Check: off until its key is in the config, and once it is, set up once with a fresh token for each request."""
 import pathlib
 import subprocess
 import sys
@@ -82,6 +83,8 @@ try:
               and a.input_value('#rcpDate') == str(TODAY - timedelta(days=2)), 'Gemini reads the shop, date, total and items')
         c = calls[0] if calls else {}
         schema = (c.get('config') or {}).get('responseJsonSchema') or {}
+        check(a.evaluate('window.__appCheck') is None and a.evaluate('window.__aiOpts') == {'app': 'hh-ai', 'limited': False} and 'reCAPTCHA' not in snapcard,
+              'no App Check key yet: App Check stays off, and the note says nothing about it')
         check(len(calls) == 1 and c.get('model') == 'gemini-3.5-flash-lite' and c.get('mime') == 'image/jpeg' and c.get('size', 0) > 100
               and (c.get('config') or {}).get('responseMimeType') == 'application/json' and set(schema.get('properties', {})) == {'shop', 'date', 'total', 'category', 'items'},
               'one call to the small Gemini model, with a JPEG and a JSON shape to fill')
@@ -128,11 +131,42 @@ try:
         models = [x['model'] for x in a.evaluate('window.__aiCalls')]
         check(models == ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'] and '$52.37' in a.locator('.dialog').inner_text(), 'if the newest model is not there, the one before it reads it')
         a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
+        snap(a, mode='unattested')
+        check("App Check key hasn't been added yet" in a.locator('.dialog').inner_text(), 'Gemini wants App Check and the app has no key yet: says so')
+        a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
         snap(a, reply={'shop': '', 'date': '', 'total': 0, 'category': 'Other', 'items': []})
         check("doesn't look like a receipt" in a.locator('.dialog').inner_text(), 'a photo that is not a receipt')
         a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
         act(a, 'closeadd'); a.wait_for_timeout(300)
         check(len(entries(a)) == 2, 'nothing else was saved')
+
+        # ---------- with App Check's key in the config ----------
+        b = ctx.new_page()
+        b.on('pageerror', lambda e: problems.append(f'pageerror {e}'))
+        b.add_init_script("window.HH_APPCHECK = 'test-recaptcha-key-0123456789abcdefghij'; sessionStorage.setItem('__fbsession', 'robin@example.com');")
+        b.goto(BASE); b.wait_for_timeout(300)
+        b.reload(); b.wait_for_timeout(900)  # the test double reads who is signed in before this page's own script runs, so once more
+        act(b, 'go', 'settings'); act(b, 'go', 'upload')
+        hint = b.locator('.snap .hint').inner_text()
+        check('reCAPTCHA' in hint and b.locator('.snap .hint a[href="https://policies.google.com/privacy"]').count() == 1
+              and b.locator('.snap .hint a[href="https://policies.google.com/terms"]').count() == 1, "the note says Google's reCAPTCHA checks it's our app, with Google's privacy and terms links")
+        b.locator('.snap').screenshot(path=str(SHOTS / 'p11b-snap-appcheck.png'))
+        snap(b)
+        check('$52.37' in b.locator('.dialog').inner_text() and b.evaluate('window.__appCheck') == [{'app': 'hh-ai', 'key': 'test-recaptcha-key-0123456789abcdefghij', 'auto': False}]
+              and b.evaluate('window.__aiOpts') == {'app': 'hh-ai', 'limited': True},
+              'App Check is set up on the receipt app with the reCAPTCHA key, and Gemini gets a fresh one-use token each time')
+        b.locator('.dialog [data-act="dlgclose"]').first.click(); b.wait_for_timeout(200)
+        snap(b, mode='unattested')
+        check("couldn't confirm this is our app" in b.locator('.dialog').inner_text(), 'a token Gemini turns down: says to reopen the app and retry')
+        b.locator('.dialog [data-act="dlgclose"]').first.click(); b.wait_for_timeout(200)
+        snap(b, mode='recaptcha')
+        check("couldn't confirm this is our app" in b.locator('.dialog').inner_text(), 'reCAPTCHA failing on the phone: the same')
+        b.locator('.dialog [data-act="dlgclose"]').first.click(); b.wait_for_timeout(200)
+        snap(b, mode='enforce')
+        dlg = b.locator('.dialog').inner_text()
+        check('until App Check is enforced' in dlg and 'Firebase AI Logic to Enforced' in dlg, 'App Check not enforced yet: says where to switch it on')
+        check(len(b.evaluate('window.__appCheck')) == 1, 'App Check is set up once, however many receipts are snapped')
+        b.locator('.dialog').screenshot(path=str(SHOTS / 'p13-receipt-appcheck.png'))
 
         browser.close()
 finally:

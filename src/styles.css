@@ -137,6 +137,7 @@ textarea.input { min-height: 140px; font-family: ui-monospace, Menlo, monospace;
 .money::before { content: '$'; position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-weight: 800; color: var(--ink2); pointer-events: none; }
 .money .input { padding-left: 30px; }
 .hint { font-size: 14px; color: var(--ink2); margin-top: 6px; }
+.hint a { color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 .err-text { font-size: 14px; color: var(--coral-deep); font-weight: 700; margin-top: 6px; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .check-row { display: flex; align-items: center; gap: 12px; min-height: 48px; margin: 0 0 14px; font-weight: 700; cursor: pointer; }

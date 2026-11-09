@@ -13,6 +13,7 @@ committed and used when pwa-config.json isn't there. The two sign-in emails are 
 """
 import hashlib
 import json
+import re
 import pathlib
 import shutil
 import zipfile
@@ -98,16 +99,16 @@ if not tgz.exists():
     tgz.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(['npm', 'pack', 'firebase@' + FIREBASE_VERSION, '--pack-destination', str(tgz.parent)], check=True, stdout=subprocess.DEVNULL)
 import tarfile
-# Receipt reading uses Firebase AI Logic. It's an ES module, loaded only when a receipt is snapped, and points at the
-# app module next to it rather than at Google's CDN.
-AI_VENDOR = ['firebase-app.js', 'firebase-ai.js']
+# Receipt reading uses Firebase AI Logic, with App Check to prove requests come from this app. They're ES modules,
+# loaded only when a receipt is snapped, and point at the app module next to them rather than at Google's CDN.
+AI_VENDOR = ['firebase-app.js', 'firebase-ai.js', 'firebase-app-check.js']
 with tarfile.open(tgz) as t:
     for f in VENDOR + AI_VENDOR:
         text = t.extractfile('package/' + f).read().decode('utf-8')
         text = '\n'.join(line for line in text.split('\n') if not line.startswith('//# sourceMappingURL='))
-        if f == 'firebase-ai.js':
+        if f in ('firebase-ai.js', 'firebase-app-check.js'):
             cdn = 'https://www.gstatic.com/firebasejs/%s/firebase-app.js' % FIREBASE_VERSION
-            assert text.count(cdn) == 1, 'the AI module should import the app module once'
+            assert text.count(cdn) == 1, f + ' should import the app module once'
             text = text.replace(cdn, './firebase-app.js')
             assert 'gstatic.com' not in text
         (site / f).write_text(text)
@@ -139,10 +140,15 @@ if fb.get('apiKey'):
     body = ',\n'.join("  %s: %s" % (k, json.dumps(fb[k])) for k in keys if fb.get(k))
 else:
     body = "  apiKey: 'PASTE_API_KEY',\n  authDomain: 'PASTE_PROJECT_ID.firebaseapp.com',\n  projectId: 'PASTE_PROJECT_ID',\n  appId: 'PASTE_APP_ID'"
+# The reCAPTCHA key App Check uses for receipt reading (Google Cloud console > reCAPTCHA). Public by design, like the rest.
+appcheck = str(cfg.get('appCheckKey') or '').strip()
+assert not appcheck or re.fullmatch(r'[A-Za-z0-9_-]{20,64}', appcheck), 'appCheckKey in pwa-config.json should be a reCAPTCHA key ID'
 (site / 'firebase-config.js').write_text(
     '/* Your Firebase web app settings (Firebase console > Project settings > Your apps > Web app).\n'
     '   These are not secret: your data is protected by the Firestore rules. */\n'
-    'window.HH_FIREBASE = {\n' + body + '\n};\n')
+    'window.HH_FIREBASE = {\n' + body + '\n};\n' +
+    ('/* The reCAPTCHA key App Check uses, so Gemini knows receipt requests come from this app. Also not secret. */\n'
+     'window.HH_APPCHECK = ' + json.dumps(appcheck) + ';\n' if appcheck else ''))
 
 files = sorted(p.relative_to(site).as_posix() for p in site.rglob('*') if p.is_file() and p.name != 'FIREBASE-LICENSE.txt')
 version = hashlib.sha256(b''.join((site / f).read_bytes() for f in files)).hexdigest()[:10]

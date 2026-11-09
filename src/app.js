@@ -1196,10 +1196,14 @@
      things that are just the other person's are saved as a spend they owe in full. */
   const AI_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
   let aiLoad = null;
+  /* Firebase AI Logic only answers apps that pass App Check. Ours uses an invisible reCAPTCHA check (no puzzles), loaded
+     only here, and a fresh one-use token for each request, so it works whether or not replay protection is on. */
   function aiModel(name, schema) {
-    aiLoad = aiLoad || Promise.all([import('./firebase-app.js'), import('./firebase-ai.js')]).then((m) => {
-      const A = m[0], AI = m[1], app = A.getApps().filter((x) => x.name === 'hh-ai')[0] || A.initializeApp(window.HH_FIREBASE, 'hh-ai');
-      return { AI, ai: AI.getAI(app, { backend: new AI.GoogleAIBackend() }) };
+    const key = window.HH_APPCHECK;
+    aiLoad = aiLoad || Promise.all([import('./firebase-app.js'), import('./firebase-ai.js'), key ? import('./firebase-app-check.js') : null]).then((m) => {
+      const A = m[0], AI = m[1], AC = m[2], app = A.getApps().filter((x) => x.name === 'hh-ai')[0] || A.initializeApp(window.HH_FIREBASE, 'hh-ai');
+      if (AC) AC.initializeAppCheck(app, { provider: new AC.ReCaptchaEnterpriseProvider(key), isTokenAutoRefreshEnabled: false });
+      return { AI, ai: AI.getAI(app, { backend: new AI.GoogleAIBackend(), useLimitedUseAppCheckTokens: !!AC }) };
     }, (e) => { aiLoad = null; throw e; });
     return aiLoad.then((x) => x.AI.getGenerativeModel(x.ai, { model: name, generationConfig: { responseMimeType: 'application/json', responseJsonSchema: schema, temperature: 0 } }));
   }
@@ -1229,12 +1233,17 @@
     return go(0);
   }
   function receiptError(e) {
-    const code = e && e.code, st = e && e.customErrorData && e.customErrorData.status, msg = String((e && e.message) || '');
+    const code = String((e && e.code) || ''), st = e && e.customErrorData && e.customErrorData.status, msg = String((e && e.message) || '');
+    const offline = 'Couldn\'t reach Gemini. Check your connection and try again.';
+    const notUs = 'Google couldn\'t confirm this is our app. Close the app fully, open it again and retry. If it keeps happening, App Check needs a look in the Firebase console.';
     if (code === 'api-not-enabled' || /api-not-enabled|has not been used|is disabled|genai config not found/i.test(msg)) return 'Receipt reading isn\'t set up yet. In the Firebase console, open AI Logic, tap Get started, choose the Gemini Developer API and finish every step. If you just did, give it 10 minutes.';
+    if (/enforce Firebase App Check|has been deactivated/i.test(msg)) return 'Gemini is switched off for this project until App Check is enforced. In the Firebase console, open Security, App Check, APIs, and set Firebase AI Logic to Enforced.';
+    if (/^appCheck\//.test(code) || /\(appCheck\//.test(msg)) return navigator.onLine === false ? offline : notUs;
+    if (st === 401 || /app ?check|attestation/i.test(msg)) return window.HH_APPCHECK ? notUs : 'Gemini needs App Check before it will answer, and the app\'s App Check key hasn\'t been added yet.';
     if (/are blocked|API_KEY_SERVICE_BLOCKED/i.test(msg)) return 'The app\'s Firebase key isn\'t allowed to use Gemini yet. In the Google Cloud console, open Credentials, edit the Browser key, and add the Firebase AI Logic API.';
     if (st === 429 || /quota|exhausted/i.test(msg)) return 'Gemini\'s free limit is used up for now. Type this one in, or try again later.';
     if (e && e.photo) return 'That photo couldn\'t be opened. Try another one.';
-    if ((code === 'fetch-error' && !st) || navigator.onLine === false || /failed to fetch|networkerror|load failed|importing a module/i.test(msg)) return 'Couldn\'t reach Gemini. Check your connection and try again.';
+    if ((code === 'fetch-error' && !st) || navigator.onLine === false || /failed to fetch|networkerror|load failed|importing a module/i.test(msg)) return offline;
     return 'Couldn\'t read that receipt. Try a clearer photo, or type it in.';
   }
   /* A smaller JPEG is plenty for reading, and quicker to send. */
@@ -1354,7 +1363,8 @@
       '<p class="muted">The app reads the shop, date, total and every item. You check it, mark anything that\'s just one person\'s, and it adds the spends.</p>' +
       '<label class="btn btn-primary btn-block file-btn">' + icon('camera') + 'Take a photo<input type="file" accept="image/*" capture="environment" data-change="rcpfile" aria-label="Take a photo of a receipt"></label>' +
       '<label class="btn btn-secondary btn-block file-btn" style="margin-top:12px">' + icon('image') + 'Choose from photos<input type="file" accept="image/*" data-change="rcpfile" aria-label="Choose a photo of a receipt"></label>' +
-      '<p class="hint" style="margin-top:12px">Receipt photos go to Google\'s Gemini to be read. The app doesn\'t keep them, and nothing else in the app goes to Gemini.</p></section>';
+      '<p class="hint" style="margin-top:12px">Receipt photos go to Google\'s Gemini to be read. The app doesn\'t keep them, and nothing else in the app goes to Gemini.' +
+      (window.HH_APPCHECK ? ' An invisible Google reCAPTCHA check confirms it\'s our app, and Google\'s <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy Policy</a> and <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Terms</a> apply.' : '') + '</p></section>';
   }
 
   /* ---------- upload: statements, Splitwise files, and spends to check ---------- */
