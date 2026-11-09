@@ -32,7 +32,8 @@ export function weekKey(feed, day) {
 export function weekHits(feed, watch, day) {
   if (!feed || !Array.isArray(watch) || !watch.length) return [];
   const s = feed.sources || {}, live = (k) => !!(s[k] && s[k].to && s[k].to >= day);
-  const specials = L.sortSpecials((feed.specials || []).filter((x) => x && x.n && live(x.src === 'hf' ? 'harris' : 'report') && L.watchHits(x.n, watch).length), watch)
+  const running = (x) => (x.src === 'um' ? !!x.to && x.to >= day : live(x.src === 'hf' ? 'harris' : 'report'));
+  const specials = L.sortSpecials((feed.specials || []).filter((x) => x && x.n && running(x) && L.watchHits(x.n, watch).length), watch)
     .map((x) => ({ n: x.n, s: L.storeName(x.s), now: x.now }));
   const deals = (feed.deals || []).filter((d) => d && d.t && !d.hp && (!d.to || d.to >= day) && L.watchHits(d.t + ' ' + d.s, watch).length)
     .map((d) => ({ n: d.t, s: L.storeName(d.s) }));

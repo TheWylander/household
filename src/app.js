@@ -625,8 +625,9 @@
       const f = root.querySelector('.dialog input:not([type="file"]), .dialog textarea') || root.querySelector('.dialog .btn-primary, .dialog .btn-danger');
       if (f) f.focus();
     } else if (key) {
+      /* Not a drop-down: on iPhone, focusing one opens its picker again straight after you've picked. */
       const el = root.querySelector(key);
-      if (el) el.focus({ preventScroll: true });
+      if (el && el.tagName !== 'SELECT') el.focus({ preventScroll: true });
     }
   }
   /* ---------- motion ---------- */
@@ -2065,7 +2066,7 @@
   ];
   const DEALS_BASE = { sales: [], watch: [], keen: {}, list: [] };
   const centsOk = (v) => (typeof v === 'number' && isFinite(v) && v > 0 && v < 1e7 ? Math.round(v) : 0);
-  const LINK_OK = /^https:\/\/(www\.)?(ozbargain\.com\.au|coles\.com\.au|woolworths\.com\.au|harrisfarm\.com\.au|sushifactory\.com\.au)\/[^\s"'<>]*$/;
+  const LINK_OK = /^https:\/\/(www\.)?(ozbargain\.com\.au|coles\.com\.au|woolworths\.com\.au|harrisfarm\.com\.au|umall\.com\.au|sushifactory\.com\.au)\/[^\s"'<>]*$/;
   const linkOk = (u) => (LINK_OK.test(String(u || '')) ? String(u).slice(0, 300) : '');
   const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
   const shopLabel = (s) => (s === 'Woolworths' ? 'Woolies' : s);
@@ -2126,10 +2127,10 @@
     const so = j.sources && typeof j.sources === 'object' ? j.sources : {};
     return {
       updated: str(j.updated, 40),
-      sources: { ozb: src(so.ozb), report: src(so.report), harris: src(so.harris) },
+      sources: { ozb: src(so.ozb), report: src(so.report), harris: src(so.harris), umall: src(so.umall) },
       specials: (Array.isArray(j.specials) ? j.specials : []).slice(0, 1500).filter((x) => x && typeof x.n === 'string' && x.n.trim() && int(x.now) > 0).map((x) => ({
         s: L.storeName(str(x.s, 40)), n: str(x.n, 120), was: int(x.was), now: int(x.now), off: L.clamp(int(x.off), 0, 99), cat: str(x.cat, 40), last: str(x.last, 40),
-        link: linkOk(x.link), src: x.src === 'hf' ? 'hf' : 'hp'
+        link: linkOk(x.link), src: x.src === 'hf' || x.src === 'um' ? x.src : 'hp', to: day(x.to)
       })),
       deals: (Array.isArray(j.deals) ? j.deals : []).slice(0, 150).filter((x) => x && typeof x.t === 'string' && x.t.trim()).map((x) => ({
         id: str(x.id, 12), t: str(x.t, 160), s: str(x.s, 40), link: linkOk(x.link), from: day(x.from), to: day(x.to), votes: int(x.votes), hp: x.hp === true
@@ -2151,7 +2152,7 @@
     const F = S.feed, t = today();
     if (!F) return [];
     const live = (k) => { const s = F.sources[k]; return !!(s && s.to && s.to >= t); };
-    return F.specials.filter((x) => live(x.src === 'hf' ? 'harris' : 'report'));
+    return F.specials.filter((x) => (x.src === 'um' ? !!x.to && x.to >= t : live(x.src === 'hf' ? 'harris' : 'report')));
   }
   /* Shops you actually go to, from this past year of shared spends: Coles 19 trips and so on. */
   function shopVisits() {
@@ -2173,7 +2174,7 @@
   }
   const rareLabel = (w) => (w >= 99 ? 'First time at half price' : 'First time in ' + w + ' weeks');
   /* Aisles, from the categories on the half-price list. Everything from Harris Farm counts as fresh. */
-  const AISLES = [['pantry', 'Pantry', /^(pantry|bakery|deli|dairy, eggs & fridge|poultry, meat & seafood|meat & seafood)$/i], ['fresh', 'Fresh', null],
+  const AISLES = [['pantry', 'Pantry', /^(pantry|bakery|deli|dairy, eggs & fridge|poultry, meat & seafood|meat & seafood)$/i], ['fresh', 'Fresh', /^fruit & veg$/i],
     ['snacks', 'Snacks', /^snacks & confectionery$/i], ['drinks', 'Drinks', /^(drinks|beer, wine & spirits|liquor)$/i], ['freezer', 'Freezer', /^freezer$/i],
     ['cleaning', 'Cleaning', /^(cleaning & maintenance|household|home & lifestyle|pet)$/i], ['health', 'Health and beauty', /^(health & beauty|personal care|baby)$/i]];
   function aisleOf(x) {
@@ -2205,6 +2206,7 @@
     return listMemo.keys.has(listKey(x));
   }
   function specialEnd(x) {
+    if (x.src === 'um') return x.to || '';
     const F = S.feed, src = F && F.sources[x.src === 'hf' ? 'harris' : 'report'];
     return (src && ISO_DAY.test(src.to || '') && src.to) || '';
   }
@@ -2376,6 +2378,7 @@
     const rep = F.sources.report, hf = F.sources.harris, srcs = [];
     if (rep.ok || rep.stale) srcs.push('Coles and Woolies from the weekly half-price list posted on ' + (rep.link ? '<a href="' + esc(rep.link) + '" target="_blank" rel="noopener">OzBargain</a>' : 'OzBargain'));
     if (hf.ok || hf.stale) srcs.push('Harris Farm from its online specials');
+    if (F.sources.umall.ok || F.sources.umall.stale) srcs.push('Umall, Sydney\'s online Asian supermarket, from its half-price and weekly specials (delivery only)');
     return srcs.length ? '<p class="hint sp-src">' + srcs.join('. ') + '. Updated ' + esc(agoLabel(F.updated)) + '. Prices can differ by store.</p>' : '';
   }
   /* OzBargain deals at our shops or on the watch list, most votes first. */

@@ -36,6 +36,11 @@ def feed(today_iso):
         {'s': 'Harris Farm', 'n': 'Imperfect Avocados 600g', 'was': 0, 'now': 299, 'off': 0, 'cat': 'Fruit', 'last': '', 'link': 'https://www.harrisfarm.com.au/products/imperfect-avocados', 'src': 'hf'},
         {'s': 'Harris Farm', 'n': 'Harris Farm Pure Australian Honey 1kg', 'was': 0, 'now': 899, 'off': 0, 'cat': 'Pantry', 'last': '', 'link': 'https://www.harrisfarm.com.au/products/hf-honey', 'src': 'hf'},
     ]
+    specials += [
+        {'s': 'Umall', 'n': 'Frozen Pork & Cabbage Dumplings 1kg', 'was': 1869, 'now': 999, 'off': 47, 'cat': 'Freezer', 'last': '',
+         'link': 'https://www.umall.com.au/products/frozen-pork-cabbage-dumplings-1kg', 'src': 'um', 'to': (t + timedelta(days=2)).isoformat()},
+        {'s': 'Umall', 'n': 'Ended Umall pick', 'was': 900, 'now': 450, 'off': 50, 'cat': 'Pantry', 'last': '', 'link': '', 'src': 'um', 'to': (t - timedelta(days=1)).isoformat()},
+    ]
     for i in range(14):
         specials.append({'s': 'Coles' if i % 2 else 'Woolworths', 'n': f'Pantry item {i + 1} 500g', 'was': 400 + i * 10, 'now': 200 + i * 5, 'off': 50,
                          'cat': 'Pantry', 'last': f'{i + 2} weeks ago @ CL', 'link': '', 'src': 'hp'})
@@ -50,5 +55,6 @@ def feed(today_iso):
     return {'v': 1, 'updated': now, 'today': today_iso,
             'sources': {'ozb': {'ok': True, 'feeds': 4, 'n': len(deals), 'at': now},
                         'report': {'ok': True, 'id': '980001', 'link': 'https://www.ozbargain.com.au/node/980001', 'date': S, 'from': S, 'to': E, 'n': 18, 'coles': 9, 'woolies': 9, 'at': now},
-                        'harris': {'ok': True, 'handle': 'specials', 'from': S, 'to': E, 'n': 2, 'at': now}},
+                        'harris': {'ok': True, 'handle': 'specials', 'from': S, 'to': E, 'n': 2, 'at': now},
+                        'umall': {'ok': True, 'lists': 'half-price', 'from': (t - timedelta(days=1)).isoformat(), 'to': (t + timedelta(days=2)).isoformat(), 'n': 2, 'at': now}},
             'specials': specials, 'deals': deals}

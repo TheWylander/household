@@ -2,7 +2,7 @@
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { build, parseRss, parseReport, splitTitle, hfItems, hfCat, FEEDS, HF_LISTS, sydneyDay, specialsWeek, fingerprint } from '../src/github/deals.mjs';
+import { build, parseRss, parseReport, splitTitle, hfItems, hfCat, FEEDS, HF_LISTS, UM_LISTS, umWindow, umItems, umCat, sydneyDay, specialsWeek, fingerprint } from '../src/github/deals.mjs';
 
 const dir = fileURLToPath(new URL('./fixtures/', import.meta.url));
 const read = (f) => readFileSync(dir + f, 'utf8');
@@ -66,6 +66,32 @@ await t('Harris Farm specials are the discounted products', () => {
   assert.deepStrictEqual(hfItems([{ title: 'x', handle: 'x', variants: [{ price: 'free', compare_at_price: '2' }] }, null]), []);
 });
 
+const UM_HALF = 'https://www.umall.com.au/collections/half-price/products.json?limit=250';
+const UM_WEEK = 'https://www.umall.com.au/collections/weekly-special/products.json?limit=250';
+await t("Umall: half-price picks run Saturday to Tuesday, weekly specials Wednesday to Friday", () => {
+  const [half, week] = UM_LISTS;
+  assert.deepStrictEqual(umWindow('2026-11-09', half), { from: '2026-11-07', to: '2026-11-10' }, 'Monday: the weekend picks still run');
+  assert.deepStrictEqual(umWindow('2026-11-09', week), { from: '2026-11-04', to: '2026-11-06' }, "Monday: last week's weekly specials have ended");
+  assert.deepStrictEqual(umWindow('2026-11-11', half), { from: '2026-11-07', to: '2026-11-10' }, 'Wednesday: the weekend picks have ended');
+  assert.deepStrictEqual(umWindow('2026-11-11', week), { from: '2026-11-11', to: '2026-11-13' });
+  assert.deepStrictEqual(umWindow('2026-11-14', half), { from: '2026-11-14', to: '2026-11-17' }, 'Saturday: new picks');
+});
+
+await t('Umall specials: the discounted products, with the shop, aisle and end day', () => {
+  const list = umItems(JSON.parse(read('um-products.json')).products, '2026-11-10');
+  assert.deepStrictEqual(list.map((x) => [x.n, x.now, x.was, x.off, x.cat]), [
+    ['Frozen Pork & Cabbage Dumplings - 1kg', 999, 1869, 47, 'Freezer'],
+    ['Chinese Broccoli (Gai Lan), 1 Bundle', 219, 429, 49, 'Fruit & Veg'],
+    ['Samyang Carbo Buldak Ramen 105g', 339, 439, 23, 'Pantry'],
+    ['Ediya Triple Sweet Americano 500ml', 179, 209, 14, 'Drinks'],
+    ['Bestore Braised Duck Neck 100g', 359, 439, 18, 'Meat & Seafood']
+  ], 'no full-price sauce, and no markup in names');
+  assert.deepStrictEqual([list[0].s, list[0].src, list[0].to, list[0].link], ['Umall', 'um', '2026-11-10', 'https://www.umall.com.au/products/frozen-pork-cabbage-dumplings-1kg']);
+  assert.strictEqual(umCat({ product_type: 'Durians', tags: ['frozen', 'fruit'], title: 'Frozen Durian 400g' }), 'Freezer', 'frozen comes first');
+  assert.strictEqual(umCat({ product_type: 'Toothpaste', tags: [], title: 'Darlie Toothpaste' }), 'Health & Beauty');
+  assert.deepStrictEqual(umItems([{ title: 'x', handle: 'x', variants: [{ price: '2', compare_at_price: '1' }] }, null], '2026-11-10'), []);
+});
+
 let first;
 await t('a full run', async () => {
   const s = site();
@@ -83,6 +109,20 @@ await t('a full run', async () => {
   assert.strictEqual(first.specials.length, 8);
   assert.ok(JSON.stringify(first).indexOf('<script>') < 0);
   assert.ok(s.calls.indexOf('https://www.harrisfarm.com.au/collections/' + HF_LISTS[0] + '/products.json?limit=250') >= 0);
+});
+
+await t("a run with Umall: Monday reads the weekend picks only, and they're kept while they run if Umall is down", async () => {
+  const s = site({ [UM_HALF]: { status: 200, text: read('um-products.json') } });
+  const run = await build({ prev: {}, now: NOW, fetchText: s.fetchText, wait: 0 });
+  assert.strictEqual(s.calls.indexOf(UM_WEEK), -1, "last week's weekly specials are over, so not asked for");
+  assert.deepStrictEqual([run.sources.umall.ok, run.sources.umall.n, run.sources.umall.from, run.sources.umall.to, run.sources.umall.lists], [true, 5, '2026-11-07', '2026-11-10', 'half-price']);
+  assert.strictEqual(run.specials.filter((x) => x.src === 'um').length, 5);
+  assert.notStrictEqual(fingerprint(run), fingerprint(first), 'new Umall specials are news');
+  const down = await build({ prev: run, now: new Date('2026-11-09T07:00:00Z'), fetchText: async () => ({ status: 0, text: '' }), wait: 0 });
+  assert.deepStrictEqual([down.sources.umall.stale, down.specials.filter((x) => x.src === 'um').length], [true, 5]);
+  const wed = await build({ prev: run, now: new Date('2026-11-10T21:00:00Z'), fetchText: site({ [UM_WEEK]: { status: 200, text: '{"products":[]}' } }).fetchText, wait: 0 });
+  assert.deepStrictEqual([wed.sources.umall.ok, wed.sources.umall.lists, wed.specials.filter((x) => x.src === 'um').length], [true, 'weekly-special', 0], "Wednesday: the weekend picks are gone and this week's list is read");
+  assert.strictEqual(first.sources.umall.ok, false, 'Umall not answering on the first run is noted');
 });
 
 await t('the next run reuses the report and the Harris Farm list that worked', async () => {
