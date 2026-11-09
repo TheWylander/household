@@ -65,6 +65,7 @@
     cart: '<path d="M3 4.5h2.4l2.2 10a1.6 1.6 0 0 0 1.6 1.3h8.3a1.6 1.6 0 0 0 1.6-1.2L20.6 8H6.2"/><circle cx="9.6" cy="19.6" r="1.4"/><circle cx="17" cy="19.6" r="1.4"/>',
     bell: '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.2H4.4z"/><path d="M10 20.6a2.1 2.1 0 0 0 4 0"/>',
     up: '<path d="M12 19V6M6 11.5 12 5.5l6 6"/>',
+    sort: '<path d="M8 19V5M4.5 8.5 8 5l3.5 3.5"/><path d="M16 5v14M12.5 15.5 16 19l3.5-3.5"/>',
     pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
     camera: '<path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.8l1.4-2h4.6l1.4 2h1.8A2.5 2.5 0 0 1 20 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5z"/><circle cx="12" cy="12.5" r="3.6"/>',
     image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 16.5 15 11l-8 8.5"/>',
@@ -114,7 +115,7 @@
     photos: null, photoBusy: null, photoErr: null, newsShown: false, newsDoc: null, newsEdit: null, newsId: null, factN: 0,
     enterKey: null, enterAt: 0, enterDir: 0, enterDirNow: 0, countsShown: {},
     pushDoc: null, pushBusy: false, pushNote: null,
-    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, spStore: 'all', spAisle: 'all', spWatch: false, spQuery: '', spAll: false, ozbAll: false, watchNew: '', listNew: '', aiDoc: null, aiTokNew: '', ghTokNew: '',
+    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, spStore: 'all', spAisle: 'all', spSort: 'best', spWatch: false, spQuery: '', spAll: false, ozbAll: false, watchNew: '', listNew: '', aiDoc: null, aiTokNew: '', ghTokNew: '',
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -2203,7 +2204,17 @@
   }
   function spFiltered() {
     const list = S.spAisle === 'all' ? spBase() : spBase().filter((x) => aisleOf(x) === S.spAisle);
-    return L.sortSpecials(list, dealsCfg().watch);
+    return spSorted(L.sortSpecials(list, dealsCfg().watch));
+  }
+  /* The sort button beside the filters. Best for us is the usual order: our watch list first, then the biggest
+     discounts. The others keep that order for ties. Harris Farm only gives its special price, so it has no saving. */
+  const SP_SORTS = [['best', 'Best for us'], ['save', 'Biggest saving'], ['off', 'Biggest % off'], ['low', 'Lowest price'], ['az', 'A to Z']];
+  const sortName = (k) => (SP_SORTS.filter((o) => o[0] === k)[0] || SP_SORTS[0])[1];
+  function spSorted(list) {
+    const k = S.spSort, num = { save: (x) => (x.was > x.now ? x.was - x.now : 0), off: (x) => x.off || 0, low: (x) => -x.now }[k];
+    if (num) return list.slice().sort((a, b) => num(b) - num(a));
+    if (k === 'az') return list.slice().sort((a, b) => a.n.localeCompare(b.n, 'en-AU', { sensitivity: 'base' }));
+    return list;
   }
   /* ---------- the weekend shopping list ---------- */
   /* Kept with the watch list in hh/deals, so both phones share it. Specials carry their price and when the special ends. */
@@ -2284,14 +2295,14 @@
   function spListHtml() {
     const D = dealsCfg(), list = spFiltered(), q = String(S.spQuery || '').trim();
     if (!list.length) return '<p class="muted sp-none">' + (q ? 'Nothing on special matches that this week.' : 'Nothing here this week.') + '</p>';
-    if (!S.spAll && !q && S.spAisle === 'all' && !S.spWatch) {
+    if (!S.spAll && !q && S.spAisle === 'all' && !S.spWatch && S.spSort === 'best') {
       const rare = list.filter((x) => rareWeeks(x) >= 8).sort((a, b) => rareWeeks(b) - rareWeeks(a) || b.off - a.off).slice(0, 3), rest = list.filter((x) => rare.indexOf(x) < 0).slice(0, 8);
       return (rare.length ? '<div class="sp-rare"><p class="sp-sec">Rarely this cheap <span>Not half price for months</span></p><ul class="sp-list">' + rare.map((x) => spRow(x, D.watch)).join('') + '</ul></div>' : '') +
         (rest.length ? '<p class="sp-sec">Top specials <span>' + (D.watch.length ? 'Our list first, then the biggest discounts' : 'Biggest discounts first') + '</span></p><ul class="sp-list">' + rest.map((x) => spRow(x, D.watch)).join('') + '</ul>' : '') +
         (list.length > rare.length + rest.length ? '<button class="btn btn-secondary btn-block sp-more" data-act="spmore">See all ' + list.length + ' specials</button>' : '');
     }
     const shown = S.spAll ? list.slice(0, 500) : list.slice(0, 40);
-    return '<ul class="sp-list">' + shown.map((x) => spRow(x, D.watch)).join('') + '</ul>' +
+    return (S.spSort !== 'best' ? '<p class="sp-sec">' + esc(sortName(S.spSort)) + ' first <button class="link sm" data-act="spsortbest">Back to best for us</button></p>' : '') + '<ul class="sp-list">' + shown.map((x) => spRow(x, D.watch)).join('') + '</ul>' +
       (list.length > shown.length ? '<button class="btn btn-secondary btn-block sp-more" data-act="spmore">Show all ' + list.length + '</button>'
         : S.spAll && !q && S.spAisle === 'all' && !S.spWatch ? '<button class="btn btn-secondary btn-block sp-more" data-act="spmore">Show fewer</button>' : '');
   }
@@ -2321,7 +2332,8 @@
     all.forEach((x) => { counts[x.s] = (counts[x.s] || 0) + 1; });
     const visits = shopVisits(), stores = Object.keys(counts).sort((a, b) => (visits[b] || 0) - (visits[a] || 0) || counts[b] - counts[a]);
     if (S.spStore !== 'all' && !counts[S.spStore]) S.spStore = 'all';
-    /* Search, then two drop-downs: the shop, and the category (with our watch list as one of them). */
+    /* Search, then two drop-downs, the shop and the category (with our watch list as one of them), and the sort button.
+       Unfiltered, each shows its name, which fits beside the sort button on a phone. */
     const D = dealsCfg(), q = String(S.spQuery || '').trim().toLowerCase();
     const pre = all.filter((x) => (S.spStore === 'all' || x.s === S.spStore) && (!q || (x.n + ' ' + x.cat).toLowerCase().indexOf(q) >= 0)), ac = {};
     pre.forEach((x) => { const a = aisleOf(x); ac[a] = (ac[a] || 0) + 1; });
@@ -2329,14 +2341,20 @@
     if (S.spAisle !== 'all' && !ac[S.spAisle]) S.spAisle = 'all';
     const aisles = AISLES.map((a) => [a[0], a[1]]).concat([['other', 'Other']]).filter((a) => ac[a[0]]);
     const opt = (v, label, n, on) => '<option value="' + esc(v) + '"' + (on ? ' selected' : '') + '>' + esc(label) + (n == null ? '' : ' · ' + n) + '</option>';
+    /* A drop-down that shows its own short label, with the phone's picker over it: the list can say All categories
+       while the closed one says Categories, which fits beside the sort button. */
+    const pick = (id, act, name, shown, options) => '<label class="sp-pick" for="' + id + '"><span class="sp-pick-t">' + esc(shown) + '</span>' +
+      '<select id="' + id + '" data-change="' + act + '" aria-label="' + esc(name) + '">' + options + '</select></label>';
     const cat = S.spWatch ? 'watch' : S.spAisle;
     return '<section class="card bold specials" id="spCard">' + head(all.length) +
       '<label class="sr" for="spQ">Search specials</label><input class="input sp-search" id="spQ" type="search" placeholder="Search ' + all.length + ' specials" autocomplete="off" enterkeyhint="search" data-bind="spQuery" data-input="spsearch" value="' + esc(S.spQuery) + '">' +
       '<div class="sp-filters">' +
-      '<label class="sr" for="spShop">Shop</label><select class="input sp-sel" id="spShop" data-change="spshopsel">' + opt('all', 'All shops', null, S.spStore === 'all') +
-        stores.map((x) => opt(x, shopLabel(x), counts[x], S.spStore === x)).join('') + '</select>' +
-      '<label class="sr" for="spCat">Category</label><select class="input sp-sel" id="spCat" data-change="spcatsel">' + opt('all', 'All categories', null, cat === 'all') +
-        (D.watch.length ? opt('watch', 'Our watch list', wn, cat === 'watch') : '') + aisles.map((a) => opt(a[0], a[1], ac[a[0]], cat === a[0])).join('') + '</select>' +
+      pick('spShop', 'spshopsel', 'Shop', S.spStore === 'all' ? 'Shops' : shopLabel(S.spStore) + ' · ' + counts[S.spStore],
+        opt('all', 'All shops', null, S.spStore === 'all') + stores.map((x) => opt(x, shopLabel(x), counts[x], S.spStore === x)).join('')) +
+      pick('spCat', 'spcatsel', 'Category', cat === 'all' ? 'Categories' : cat === 'watch' ? 'Our watch list · ' + wn : ((aisles.filter((a) => a[0] === cat)[0] || [0, 'Categories'])[1] + ' · ' + ac[cat]),
+        opt('all', 'All categories', null, cat === 'all') + (D.watch.length ? opt('watch', 'Our watch list', wn, cat === 'watch') : '') + aisles.map((a) => opt(a[0], a[1], ac[a[0]], cat === a[0])).join('')) +
+      '<label class="sp-sort' + (S.spSort !== 'best' ? ' on' : '') + '" for="spSort">' + icon('sort') + '<span class="sr">Sort by</span>' +
+        '<select id="spSort" data-change="spsortsel" aria-label="Sort by, now ' + esc(sortName(S.spSort)) + '">' + SP_SORTS.map((o) => opt(o[0], o[1], null, S.spSort === o[0])).join('') + '</select></label>' +
       '</div>' +
       '<div id="spList">' + spListHtml() + '</div></section>';
   }
@@ -3634,6 +3652,7 @@
       upsert('hh/ai', { ghToken: '' }, {});
       S.dialog = null; render(); toast('Token removed. New spends wait for the morning or evening check');
     },
+    spsortbest: () => { S.spSort = 'best'; S.spAll = false; render(); },
     shoplist: () => openDialog({ type: 'shoplist' }),
     listadd: (k) => {
       const x = findSpecial(k);
@@ -3823,6 +3842,7 @@
     },
     importfile: (el) => { const f = el.files && el.files[0]; importFile(f); el.value = ''; },
     spshopsel: (el) => { S.spStore = el.value || 'all'; S.spAll = false; render(); },
+    spsortsel: (el) => { S.spSort = SP_SORTS.some((o) => o[0] === el.value) ? el.value : 'best'; S.spAll = false; render(); },
     spcatsel: (el) => { const v = el.value || 'all'; S.spWatch = v === 'watch'; S.spAisle = v === 'watch' ? 'all' : v; S.spAll = false; render(); },
     rcpfile: (el) => { const f = el.files && el.files[0]; el.value = ''; startReceipt(f); },
     remember: (el) => { upsert('hh/settings', { remember: !!el.checked }, defaults()); },
