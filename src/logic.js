@@ -512,7 +512,7 @@
   }
   /* One name per store, so "WW", "Woolies" and "WOOLWORTHS 1234 MACQUARIE" all count as Woolworths. */
   var STORES = [
-    ['Coles', /\bcoles\b|^cl$/i], ['Woolworths', /\bwoolworths\b|\bwoolies\b|^ww$/i], ['Harris Farm', /\bharris ?farm/i],
+    ['Liquorland', /\bliquorland\b/i], ['Coles', /\bcoles\b|^cl$/i], ['Woolworths', /\bwoolworths\b|\bwoolies\b|^ww$/i], ['Harris Farm', /\bharris ?farm/i],
     ['ALDI', /\baldi\b/i], ['Costco', /\bcostco\b/i], ['IGA', /\biga\b/i], ['Lucky Mart', /\blucky ?mart\b/i], ['Umall', /\bumall\b/i]
   ];
   function storeName(s) {

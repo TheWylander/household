@@ -208,6 +208,8 @@ t('specials: stores, watch words and order', () => {
   assert.strictEqual(L.storeName('WW'), 'Woolworths');
   assert.strictEqual(L.storeName('Woolies'), 'Woolworths');
   assert.strictEqual(L.storeName('WOOLWORTHS 1234 MACQUARIE PARK'), 'Woolworths');
+  assert.strictEqual(L.storeName('Liquorland via Coles Online'), 'Liquorland', 'Liquorland, even when it is sold through Coles Online');
+  assert.strictEqual(L.storeName('Coles Online'), 'Coles');
   assert.strictEqual(L.storeName('CL'), 'Coles');
   assert.strictEqual(L.storeName('Harris Farm Markets'), 'Harris Farm');
   assert.strictEqual(L.storeName('Some Deli'), 'Some Deli');

@@ -424,6 +424,7 @@ try:
         close(a)
         ozb = a.locator('.ozb-list').inner_text()
         check(ozb.index('Tony') < ozb.index('Iceberg') and '44' in ozb and 'Sushi Rice' not in ozb and '191 More' not in ozb and 'Ended last week' not in ozb, 'OzBargain deals for our shops, most votes first, without the half-price post or ended deals')
+        check('15% off Online' in ozb and 'Liquorland ·' in ozb, 'Liquorland counts as one of our shops: ' + ozb.replace('\n', ' | ')[:300])
         act(a, 'ozball')
         check('Sushi Rice' in a.locator('.ozb-list').inner_text(), 'see every grocery deal')
         act(a, 'go', 'home'); a.wait_for_timeout(300)

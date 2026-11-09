@@ -150,6 +150,15 @@ await t("next week's half-price list, posted early, waits until it starts", asyn
   const fresh = await build({ prev: {}, now: NOW, fetchText: site(over).fetchText, wait: 0 });
   assert.strictEqual(fresh.sources.report.id, '980500', 'with nothing running to keep, the new list is shown early rather than nothing');
 });
+await t("Liquorland's deals come from OzBargain's Liquorland feed", async () => {
+  assert.strictEqual(FEEDS[4], 'https://www.ozbargain.com.au/deals/liquorland.com.au/feed');
+  const run = await build({ prev: {}, now: NOW, fetchText: site({ [FEEDS[4]]: { status: 200, text: read('ozb-liquorland.xml') } }).fetchText, wait: 0 });
+  const lq = run.deals.filter((d) => d.id === '981500' || d.id === '981501');
+  assert.deepStrictEqual(lq.map((d) => [d.id, d.to, d.votes]).sort(), [['981500', '2026-11-15', 63], ['981501', '2026-11-10', 22]]);
+  assert.ok(lq.every((d) => /Liquorland/.test(d.s)), 'each says it is at Liquorland: ' + lq.map((d) => d.s).join(', '));
+  assert.strictEqual(run.sources.ozb.feeds, 4, 'four feeds read: the fixtures leave Woolworths blocked');
+});
+
 await t('when everything is down, what still applies is kept', async () => {
   const down = async () => ({ status: 0, text: '' });
   const kept = await build({ prev: first, now: new Date('2026-11-09T07:00:00Z'), fetchText: down, wait: 0 });

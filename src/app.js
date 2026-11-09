@@ -2429,7 +2429,7 @@
   function ozbCard() {
     const F = S.feed, t = today();
     if (!F || !F.deals.length) return '';
-    const D = dealsCfg(), shops = /^(Coles|Woolworths|Harris Farm|ALDI|Costco|IGA|Lucky Mart)$/;
+    const D = dealsCfg(), shops = /^(Coles|Woolworths|Harris Farm|ALDI|Costco|IGA|Lucky Mart|Liquorland)$/;
     const list = F.deals.filter((d) => !d.hp && (!d.to || d.to >= t)).map((d) => Object.assign({ shop: L.storeName(d.s), ours: L.watchHits(d.t + ' ' + d.s, D.watch).length > 0 }, d))
       .sort((a, b) => (b.votes || 0) - (a.votes || 0));
     if (!list.length) return '';

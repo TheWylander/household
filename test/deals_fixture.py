@@ -48,6 +48,7 @@ def feed(today_iso):
         {'id': '979001', 't': "Tony's Chocolonely Chocolate Varieties 180g $7.95 (Was $9.95)", 's': 'Coles', 'link': 'https://www.ozbargain.com.au/node/979001', 'from': S, 'to': E, 'votes': 44},
         {'id': '979005', 't': 'Iceberg Lettuce $1.50, Coriander $0.99', 's': 'Harris Farm', 'link': 'https://www.ozbargain.com.au/node/979005', 'from': S, 'to': (t + timedelta(days=2)).isoformat(), 'votes': 30},
         {'id': '979010', 't': 'Sushi Rice 5kg $12', 's': 'Some Japanese Grocer', 'link': 'https://www.ozbargain.com.au/node/979010', 'from': S, 'to': E, 'votes': 12},
+        {'id': '981500', 't': '15% off Online + Delivery ($0 C&C)', 's': 'Liquorland via Coles Online', 'link': 'https://www.ozbargain.com.au/node/981500', 'from': S, 'to': E, 'votes': 20},
         {'id': '980001', 't': '½ Price: Sanitarium Weet-Bix 575g $2.50 @ Coles + 191 More', 's': 'Coles + 191 More', 'link': 'https://www.ozbargain.com.au/node/980001', 'from': S, 'to': E, 'votes': 118, 'hp': True},
         {'id': '970000', 't': 'Ended last week', 's': 'Coles', 'link': 'https://www.ozbargain.com.au/node/970000', 'from': (s - timedelta(days=7)).isoformat(), 'to': (t - timedelta(days=1)).isoformat(), 'votes': 99},
     ]
