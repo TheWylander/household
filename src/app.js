@@ -89,7 +89,7 @@
       ['check', 'Tidy categories.', 'In Insights, tap a category to see every spend in it, and move any that belong somewhere else.'],
       ['star', 'Fun fact.', 'A little fact about how we spend, a new one each time you open the app.'],
       ['arrow', 'Swipe through months.', 'Swipe left or right in Insights and the Calendar. Numbers count up and charts grow as each screen opens.'],
-      ['tag', 'Deals.', "Deals has its own tab. Everything on special this week is at the top, from Coles, Woolies and Harris Farm, with filters by shop and aisle and the things that are rarely this cheap. Below it, the best deal for each thing on our watch list, then sale days and OzBargain."],
+      ['tag', 'Deals.', "Deals has its own tab. Everything on special this week is at the top, from Coles, Woolies, Harris Farm and Umall (with photos for Harris Farm and Umall), with filters by shop and category and the things that are rarely this cheap. Below it, the best deal for each thing on our watch list, then sale days and OzBargain."],
       ['cal', 'Next sale day.', "Home shows the next sale day we're keen on, like Lucky Mart's monthly sale, with the address and a Keen button."],
       ['camera', 'Capture a receipt.', "Tap the plus and choose Capture a receipt. The app reads the shop, total and every item. Tap anything that's just one person's, and it adds the spends."],
       ['gear', 'Upload.', 'Bringing in the Westpac statement and Splitwise files has moved to Settings, under Upload. Spends to check still show on Home.'],
@@ -2125,6 +2125,11 @@
     return m && repo ? 'https://raw.githubusercontent.com/' + m[1] + '/' + repo + '/deals/deals.json' : '';
   }
   /* Only what the app expects gets through: plain text, whole cents, real dates, links to the stores and OzBargain. */
+  /* Product photos from Harris Farm and Umall's Shopify stores: only plain image files on Shopify's image CDN, asked for
+     at the size they're shown (three times over, for the iPhone's screen). */
+  const IMG_OK = /^https:\/\/cdn\.shopify\.com\/s\/files\/[A-Za-z0-9_./%-]+\.(?:jpe?g|png|webp)(?:\?v=\d+)?$/i;
+  const imgOk = (u) => (typeof u === 'string' && u.length <= 300 && IMG_OK.test(u) ? u : '');
+  const thumb = (x, px) => (x && x.img ? '<img class="sp-img" src="' + esc(x.img + (x.img.indexOf('?') >= 0 ? '&' : '?') + 'width=' + px * 3) + '" alt="" width="' + px + '" height="' + px + '" loading="lazy" decoding="async" referrerpolicy="no-referrer">' : '');
   function cleanFeed(j) {
     if (!j || typeof j !== 'object' || j.v !== 1) return null;
     const str = (x, n) => String(x == null ? '' : x).slice(0, n), int = (x) => (typeof x === 'number' && isFinite(x) ? Math.round(x) : 0), day = (x) => (ISO_DAY.test(x || '') ? x : '');
@@ -2135,7 +2140,7 @@
       sources: { ozb: src(so.ozb), report: src(so.report), harris: src(so.harris), umall: src(so.umall) },
       specials: (Array.isArray(j.specials) ? j.specials : []).slice(0, 1500).filter((x) => x && typeof x.n === 'string' && x.n.trim() && int(x.now) > 0).map((x) => ({
         s: L.storeName(str(x.s, 40)), n: str(x.n, 120), was: int(x.was), now: int(x.now), off: L.clamp(int(x.off), 0, 99), cat: str(x.cat, 40), last: str(x.last, 40),
-        link: linkOk(x.link), src: x.src === 'hf' || x.src === 'um' ? x.src : 'hp', to: day(x.to)
+        link: linkOk(x.link), img: imgOk(x.img), src: x.src === 'hf' || x.src === 'um' ? x.src : 'hp', to: day(x.to)
       })),
       deals: (Array.isArray(j.deals) ? j.deals : []).slice(0, 150).filter((x) => x && typeof x.t === 'string' && x.t.trim()).map((x) => ({
         id: str(x.id, 12), t: str(x.t, 160), s: str(x.s, 40), link: linkOk(x.link), from: day(x.from), to: day(x.to), votes: int(x.votes), hp: x.hp === true
@@ -2239,8 +2244,8 @@
     const x = findSpecial(d.key), head = (t) => '<div class="dlg-head"><h2 id="dlgT">' + esc(t) + '</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>';
     if (!x) return head('That special has finished') + '<p class="muted">The specials have moved on since. Have a look at this week\'s.</p><div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
     const k = esc(spKey(x)), on = onList(x), words = L.watchHits(x.n, dealsCfg().watch), end = specialEnd(x);
-    return head(x.n) +
-      '<p class="muted">' + esc([shopLabel(x.s), L.fmt(x.now) + (x.was > x.now ? ', was ' + L.fmt(x.was) : ''), end ? 'special till ' + L.fmtDay(end) : ''].filter(Boolean).join(' · ')) + '</p>' +
+    const line = '<p class="muted">' + esc([shopLabel(x.s), L.fmt(x.now) + (x.was > x.now ? ', was ' + L.fmt(x.was) : ''), end ? 'special till ' + L.fmtDay(end) : ''].filter(Boolean).join(' · ')) + '</p>';
+    return head(x.n) + (x.img ? '<div class="sp-item-head">' + thumb(x, 88) + line + '</div>' : line) +
       '<div class="item-acts">' +
       (on ? '<button class="btn btn-secondary btn-block" data-act="listoff" data-arg="' + k + '">' + icon('check') + 'On the weekend list. Take it off</button>'
         : '<button class="btn btn-primary btn-block" data-act="listadd" data-arg="' + k + '">' + icon('cart') + 'Add to our weekend list</button>') +
@@ -2270,7 +2275,7 @@
   function spRow(x, words) {
     const hit = L.watchHits(x.n, words).length > 0, w = rareWeeks(x), st = specialStart(x);
     const name = x.link ? '<a class="sp-n" href="' + esc(x.link) + '" target="_blank" rel="noopener">' + esc(x.n) + '</a>' : '<span class="sp-n">' + esc(x.n) + '</span>';
-    return '<li class="sp-row' + (hit ? ' hit' : '') + (S.readOnly ? '' : ' has-add') + '"><span class="sp-main">' + name + '<span class="k">' + esc([shopLabel(x.s), x.cat, st ? 'from ' + L.fmtDay(st) : ''].filter(Boolean).join(' · ')) + '</span>' +
+    return '<li class="sp-row' + (hit ? ' hit' : '') + (S.readOnly ? '' : ' has-add') + (x.img ? ' has-img' : '') + '">' + thumb(x, 48) + '<span class="sp-main">' + name + '<span class="k">' + esc([shopLabel(x.s), x.cat, st ? 'from ' + L.fmtDay(st) : ''].filter(Boolean).join(' · ')) + '</span>' +
       (hit || w >= 8 ? '<span class="sp-tags">' + (hit ? '<span class="tag hit">On our list</span>' : '') + (w >= 8 ? '<span class="tag rare">' + esc(rareLabel(w)) + '</span>' : '') + '</span>' : '') + '</span>' +
       '<span class="sp-price"><span class="sp-now">' + L.fmt(x.now) + '</span>' + (x.was > x.now ? '<s class="sp-was"><span class="sr">was </span>' + L.fmt(x.was) + '</s>' : '') +
       (x.off ? '<span class="sp-off">' + x.off + '% off</span>' : x.src === 'hf' ? '<span class="sp-off">Special</span>' : '') + '</span>' + addBtn(x) + '</li>';
@@ -2359,7 +2364,7 @@
     const m = on.reduce((a, x) => a + x.sp, 0), save = on.reduce((a, x) => a + (x.hits[0].was > x.hits[0].now ? x.hits[0].was - x.hits[0].now : 0), 0);
     const rows = on.map((x) => {
       const h = x.hits[0], name = h.link ? '<a class="match-n" href="' + esc(h.link) + '" target="_blank" rel="noopener">' + esc(h.n) + '</a>' : '<span class="match-n">' + esc(h.n) + '</span>';
-      return '<li class="match-row' + (h.deal || S.readOnly ? '' : ' has-add') + '"><span class="match-main">' + name + '<span class="match-meta"><span class="wpill">' + esc(x.w) + ' <span class="n">' + x.hits.length + '</span></span>' +
+      return '<li class="match-row' + (h.deal || S.readOnly ? '' : ' has-add') + (h.img ? ' has-img' : '') + '">' + thumb(h, 48) + '<span class="match-main">' + name + '<span class="match-meta"><span class="wpill">' + esc(x.w) + ' <span class="n">' + x.hits.length + '</span></span>' +
         '<span>' + esc([shopLabel(h.s), h.was > h.now ? 'was ' + L.fmt(h.was) : ''].filter(Boolean).join(' · ')) + '</span></span></span>' +
         '<span class="sp-price">' + (h.now ? '<span class="sp-now">' + L.fmt(h.now) + '</span>' : '') + '<span class="sp-off">' + (h.deal ? 'Deal' : h.off ? h.off + '% off' : 'Special') + '</span></span>' + (h.deal ? '' : addBtn(h)) + '</li>';
     }).join('');
@@ -4050,6 +4055,8 @@
   }
 
   /* ---------- events ---------- */
+  /* A shop photo that won't load steps aside, leaving its space. */
+  document.addEventListener('error', (ev) => { const el = ev.target; if (el && el.classList && el.classList.contains('sp-img')) el.classList.add('gone'); }, true);
   document.addEventListener('click', (ev) => {
     const el = ev.target.closest('[data-act]');
     if (!el || !root.contains(el) || el.disabled) return;

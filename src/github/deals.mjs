@@ -60,6 +60,12 @@ export function specialsWeek(s) {
 }
 const clip = (s, n) => String(s == null ? '' : s).slice(0, n);
 const safeLink = (u) => (LINK_OK.test(String(u || '')) ? clip(u, 300) : '');
+/* A product's photo, from Harris Farm and Umall's Shopify stores: only a plain image file on Shopify's image CDN. */
+export const IMG_OK = /^https:\/\/cdn\.shopify\.com\/s\/files\/[A-Za-z0-9_./%-]+\.(?:jpe?g|png|webp)(?:\?v=\d+)?$/i;
+export function shopImg(p) {
+  const i = p && Array.isArray(p.images) ? p.images[0] : null, u = i && typeof i.src === 'string' ? i.src.replace(/^(?:https?:)?\/\//, 'https://') : '';
+  return u.length <= 300 && IMG_OK.test(u) ? u : '';
+}
 
 /* ---------- OzBargain feeds ---------- */
 export function parseRss(xml) {
@@ -165,7 +171,7 @@ export function hfItems(products) {
       const n = clip(String(p.title).trim() + (v.title && !/^default title$/i.test(v.title) ? ' ' + v.title : ''), 120);
       if (seen[n.toLowerCase()]) return;
       seen[n.toLowerCase()] = true;
-      out.push({ s: 'Harris Farm', n, was: 0, now, off: 0, cat: hfCat(p.product_type), last: '', link: p.handle ? safeLink(HF + '/products/' + encodeURIComponent(p.handle)) : '', src: 'hf' });
+      out.push({ s: 'Harris Farm', n, was: 0, now, off: 0, cat: hfCat(p.product_type), last: '', link: p.handle ? safeLink(HF + '/products/' + encodeURIComponent(p.handle)) : '', img: shopImg(p), src: 'hf' });
     });
   });
   return out.slice(0, 400);
@@ -201,7 +207,7 @@ export function umItems(products, to) {
       const n = clip(text(p.title) + (v.title && !/^default title$/i.test(v.title) ? ' ' + text(v.title) : ''), 120), k = n.toLowerCase();
       if (!n || seen[k]) return;
       seen[k] = true;
-      out.push({ s: 'Umall', n, was, now, off: Math.round((1 - now / was) * 100), cat: umCat(p), last: '', link: p.handle ? safeLink(UM + '/products/' + encodeURIComponent(p.handle)) : '', src: 'um', to });
+      out.push({ s: 'Umall', n, was, now, off: Math.round((1 - now / was) * 100), cat: umCat(p), last: '', link: p.handle ? safeLink(UM + '/products/' + encodeURIComponent(p.handle)) : '', img: shopImg(p), src: 'um', to });
     });
   });
   return out.slice(0, 300);
@@ -330,7 +336,7 @@ export function fingerprint(out) {
     report: s.report && s.report.ok ? [s.report.id, s.report.to] : null,
     harris: s.harris && s.harris.ok ? [s.harris.from, s.harris.to] : null,
     umall: s.umall && s.umall.ok ? [s.umall.from, s.umall.to] : null,
-    specials: (Array.isArray(o.specials) ? o.specials : []).map((x) => [x.s, x.n, x.now, x.was]),
+    specials: (Array.isArray(o.specials) ? o.specials : []).map((x) => [x.s, x.n, x.now, x.was, x.img ? 1 : 0]),
     deals: (Array.isArray(o.deals) ? o.deals : []).map((d) => d.id + '|' + d.to).sort()
   });
 }

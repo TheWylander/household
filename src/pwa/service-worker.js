@@ -47,7 +47,7 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('push', (event) => {
   let d = {};
   try { d = event.data ? event.data.json() : {}; } catch (e) { d = { body: event.data ? event.data.text() : '' }; }
-  event.waitUntil(self.registration.showNotification(String(d.title || 'Our household').slice(0, 80), {
+  event.waitUntil(self.registration.showNotification(String(d.title || 'Two of Us').slice(0, 80), {
     body: String(d.body || '').slice(0, 240), icon: 'icon-192.png', badge: 'icon-192.png',
     tag: d.tag ? String(d.tag).slice(0, 60) : undefined, data: { url: typeof d.url === 'string' ? d.url : './' }
   }));

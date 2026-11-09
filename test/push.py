@@ -184,11 +184,13 @@ try:
         # the service worker shows a pop-up from a push
         sw = ctx.service_workers[0] if ctx.service_workers else ctx.wait_for_event('serviceworker')
         titles = sw.evaluate("""async () => {
-          self.dispatchEvent(new PushEvent('push', { data: JSON.stringify({ title: '📅 Lucky Mart sale tomorrow', body: 'Up to 20% off\\n📍 Artarmon', url: './#deals', tag: 'sale-1' }) }));
+          self.dispatchEvent(new PushEvent('push', { data: JSON.stringify({ title: 'Two of Us', body: '📅 Lucky Mart sale tomorrow\\nUp to 20% off\\n📍 Artarmon', url: './#deals', tag: 'sale-1' }) }));
+          self.dispatchEvent(new PushEvent('push', { data: JSON.stringify({ body: 'No title came with this one', tag: 'bare' }) }));
           await new Promise((r) => setTimeout(r, 500));
           return (await self.registration.getNotifications()).map((n) => [n.title, n.body, n.tag, n.data && n.data.url]);
         }""")
-        check(['📅 Lucky Mart sale tomorrow', 'Up to 20% off\n📍 Artarmon', 'sale-1', './#deals'] in titles, 'the service worker shows the pop-up: ' + json.dumps(titles))
+        check(['Two of Us', '📅 Lucky Mart sale tomorrow\nUp to 20% off\n📍 Artarmon', 'sale-1', './#deals'] in titles, 'the service worker shows the pop-up, titled Two of Us: ' + json.dumps(titles, ensure_ascii=False))
+        check(['Two of Us', 'No title came with this one', 'bare', './'] in titles, 'a pop-up without a title still says Two of Us')
 
         # a tapped notification opens Deals
         a.goto(BASE + '?from=notification#deals'); a.wait_for_timeout(1500)

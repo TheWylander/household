@@ -63,6 +63,7 @@ await t('Harris Farm specials are the discounted products', () => {
   assert.deepStrictEqual(list.map((x) => [x.n, x.now, x.was, x.off]), [['Imperfect Avocados 600g', 299, 0, 0], ['Harris Farm Pure Australian Honey 1kg', 899, 0, 0], ['Sirena Tuna 95g', 199, 0, 0]], 'the special price only: their was price is often per kilo');
   assert.deepStrictEqual(['S11S-Veg', 'Frdg1-Cheese', 'Fridge-Seafood', 'Butcher', 'S07H-Fruit'].map(hfCat), ['Veg', 'Cheese', 'Seafood', 'Butcher', 'Fruit']);
   assert.strictEqual(list[0].link, 'https://www.harrisfarm.com.au/products/imperfect-avocados');
+  assert.deepStrictEqual(list.map((x) => x.img), ['https://cdn.shopify.com/s/files/1/0206/9470/products/1382-done.jpg?v=1611533677', '', 'https://cdn.shopify.com/s/files/1/0206/9470/files/1331.webp?v=1694663013'], "each product's photo from Shopify's image CDN; anything else is left out");
   assert.deepStrictEqual(hfItems([{ title: 'x', handle: 'x', variants: [{ price: 'free', compare_at_price: '2' }] }, null]), []);
 });
 
@@ -87,6 +88,7 @@ await t('Umall specials: the discounted products, with the shop, aisle and end d
     ['Bestore Braised Duck Neck 100g', 359, 439, 18, 'Meat & Seafood']
   ], 'no full-price sauce, and no markup in names');
   assert.deepStrictEqual([list[0].s, list[0].src, list[0].to, list[0].link], ['Umall', 'um', '2026-11-10', 'https://www.umall.com.au/products/frozen-pork-cabbage-dumplings-1kg']);
+  assert.deepStrictEqual(list.map((x) => x.img ? x.img.split('/').pop() : ''), ['erp_03.source_80e4ed67-c9df-4faf-a805-83025c3347c4.png?v=1785875988', '', '', '', 'duck.jpg?v=1'], 'photos only from the image CDN');
   assert.strictEqual(umCat({ product_type: 'Durians', tags: ['frozen', 'fruit'], title: 'Frozen Durian 400g' }), 'Freezer', 'frozen comes first');
   assert.strictEqual(umCat({ product_type: 'Toothpaste', tags: [], title: 'Darlie Toothpaste' }), 'Health & Beauty');
   assert.deepStrictEqual(umItems([{ title: 'x', handle: 'x', variants: [{ price: '2', compare_at_price: '1' }] }, null], '2026-11-10'), []);

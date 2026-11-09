@@ -1,6 +1,73 @@
-{"products":[
- {"title":"Imperfect Avocados 600g","handle":"imperfect-avocados","product_type":"Fruit","variants":[{"title":"Default Title","price":"2.99","compare_at_price":"4.50"}]},
- {"title":"Harris Farm Pure Australian Honey","handle":"hf-honey","product_type":"Pantry","variants":[{"title":"1kg","price":"8.99","compare_at_price":"12.99"}]},
- {"title":"Carrots","handle":"carrots","product_type":"Veg","variants":[{"title":"Default Title","price":"1.49","compare_at_price":null}]},
- {"title":"Sirena Tuna 95g","handle":"sirena-tuna","product_type":"Pantry","variants":[{"title":"Default Title","price":"1.99","compare_at_price":"2.69"}]}
-]}
+{
+ "products": [
+  {
+   "title": "Imperfect Avocados 600g",
+   "handle": "imperfect-avocados",
+   "product_type": "Fruit",
+   "variants": [
+    {
+     "title": "Default Title",
+     "price": "2.99",
+     "compare_at_price": "4.50"
+    }
+   ],
+   "images": [
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0206/9470/products/1382-done.jpg?v=1611533677",
+     "width": 1300,
+     "height": 1300
+    }
+   ]
+  },
+  {
+   "title": "Harris Farm Pure Australian Honey",
+   "handle": "hf-honey",
+   "product_type": "Pantry",
+   "variants": [
+    {
+     "title": "1kg",
+     "price": "8.99",
+     "compare_at_price": "12.99"
+    }
+   ],
+   "images": [
+    {
+     "src": "javascript:alert(1)",
+     "width": 1300,
+     "height": 1300
+    }
+   ]
+  },
+  {
+   "title": "Carrots",
+   "handle": "carrots",
+   "product_type": "Veg",
+   "variants": [
+    {
+     "title": "Default Title",
+     "price": "1.49",
+     "compare_at_price": null
+    }
+   ]
+  },
+  {
+   "title": "Sirena Tuna 95g",
+   "handle": "sirena-tuna",
+   "product_type": "Pantry",
+   "variants": [
+    {
+     "title": "Default Title",
+     "price": "1.99",
+     "compare_at_price": "2.69"
+    }
+   ],
+   "images": [
+    {
+     "src": "//cdn.shopify.com/s/files/1/0206/9470/files/1331.webp?v=1694663013",
+     "width": 1300,
+     "height": 1300
+    }
+   ]
+  }
+ ]
+}

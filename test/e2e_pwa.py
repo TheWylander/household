@@ -175,6 +175,9 @@ try:
             if feed_over.get('report_from'):
                 f['sources']['report']['from'] = feed_over['report_from']
             return json.dumps(f)
+        photo = (ROOT / 'test' / 'photo-sample.png').read_bytes()
+        shop_photos = []
+        ctx.route('https://cdn.shopify.com/**', lambda r: (shop_photos.append(r.request.url), r.fulfill(status=200, content_type='image/png', body=photo))[-1])
         ctx.route(deals_fixture.URL, lambda r: r.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'}, body=deals_body()))
 
         a = watch(ctx.new_page(), 'robin')
@@ -289,7 +292,14 @@ try:
         check('All categories' in aisles and 'Pantry · 18' in aisles and 'Fresh · 2' in aisles and 'Freezer · 1' in aisles, 'categories with how many in each: ' + aisles)
         check(a.locator('[data-act="spmore"]').inner_text() == 'See all 21 specials', 'a button for the lot')
         act(a, 'spmore')
-        check(a.locator('#spList .sp-row').count() == 21 and 'Frozen Pork & Cabbage Dumplings' in text(a) and 'Ended Umall pick' not in text(a) and 'Umall' in a.locator('.sp-src').inner_text() and a.evaluate('window.__xss') is None and a.locator('.specials img').count() == 0 and '<img src=x' in text(a), 'every special, and text from the deals file shows as text and never runs')
+        check(a.locator('#spList .sp-row').count() == 21 and 'Frozen Pork & Cabbage Dumplings' in text(a) and 'Ended Umall pick' not in text(a) and 'Umall' in a.locator('.sp-src').inner_text() and a.evaluate('window.__xss') is None and a.locator('.specials img:not(.sp-img)').count() == 0 and '<img src=x' in text(a), 'every special, and text from the deals file shows as text and never runs')
+        for i in range(a.locator('#spList .sp-img').count()):
+            a.locator('#spList .sp-img').nth(i).scroll_into_view_if_needed(); a.wait_for_timeout(400)
+        imgs = a.evaluate("[...document.querySelectorAll('#spList .sp-img')].map((i) => [i.closest('.sp-row').querySelector('.sp-n').textContent, i.getAttribute('src'), i.complete && i.naturalWidth > 0, i.getAttribute('alt'), i.className])")
+        check(len(imgs) == 2 and {x[0] for x in imgs} == {'Imperfect Avocados 600g', 'Frozen Pork & Cabbage Dumplings 1kg'}
+              and all(x[1].startswith('https://cdn.shopify.com/s/files/') and x[1].endswith('width=144') and x[3] == '' for x in imgs),
+              'photos on the Harris Farm and Umall specials, only from Shopify, sized for the row: ' + json.dumps(imgs))
+        check(any(x[2] for x in imgs) and all('width=144' in u or 'width=264' in u for u in shop_photos), 'and they load, at the size asked for: ' + json.dumps([imgs, shop_photos])[:600])
         check(a.locator('.specials a[href^="javascript"]').count() == 0, 'only links to the stores and OzBargain')
         act(a, 'spmore')
         check(a.locator('.sp-rare').count() == 1, 'Show fewer goes back to the picks')
@@ -297,6 +307,12 @@ try:
         check(a.evaluate('document.activeElement.tagName') != 'SELECT', 'after a pick the drop-down lets go, so the iPhone picker does not open again')
         fresh = a.locator('#spList .sp-row').all_inner_texts()
         check(len(fresh) == 2 and all('Harris Farm' in r for r in fresh), 'pick an aisle')
+        a.locator('#spCard').screenshot(path=str(SHOTS / 'p13-deals-photos.png'))
+        a.locator('#spList .sp-row', has_text='Imperfect Avocados').locator('.sp-add').click(); a.wait_for_timeout(300)
+        big = a.locator('.dialog .sp-item-head .sp-img')
+        check(big.count() == 1 and (big.get_attribute('src') or '').endswith('width=264') and big.get_attribute('width') == '88', 'the + panel shows a bigger photo')
+        a.locator('.dialog').screenshot(path=str(SHOTS / 'p14-special-photo.png'))
+        a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
         a.select_option('#spCat', 'all'); a.wait_for_timeout(250)
         check(a.locator('.sp-rare').count() == 1, 'All categories goes back to the picks')
         m = a.locator('#matchCard, .matches').first.inner_text()

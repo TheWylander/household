@@ -19,6 +19,9 @@ export function sydneyNow(d) {
     .formatToParts(d).forEach((x) => { p[x.type] = x.value; });
   return { day: p.year + '-' + p.month + '-' + p.day, hour: Number(p.hour) };
 }
+/* Every pop-up's bold title, so it's always clear it's from our app. What it's about goes on the first line under it. */
+export const APP = 'Two of Us';
+export const popBody = (n) => [n.title, n.body].filter(Boolean).join('\n');
 const keenOn = (s, d) => (s.keen !== false ? (s.skip || []).indexOf(d) < 0 : (s.on || []).indexOf(d) >= 0);
 const shop = (s) => (s === 'Woolworths' ? 'Woolies' : s);
 const short = (n) => String(n).split(' ').slice(0, 4).join(' ');
@@ -47,21 +50,21 @@ export function wordHits(feed, watch, day) {
 }
 const andList = (a) => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]);
 const itemLine = (h) => short(h.n) + (h.now > 0 ? ' · ' + L.fmt(h.now) : '') + (h.s ? ' at ' + shop(h.s) : '');
-/* One line per thing we buy, with its best deal. Four lines fit on an iPhone lock screen: up to four, or three and the rest by name. */
+/* One line per thing we buy, with its best deal. Under the heading, three lines fit on an iPhone lock screen: up to three,
+   or two and the rest by name. */
 export function specialsPop(groups, more) {
-  const title = more ? 'More on special this week' : groups.length === 1 ? groups[0].w.charAt(0).toUpperCase() + groups[0].w.slice(1) + ' is on special' : groups.length + ' things we buy are on special';
-  const shown = groups.length > 4 ? groups.slice(0, 3) : groups;
-  const body = shown.map((g) => itemLine(g.hits[0])).concat(groups.length > 4 ? ['+ ' + andList(groups.slice(3).map((g) => g.w)) + ' in the app'] : []).join('\n');
-  return { title: '🏷️ ' + title, body };
+  const shown = groups.length > 3 ? groups.slice(0, 2) : groups;
+  const body = shown.map((g) => itemLine(g.hits[0])).concat(groups.length > 3 ? ['+ ' + andList(groups.slice(2).map((g) => g.w)) + ' in the app'] : []).join('\n');
+  return { title: '🏷️ ' + (more ? 'More top specials this week' : 'Check out the top weekly specials'), body };
 }
 
-/* Several new spends from one person in a single pop-up: the total, up to three lines, and your share. */
+/* Several new spends from one person in a single pop-up: the total, what they were on one line, and your share. */
 export function spendsPop(list) {
   if (list.length === 1) return { title: list[0].t, body: list[0].b || '' };
   const name = list[list.length - 1].n, total = list.reduce((a, e) => a + (e.c > 0 ? e.c : 0), 0), share = list.reduce((a, e) => a + (e.sh > 0 ? e.sh : 0), 0);
   const line = (e) => e.l || String(e.t || '').replace(/^\W+/u, '');
-  const lines = (list.length > 3 ? list.slice(0, 2).map(line).concat(['+ ' + (list.length - 2) + ' more in the app']) : list.map(line))
-    .concat(list.every((e) => typeof e.sh === 'number') ? ['Your share: ' + L.fmt(share)] : []);
+  const what = list.length > 3 ? list.slice(0, 2).map(line).join(', ') + ' and ' + (list.length - 2) + ' more' : andList(list.map(line));
+  const lines = [what].concat(list.every((e) => typeof e.sh === 'number') ? ['Your share: ' + L.fmt(share)] : []);
   return { title: '💸 ' + (name ? name + ' added ' : '') + list.length + ' spends' + (total > 0 ? ', ' + L.fmt(total) : ''), body: lines.join('\n') };
 }
 const EV_FRESH = 36 * 3600e3, TEST_FRESH = 15 * 60e3;
@@ -92,7 +95,7 @@ export function plan({ push, deals, feed, now, mode = 'all' }) {
 
   subs.filter((s) => !s.welcomed).forEach((s) => out.push({
     key: 'welcome:' + s.id, to: [s.id], welcome: true, title: '🔔 Notifications are on',
-    body: "💸 When the other of us adds a spend\n📅 The evening before a sale day we're keen on\n🛒 Again that morning\n🏷️ When our watch list is on special", url: './'
+    body: "💸 New spends from the other of us\n📅 Sale days we're keen on\n🏷️ Our watch list on special", url: './'
   }));
 
   /* New spends, as one pop-up per person; with nobody to tell, they're only marked as done. */
@@ -148,7 +151,7 @@ export async function run({ push, deals, feed, now = new Date(), mode = 'all', s
     for (const id of n.to) {
       if (subs[id] === null) continue;
       const s = p.subs.find((x) => x.id === id);
-      const r = await send(s, { title: n.title, body: n.body, url: n.url, tag: n.tag }, push.vapid);
+      const r = await send(s, { title: APP, body: popBody(n), url: n.url, tag: n.tag }, push.vapid);
       if (r && r.ok) { any = true; ok++; continue; }
       failed++;
       const st = r ? r.status : 0;

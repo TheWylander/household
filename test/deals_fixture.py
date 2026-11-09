@@ -33,12 +33,12 @@ def feed(today_iso):
         {'s': 'Woolworths', 'n': 'Vittoria Espresso Coffee Beans 1kg', 'was': 4000, 'now': 2000, 'off': 50, 'cat': 'Pantry', 'last': 'Never', 'link': '', 'src': 'hp'},
         {'s': 'Coles', 'n': 'Tip Top English Muffins 6 Pack 400g', 'was': 640, 'now': 320, 'off': 50, 'cat': 'Bakery', 'last': '1 week ago @ WW', 'link': '', 'src': 'hp'},
         {'s': 'Woolworths', 'n': '<img src=x onerror="window.__xss=1"> Helga\'s Wraps', 'was': 550, 'now': 275, 'off': 50, 'cat': 'Bakery', 'last': '7 weeks ago @ WW', 'link': 'javascript:window.__xss=1', 'src': 'hp'},
-        {'s': 'Harris Farm', 'n': 'Imperfect Avocados 600g', 'was': 0, 'now': 299, 'off': 0, 'cat': 'Fruit', 'last': '', 'link': 'https://www.harrisfarm.com.au/products/imperfect-avocados', 'src': 'hf'},
-        {'s': 'Harris Farm', 'n': 'Harris Farm Pure Australian Honey 1kg', 'was': 0, 'now': 899, 'off': 0, 'cat': 'Pantry', 'last': '', 'link': 'https://www.harrisfarm.com.au/products/hf-honey', 'src': 'hf'},
+        {'s': 'Harris Farm', 'n': 'Imperfect Avocados 600g', 'was': 0, 'now': 299, 'off': 0, 'cat': 'Fruit', 'last': '', 'link': 'https://www.harrisfarm.com.au/products/imperfect-avocados', 'img': 'https://cdn.shopify.com/s/files/1/0206/9470/products/avocados.jpg?v=1', 'src': 'hf'},
+        {'s': 'Harris Farm', 'n': 'Harris Farm Pure Australian Honey 1kg', 'was': 0, 'now': 899, 'off': 0, 'cat': 'Pantry', 'last': '', 'link': 'https://www.harrisfarm.com.au/products/hf-honey', 'img': 'https://images.example.com/honey.jpg', 'src': 'hf'},
     ]
     specials += [
         {'s': 'Umall', 'n': 'Frozen Pork & Cabbage Dumplings 1kg', 'was': 1869, 'now': 999, 'off': 47, 'cat': 'Freezer', 'last': '',
-         'link': 'https://www.umall.com.au/products/frozen-pork-cabbage-dumplings-1kg', 'src': 'um', 'to': (t + timedelta(days=2)).isoformat()},
+         'link': 'https://www.umall.com.au/products/frozen-pork-cabbage-dumplings-1kg', 'img': 'https://cdn.shopify.com/s/files/1/0864/3602/0511/files/dumplings.png?v=2', 'src': 'um', 'to': (t + timedelta(days=2)).isoformat()},
         {'s': 'Umall', 'n': 'Ended Umall pick', 'was': 900, 'now': 450, 'off': 50, 'cat': 'Pantry', 'last': '', 'link': '', 'src': 'um', 'to': (t - timedelta(days=1)).isoformat()},
     ]
     for i in range(14):

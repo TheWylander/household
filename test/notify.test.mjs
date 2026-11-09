@@ -1,6 +1,6 @@
 /* What the notification job sends, and to whom, without Firebase or a push service. node test/notify.test.mjs */
 import assert from 'node:assert';
-import { plan, run, sydneyNow, weekKey, weekHits, wordHits, specialsPop, spendsPop, oldKeys, webConfig, fromFs, toFs, fieldPath, toUpdate, job, runSummary } from '../src/github/notify.mjs';
+import { APP, popBody, plan, run, sydneyNow, weekKey, weekHits, wordHits, specialsPop, spendsPop, oldKeys, webConfig, fromFs, toFs, fieldPath, toUpdate, job, runSummary } from '../src/github/notify.mjs';
 
 let passed = 0;
 async function t(name, fn) {
@@ -43,8 +43,8 @@ await t('the evening before a sale day', () => {
   const p = plan({ push: push(), deals: deals(), feed, now: FRI_EVENING });
   assert.deepStrictEqual(p.subs.map((s) => s.id), ['p1', 'p2'], 'phones with an older key or removed are left out');
   const titles = p.out.map((n) => n.title);
-  assert.deepStrictEqual(titles, ['🔔 Notifications are on', '📅 Lucky Mart sale tomorrow', '🏷️ 2 things we buy are on special']);
-  assert.deepStrictEqual(p.out[0].body.split('\n').map((l) => l.slice(0, 2)), ['💸', '📅', '🛒', '🏷️'.slice(0, 2)], 'the welcome lists each kind of pop-up, one per line');
+  assert.deepStrictEqual(titles, ['🔔 Notifications are on', '📅 Lucky Mart sale tomorrow', '🏷️ Check out the top weekly specials']);
+  assert.deepStrictEqual(p.out[0].body.split('\n').map((l) => l.slice(0, 2)), ['💸', '📅', '🏷️'.slice(0, 2)], 'the welcome lists each kind of pop-up, one per line');
   const sale = p.out[1];
   assert.deepStrictEqual([sale.to, sale.body, sale.url, sale.key], [['p1', 'p2'], 'Up to 20% off\n📍 Shop 2, 2 Wilkes Ave, Artarmon', './#deals', 'sale:s1|2026-11-14:eve']);
   const sp = p.out[2];
@@ -64,15 +64,15 @@ await t('the morning of, and nothing twice', () => {
   const more = JSON.parse(JSON.stringify(feed));
   more.specials.push({ s: 'Woolworths', n: 'Weetbix Bites 510g', now: 400, was: 800, off: 50, src: 'hp' });
   const p2 = plan({ push: pp, deals: deals(), feed: more, now: SAT_MORNING });
-  assert.deepStrictEqual([p2.out[0].title, p2.out[0].body], ['🏷️ More on special this week', 'Weetbix Bites 510g · $4.00 at Woolies']);
+  assert.deepStrictEqual([p2.out[0].title, p2.out[0].body], ['🏷️ More top specials this week', 'Weetbix Bites 510g · $4.00 at Woolies']);
   const lots = JSON.parse(JSON.stringify(feed));
   ['Weet-Bix Kids', 'Weet-Bix Blends', 'Weet-Bix Gold', 'Weet-Bix Protein'].forEach((n) => lots.specials.push({ s: 'Coles', n, now: 300, was: 600, off: 50, src: 'hp' }));
   const grouped = plan({ push: push(), deals: deals(), feed: lots, now: FRI_EVENING }).out.filter((n) => n.tag === 'specials')[0];
   assert.deepStrictEqual(grouped.body.split('\n'), ['Sanitarium Weet-Bix 575g · $2.50 at Coles', '20% off Everything In-Store at Tokyo Mart'], 'five Weet-Bix specials make one line, with the best of them');
   const six = plan({ push: push(), deals: { sales: [], watch: ['weetbix', 'tokyo mart', 'muffins', 'kids', 'blends', 'gold'] }, feed: lots, now: FRI_EVENING }).out.filter((n) => n.tag === 'specials')[0];
-  assert.deepStrictEqual([six.title, six.body.split('\n').length, six.body.split('\n')[3]], ['🏷️ 6 things we buy are on special', 4, '+ kids, blends and gold in the app'], 'six words: three lines and the rest by name');
+  assert.deepStrictEqual([six.title, six.body.split('\n').length, six.body.split('\n')[2]], ['🏷️ Check out the top weekly specials', 3, '+ muffins, kids, blends and gold in the app'], 'six words: two lines and the rest by name, so it fits under the heading');
   const one = specialsPop(wordHits(feed, ['weetbix'], '2026-11-13'), false);
-  assert.deepStrictEqual(one, { title: '🏷️ Weetbix is on special', body: 'Sanitarium Weet-Bix 575g · $2.50 at Coles' }, 'one word says which');
+  assert.deepStrictEqual(one, { title: '🏷️ Check out the top weekly specials', body: 'Sanitarium Weet-Bix 575g · $2.50 at Coles' }, 'one word: its best deal');
 });
 
 await t("not keen, skipped, or not today: no pop-up", () => {
@@ -104,12 +104,14 @@ await t('sending: what gets written back', async () => {
   const pp = push(), calls = [];
   pp.sent = { 'sale:s1|2026-08-01:eve': 1 };
   const send = async (s, payload, vapid) => {
-    calls.push([s.id, payload.title, vapid.pub]);
+    calls.push([s.id, payload.title === APP ? payload.body.split('\n')[0] : 'title: ' + payload.title, vapid.pub]);
     if (s.id === 'p2') return { ok: false, status: 410 };
     return { ok: true };
   };
   const r = await run({ push: pp, deals: deals(), feed, now: FRI_EVENING, send });
-  assert.deepStrictEqual(calls, [['p1', '🔔 Notifications are on', 'KEY'], ['p1', '📅 Lucky Mart sale tomorrow', 'KEY'], ['p2', '📅 Lucky Mart sale tomorrow', 'KEY'], ['p1', '🏷️ 2 things we buy are on special', 'KEY']]);
+  assert.deepStrictEqual(calls, [['p1', '🔔 Notifications are on', 'KEY'], ['p1', '📅 Lucky Mart sale tomorrow', 'KEY'], ['p2', '📅 Lucky Mart sale tomorrow', 'KEY'], ['p1', '🏷️ Check out the top weekly specials', 'KEY']], 'every pop-up is titled Two of Us, with what it is about on the first line');
+  assert.strictEqual(popBody({ title: '📅 Lucky Mart sale tomorrow', body: 'Up to 20% off' }), '📅 Lucky Mart sale tomorrow\nUp to 20% off');
+  assert.strictEqual(APP, 'Two of Us');
   assert.deepStrictEqual(r.write.subs, { p1: { welcomed: true }, p2: null }, 'welcomed, and a phone that has gone is removed');
   assert.deepStrictEqual(Object.keys(r.write.sent).sort(), ['sale:s1|2026-11-14:eve', 'sp:2026-11-11']);
   assert.deepStrictEqual(r.write.drop, ['sale:s1|2026-08-01:eve']);
@@ -132,16 +134,16 @@ await t('a new spend pops up on the other phone only', () => {
   const both = plan({ push: spendPush({ b: [ev('e2', 2, { n: 'Jules', t: '💸 Jules added $5.50' })] }), deals: deals(), feed, now: FRI_EVENING, mode: 'spends' });
   assert.deepStrictEqual(both.out.map((x) => [x.to, x.title]), [[['p1'], '💸 Jules added $5.50']], "and the other way: Jules's spend goes to Robin's phone");
   const all = plan({ push: spendPush({ a: [ev('e1', 1)] }), deals: deals(), feed, now: FRI_EVENING });
-  assert.deepStrictEqual(all.out.map((x) => x.title), ['💸 Robin added $42.10', '📅 Lucky Mart sale tomorrow', '🏷️ 2 things we buy are on special'], 'the evening run sends a spend that missed out, with the rest');
+  assert.deepStrictEqual(all.out.map((x) => x.title), ['💸 Robin added $42.10', '📅 Lucky Mart sale tomorrow', '🏷️ Check out the top weekly specials'], 'the evening run sends a spend that missed out, with the rest');
 });
 
 await t('several spends make one pop-up', () => {
   const three = [ev('e1', 30), ev('e2', 20, { l: '$5.50 Coffee', c: 550, sh: 275 }), ev('e3', 10, { l: '$12.00 Uber', c: 1200, sh: 600 })];
   const n = plan({ push: spendPush({ a: three }), deals: deals(), feed, now: FRI_EVENING, mode: 'spends' }).out[0];
-  assert.deepStrictEqual([n.title, n.body.split('\n')], ['💸 Robin added 3 spends, $59.60', ['$42.10 Woolworths', '$5.50 Coffee', '$12.00 Uber', 'Your share: $29.80']]);
+  assert.deepStrictEqual([n.title, n.body.split('\n')], ['💸 Robin added 3 spends, $59.60', ['$42.10 Woolworths, $5.50 Coffee and $12.00 Uber', 'Your share: $29.80']]);
   assert.strictEqual(n.keys.length, 3);
   const five = spendsPop([1, 2, 3, 4, 5].map((i) => ev('e' + i, 50 - i, { l: '$1.00 Thing ' + i, c: 100, sh: 50 })));
-  assert.deepStrictEqual([five.title, five.body.split('\n')], ['💸 Robin added 5 spends, $5.00', ['$1.00 Thing 1', '$1.00 Thing 2', '+ 3 more in the app', 'Your share: $2.50']], 'four lines at most, for the lock screen');
+  assert.deepStrictEqual([five.title, five.body.split('\n')], ['💸 Robin added 5 spends, $5.00', ['$1.00 Thing 1, $1.00 Thing 2 and 3 more', 'Your share: $2.50']], 'short enough for the lock screen under the heading');
 });
 
 await t("old, sent, switched off or nobody to tell: no spend pop-up", () => {
@@ -162,8 +164,8 @@ await t("the setup's test pop-up goes to the person's own phones, while it's fre
 
 await t('sending spends: what gets written back, and the public log', async () => {
   const calls = [], pp = spendPush({ a: [ev('e1', 3), ev('e2', 2)], b: [ev('e9', 1, { n: 'Jules' })] }, { prefs: { a: { spends: false } } });
-  const r = await run({ push: pp, deals: deals(), feed, now: FRI_EVENING, mode: 'spends', send: async (s, payload) => { calls.push([s.id, payload.title, payload.url]); return { ok: true }; } });
-  assert.deepStrictEqual(calls, [['p2', '💸 Robin added 2 spends, $84.20', './']], "Robin's two spends go to Jules; Robin turned spends off");
+  const r = await run({ push: pp, deals: deals(), feed, now: FRI_EVENING, mode: 'spends', send: async (s, payload) => { calls.push([s.id, payload.title, payload.body.split('\n')[0], payload.url]); return { ok: true }; } });
+  assert.deepStrictEqual(calls, [['p2', 'Two of Us', '💸 Robin added 2 spends, $84.20', './']], "Robin's two spends go to Jules; Robin turned spends off");
   assert.deepStrictEqual(Object.keys(r.write.sent).sort(), ['ev:2026-11-13:e1', 'ev:2026-11-13:e2', 'ev:2026-11-13:e9'], 'all three marked done');
   assert.strictEqual(runSummary(r), 'Sent 1 pop-up (new spends).');
   assert.ok(!/Robin|Woolworths|42/.test(runSummary(r)), 'the public log never says what was spent');
