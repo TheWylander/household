@@ -247,7 +247,7 @@ async function main() {
   };
   try {
     const r = await job({ email, password, config, feed, now: new Date(), send, referer: site, log: (m) => console.log('::warning::' + m) });
-    console.log(runSummary(r));
+    console.log('::notice::' + runSummary(r));
   } catch (e) {
     console.log('::error::' + (e && e.message ? e.message : e));
     process.exitCode = 1;

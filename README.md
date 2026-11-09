@@ -32,7 +32,7 @@ It signs in to Firebase as its own bot user through Firebase's REST APIs, so it 
 2. Publish the rules that `python3 build.py` writes to `pwa/firestore.rules`. Their `isBot()` lets that user read `hh/deals` and `hh/push`, and change only `subs`, `sent` and `last` in `hh/push`.
 3. Add two repository secrets, `BOT_EMAIL` and `BOT_PASSWORD`.
 
-It does nothing until both secrets exist. Its run log is public, so it says how many pop-ups went out, never what they said.
+It does nothing until both secrets exist. It also runs once whenever its code changes on `main`. Its run log is public, so each run's note says how many pop-ups went out, never what they said.
 
 ## Where the data lives
 

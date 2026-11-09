@@ -2,7 +2,8 @@
 # and specials on the watch list. Free on GitHub for public repos. It signs in to Firebase as its own bot user, whose
 # login is in two secrets, BOT_EMAIL and BOT_PASSWORD, and does nothing until they're there. The Firestore rules only
 # let that user read the sale days, watch list and phones, and note what it sent. No Google Cloud key is needed.
-# Run it by hand to send a test to phones that have just turned notifications on.
+# Run it by hand to send a test to phones that have just turned notifications on. Each run's result shows as a note
+# on the run's page.
 name: Phone notifications
 
 on:
@@ -10,6 +11,9 @@ on:
     - cron: '37 20 * * *'   # about 7:40am in Sydney (6:40am in winter)
     - cron: '7 8 * * *'     # about 7pm in Sydney (6pm in winter)
   workflow_dispatch:
+  push:                     # and once whenever its code changes, so a change is tested straight away
+    branches: [main]
+    paths: ['.github/workflows/notify.yml', '.github/notify/notify.mjs']
 
 permissions:
   contents: read
