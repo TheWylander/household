@@ -242,15 +242,20 @@ export async function build({ prev, now = new Date(), fetchText, wait = 400, log
   out.deals = feeds ? toDeals(items, today).slice(0, 80) : (Array.isArray(P.deals) ? P.deals.filter((d) => !d.to || d.to >= today) : []);
   out.sources.ozb = { ok: feeds > 0, feeds, n: out.deals.length, at: feeds ? at : (PS.ozb && PS.ozb.at) || null };
 
-  /* The half-price report: read again only when there's a new one. */
+  /* The half-price report: read again only when there's a new one. Next week's list is often posted days early;
+     it waits while this week's is still running, so the weekend shop sees what's on now. */
   const reports = items.filter(isReport).map((it) => ({ id: nodeId(it.link), pub: new Date(it.pub).getTime() || 0, title: it.title })).filter((x) => x.id).sort((a, b) => b.pub - a.pub);
   const pr = PS.report, prevItems = (Array.isArray(P.specials) ? P.specials : []).filter((x) => x.src === 'hp');
+  const prOn = live(pr) && !!pr.from && pr.from <= today && prevItems.length > 0;
   let rep = null;
   if (reports.length && pr && pr.id === reports[0].id && live(pr) && prevItems.length) rep = { meta: pr, items: prevItems };
   else if (reports.length) {
     const r = await fetchText(OZB + '/node/' + reports[0].id);
     const parsed = r && r.status === 200 ? parseReport(r.text) : null;
-    if (parsed && parsed.items.length && parsed.to >= today) {
+    if (parsed && parsed.items.length && parsed.to >= today && parsed.from > today && prOn) {
+      rep = { meta: pr, items: prevItems };
+      log('Next week\'s half-price list is out (from ' + parsed.from + '). This week\'s stays until then.');
+    } else if (parsed && parsed.items.length && parsed.to >= today) {
       rep = { meta: { ok: true, id: reports[0].id, link: OZB + '/node/' + reports[0].id, date: parsed.date, from: parsed.from, to: parsed.to, at }, items: parsed.items };
     } else log('Half-price report not read: node ' + reports[0].id + ' (' + (r ? r.status : 'no answer') + ')');
     await pause(wait);

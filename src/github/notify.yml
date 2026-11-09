@@ -1,9 +1,11 @@
-# Sends the household app's phone notifications: sale days you're keen on (the evening before and the morning of)
-# and specials on the watch list. Free on GitHub for public repos. It signs in to Firebase as its own bot user, whose
-# login is in two secrets, BOT_EMAIL and BOT_PASSWORD, and does nothing until they're there. The Firestore rules only
-# let that user read the sale days, watch list and phones, and note what it sent. No Google Cloud key is needed.
+# Sends the household app's phone notifications: new spends (to the other person's phone), sale days you're keen on
+# (the evening before and the morning of) and specials on the watch list. Free on GitHub for public repos. It signs in
+# to Firebase as its own bot user, whose login is in two secrets, BOT_EMAIL and BOT_PASSWORD, and does nothing until
+# they're there. The Firestore rules only let that user read the sale days, watch list, phones and new-spend notes, and
+# note what it sent. No Google Cloud key is needed. The app starts it with mode "spends" the moment a spend is added,
+# using a GitHub token kept privately in Firebase; the morning and evening runs send anything that missed out.
 # Run it by hand to send a test to phones that have just turned notifications on. Each run's result shows as a note
-# on the run's page.
+# on the run's page, which says what kind of pop-ups went out, never what they said.
 name: Phone notifications
 
 on:
@@ -11,6 +13,12 @@ on:
     - cron: '37 20 * * *'   # about 7:40am in Sydney (6:40am in winter)
     - cron: '7 8 * * *'     # about 7pm in Sydney (6pm in winter)
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'What to send: everything that is due, or only new spends (the app uses this one)'
+        type: choice
+        options: [all, spends]
+        default: all
   push:                     # and once whenever its code changes, so a change is tested straight away
     branches: [main]
     paths: ['.github/workflows/notify.yml', '.github/notify/notify.mjs']
@@ -43,7 +51,7 @@ jobs:
         with:
           node-version: 22
       - name: Get this week's deals
-        if: steps.key.outputs.ok == 'true'
+        if: steps.key.outputs.ok == 'true' && inputs.mode != 'spends'
         run: |
           if git fetch --depth 1 origin deals 2>/dev/null; then git show FETCH_HEAD:deals.json > deals.json || echo '{}' > deals.json; else echo '{}' > deals.json; fi
       - name: Install
@@ -55,4 +63,5 @@ jobs:
         env:
           BOT_EMAIL: ${{ secrets.BOT_EMAIL }}
           BOT_PASSWORD: ${{ secrets.BOT_PASSWORD }}
+          NOTIFY_MODE: ${{ inputs.mode }}
         run: node .github/notify/notify.mjs deals.json

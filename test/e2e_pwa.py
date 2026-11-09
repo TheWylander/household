@@ -168,8 +168,14 @@ try:
           window.__kb = (px) => { h = px ? window.innerHeight - px : null; fake.dispatchEvent(new Event('resize')); };
           Object.defineProperty(window, 'visualViewport', { get: () => fake, configurable: true });
         })();""")
-        ctx.route(deals_fixture.URL, lambda r: r.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'},
-                                                         body=json.dumps(deals_fixture.feed(TODAY.isoformat()))))
+        feed_over = {}
+
+        def deals_body():
+            f = deals_fixture.feed(TODAY.isoformat())
+            if feed_over.get('report_from'):
+                f['sources']['report']['from'] = feed_over['report_from']
+            return json.dumps(f)
+        ctx.route(deals_fixture.URL, lambda r: r.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'}, body=deals_body()))
 
         a = watch(ctx.new_page(), 'robin')
         a.goto(BASE); a.wait_for_timeout(300)
@@ -467,6 +473,15 @@ try:
         a.fill('#aupw', 'correct horse 1')
         act(a, 'auin'); a.wait_for_timeout(900)
         check('Hi Robin' in text(a), 'signed back in, data still there')
+
+        # next week's half-price list, posted early, says when it starts
+        feed_over['report_from'] = (TODAY + timedelta(days=1)).isoformat()
+        a.reload(); a.wait_for_timeout(2500); act(a, 'go', 'deals'); a.wait_for_timeout(400)
+        a.select_option('#spShop', 'Coles'); a.wait_for_timeout(250)
+        rows = a.locator('#spList .sp-row').all_inner_texts()
+        d1 = TODAY + timedelta(days=1)
+        starts = 'from ' + d1.strftime('%a ') + str(d1.day) + d1.strftime(' %b')
+        check(rows and all(starts in r for r in rows), 'specials that start tomorrow say so: ' + (rows[0].replace('\n', ' | ') if rows else 'none'))
         browser.close()
 finally:
     server.terminate()

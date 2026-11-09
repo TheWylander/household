@@ -133,6 +133,21 @@ await t('the next run reuses the report and the Harris Farm list that worked', a
   assert.strictEqual(s.calls.filter((u) => /harrisfarm\.com\.au\/collections/.test(u))[0], 'https://www.harrisfarm.com.au/collections/' + HF_LISTS[1] + '/products.json?limit=250');
 });
 
+await t("next week's half-price list, posted early, waits until it starts", async () => {
+  const item = '<item>\n<title>&#189; Price: Arnott\'s Tim Tam 175g $2.75 @ Coles + 180 More @ Coles and Woolworths</title>\n<link>https://www.ozbargain.com.au/node/980500</link>\n' +
+    '<description><![CDATA[<p>Catalogue Half-Price Report - 2026-11-11 Valid from Wed 11 November to Tue 17 November.</p>]]></description>\n' +
+    '<category domain="https://www.ozbargain.com.au/cat/groceries">Groceries</category>\n<pubDate>Sun, 08 Nov 2026 20:00:00 +1100</pubDate>\n</item>\n';
+  const feed = read('ozb-groceries.xml').replace('<item>', item + '<item>');
+  const page = read('ozb-report.html').replace(/2026-11-04/g, '2026-11-11').replace(/4 November/g, '11 November').replace(/10 November/g, '17 November');
+  const over = { [FEEDS[0]]: { status: 200, text: feed }, 'https://www.ozbargain.com.au/node/980500': { status: 200, text: page } };
+  const logs = [], mon = await build({ prev: first, now: NOW, fetchText: site(over).fetchText, wait: 0, log: (m) => logs.push(m) });
+  assert.deepStrictEqual([mon.sources.report.id, mon.sources.report.from, mon.sources.report.to, mon.specials.filter((x) => x.src === 'hp').length], ['980001', '2026-11-04', '2026-11-10', 5], "Monday: this week's list stays");
+  assert.ok(logs.some((m) => /Next week's half-price list is out \(from 2026-11-11\)/.test(m)));
+  const wed = await build({ prev: mon, now: new Date('2026-11-10T20:07:00Z'), fetchText: site(over).fetchText, wait: 0 });
+  assert.deepStrictEqual([wed.sources.report.id, wed.sources.report.from, wed.sources.report.to], ['980500', '2026-11-11', '2026-11-17'], 'Wednesday morning: the new list takes over');
+  const fresh = await build({ prev: {}, now: NOW, fetchText: site(over).fetchText, wait: 0 });
+  assert.strictEqual(fresh.sources.report.id, '980500', 'with nothing running to keep, the new list is shown early rather than nothing');
+});
 await t('when everything is down, what still applies is kept', async () => {
   const down = async () => ({ status: 0, text: '' });
   const kept = await build({ prev: first, now: new Date('2026-11-09T07:00:00Z'), fetchText: down, wait: 0 });

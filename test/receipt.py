@@ -1,6 +1,7 @@
 """Snap a receipt: the photo goes to Gemini (stood in for here), the check-and-split panel, the spends it saves,
 and what happens when Gemini isn't switched on, has hit its limit, or the newest model isn't there.
 Then App Check: off until its key is in the config, and once it is, set up once with a fresh token for each request."""
+import json
 import pathlib
 import subprocess
 import sys
@@ -70,6 +71,12 @@ try:
         a.evaluate("(e) => window.__fbVerify(e)", 'robin@example.com'); act(a, 'auverified'); a.wait_for_load_state('load'); a.wait_for_timeout(700)
         a.fill('#sna', 'Robin'); a.fill('#snb', 'Jules'); act(a, 'sme', 'a'); act(a, 'snext'); a.fill('#sbudget', '2000'); act(a, 'snext'); act(a, 'sfinish'); a.wait_for_timeout(500)
 
+        # Jules's phone has notifications on, so a saved receipt pops up there
+        a.evaluate("""() => { const d = JSON.parse(localStorage.getItem('__fbdb'));
+          d['hh/push'] = { vapid: { pub: 'PUBKEY', d: 'x' }, subs: { pJules: { who: 'b', endpoint: 'https://push.test/j', keys: { p256dh: 'k', auth: 'a' }, vapid: 'PUBKEY', welcomed: true } }, prefs: {}, sent: {}, last: null };
+          localStorage.setItem('__fbdb', JSON.stringify(d)); }""")
+        a.reload(); a.wait_for_timeout(900)
+
         # ---------- from Upload ----------
         act(a, 'go', 'settings'); act(a, 'go', 'upload')
         snapcard = a.locator('.snap').inner_text()
@@ -113,6 +120,10 @@ try:
                   'the shared spend has each line with its name')
             check(her['amount'] == 495 and her['title'] == 'Coles Artarmon, just Jules' and her['splitA'] == 0 and her['owed'] == {'a': 0, 'b': 495}, 'Jules owes all of her milk')
         check('Saved 2 spends from Coles Artarmon' in a.locator('.toast').inner_text(), 'a note says what was saved')
+        evs = (a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/push']").get('events') or {}).get('a') or []
+        e = evs[-1] if evs else {}
+        check(len(evs) == 1 and e.get('t') == '💸 Robin added $36.37' and e.get('c') == 3637 and e.get('sh') == 2066 and e.get('b', '').startswith('Coles Artarmon')
+              and e.get('b', '').endswith('\nRobin paid · your share $20.66'), 'one pop-up for Jules covers both spends, with her share: ' + json.dumps(e, ensure_ascii=False))
 
         # ---------- when Gemini can't help ----------
         snap(a, mode='setup')

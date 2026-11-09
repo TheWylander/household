@@ -623,6 +623,10 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
 .push-setup p { margin: 0 0 6px; }
 .push-setup ol { margin: 6px 0 6px; padding-left: 20px; }
 .push-setup li { margin: 4px 0; overflow-wrap: anywhere; }
+.push-instant { margin-top: 12px; padding-top: 10px; border-top: 2px dashed var(--dash); }
+.push-instant .push-on { margin-top: 2px; }
+.push-instant .err-text { margin: 2px 0 0; }
+.setup-steps a { color: inherit; font-weight: 800; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
 
 /* ---------- deals, rearranged ---------- */
 .hscroll { flex-wrap: nowrap; overflow-x: auto; margin-right: -16px; padding-right: 16px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }

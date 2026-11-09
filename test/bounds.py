@@ -103,6 +103,11 @@ try:
             act(a, 'saveadd'); a.wait_for_timeout(300)
             # Customise: every date field, the rent and points rows
             act(a, 'go', 'settings'); audit(a, 'settings', width)
+            # the instant pop-ups setup, opened the way its button does once the notification job has run
+            a.evaluate("() => { const b = document.createElement('button'); b.setAttribute('data-act', 'ghtoken'); document.getElementById('app').appendChild(b); b.click(); b.remove(); }")
+            a.wait_for_timeout(200)
+            a.fill('#ghTokIn', 'not a token'); act(a, 'ghtoksave'); audit(a, 'instant pop-ups setup', width)
+            a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
             act(a, 'go', 'custom')
             a.check('#drenton'); a.wait_for_timeout(150)
             a.fill('#drentamt', '250'); a.fill('#drentstart', '2026-10-04')
