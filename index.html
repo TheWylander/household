@@ -28,6 +28,9 @@
   --body: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --r-sm: 12px; --r-md: 18px; --r-lg: 26px;
   --nav-h: 74px;
+  /* The phone's home-bar area. The tab bar sits partly inside it, like iOS's own tab bars, so its icons sit lower. */
+  --sab: env(safe-area-inset-bottom, 0px);
+  --nav-bottom: max(8px, calc(var(--sab) - 16px));
 }
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; color-scheme: light; }
@@ -42,14 +45,14 @@ h1, h2, h3 { margin: 0; font-family: var(--display); letter-spacing: -0.02em; }
 .k { font-size: 14px; font-weight: 700; color: var(--ink2); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-.main { max-width: 480px; margin: 0 auto; padding: 8px 16px calc(var(--nav-h) + 40px + env(safe-area-inset-bottom)); }
+.main { max-width: 480px; margin: 0 auto; padding: 0 16px calc(var(--nav-h) + 32px + var(--nav-bottom)); }
 .main.no-nav { padding-bottom: 24px; }
 .banner { max-width: 480px; margin: 0 auto; padding: 10px 16px; background: var(--marigold-soft); border-bottom: 2px solid var(--ink); font-size: 14px; font-weight: 600; }
 .banner.ro { background: var(--coral-soft); }
 
 /* headers */
-.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 14px 2px 16px; }
-.top.sheet { align-items: center; padding-top: 10px; }
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 4px 2px 16px; }
+.top.sheet { align-items: center; padding-top: 2px; }
 .eyebrow { font-size: 15px; font-weight: 700; color: var(--ink2); margin-bottom: 2px; }
 .title { font: 800 34px/1.02 var(--display); letter-spacing: -0.03em; }
 .title.sm { font-size: 24px; flex: 1; }
@@ -157,6 +160,7 @@ textarea.input { min-height: 140px; font-family: ui-monospace, Menlo, monospace;
 .hint { font-size: 14px; color: var(--ink2); margin-top: 6px; }
 .hint a { color: inherit; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
 .err-text { font-size: 14px; color: var(--coral-deep); font-weight: 700; margin-top: 6px; }
+.err-why { font-size: 12px; margin-top: 8px; overflow-wrap: anywhere; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .check-row { display: flex; align-items: center; gap: 12px; min-height: 48px; margin: 0 0 14px; font-weight: 700; cursor: pointer; }
 .check-row input { width: 24px; height: 24px; accent-color: var(--ink); flex: none; margin: 0; }
@@ -235,9 +239,9 @@ textarea.input { min-height: 140px; font-family: ui-monospace, Menlo, monospace;
 .key.plus { grid-row: span 2; background: var(--coral); font-size: 34px; }
 .key.zero { grid-column: span 2; }
 .nudge { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: var(--r-md); background: var(--marigold-soft); border: 2px solid var(--ink); font-weight: 600; font-size: 15px; }
-.savebar { position: sticky; bottom: 0; z-index: 5; padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); background: var(--ground); border-top: 2px dashed var(--dash); margin-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.savebar { position: sticky; bottom: 0; z-index: 5; padding: 12px 0 calc(12px + var(--sab)); background: var(--ground); border-top: 2px dashed var(--dash); margin-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .after-card { text-align: center; margin: -4px 0 4px; }
-.savebar.above-nav { bottom: calc(var(--nav-h) + env(safe-area-inset-bottom)); }
+.savebar.above-nav { bottom: calc(var(--nav-h) - 8px + var(--nav-bottom)); }
 .note-card { background: var(--marigold-soft); border-color: var(--ink); box-shadow: 0 4px 0 var(--ink); }
 .note-card.err { background: var(--coral-soft); }
 .note-card h2 { font-size: 19px; margin-bottom: 6px; }
@@ -310,7 +314,7 @@ details li { margin: 4px 0; }
 .who-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
 
 /* Welcome for the second person, the first time they open the app */
-.welcome { max-width: 480px; margin: 0 auto; padding: 18px 20px calc(36px + env(safe-area-inset-bottom)); text-align: center; }
+.welcome { max-width: 480px; margin: 0 auto; padding: 18px 20px calc(36px + var(--sab)); text-align: center; }
 .wl-preview { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -18px -20px 16px; padding: 8px 12px 8px 16px; background: var(--marigold-soft); border-bottom: 2px solid var(--ink); font-weight: 800; text-align: left; }
 .wl-mark { width: 176px; margin: 6px auto 12px; }
 .wl-mark svg { display: block; width: 100%; height: auto; overflow: visible; }
@@ -347,7 +351,7 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
 @keyframes wobble { 50% { border-radius: 45% 55% 42% 58% / 60% 44% 56% 40%; transform: rotate(6deg); } }
 
 /* nav */
-.nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; align-items: flex-end; justify-content: space-around; max-width: 480px; margin: 0 auto; padding: 6px 6px calc(8px + env(safe-area-inset-bottom)); background: var(--card); border: 2px solid var(--ink); border-bottom: 0; border-radius: 24px 24px 0 0; }
+.nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; align-items: flex-end; justify-content: space-around; max-width: 480px; margin: 0 auto; padding: 6px 6px var(--nav-bottom); background: var(--card); border: 2px solid var(--ink); border-bottom: 0; border-radius: 24px 24px 0 0; }
 .nav-i { position: relative; isolation: isolate; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: 54px; padding: 6px 0 2px; border: 0; background: none; font-size: 12px; font-weight: 800; color: var(--ink2); }
 .nav-i .ic { width: 24px; height: 24px; }
 .nav-i.on { color: var(--ink); }
@@ -359,7 +363,7 @@ textarea.input.wl-text { min-height: 280px; font: 600 16px/1.5 var(--body); resi
 
 /* dialog and toast */
 .scrim { position: fixed; inset: 0; z-index: 40; background: rgba(43, 27, 18, .45); }
-.dialog { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); z-index: 41; width: min(480px, 100%); max-height: 90vh; overflow: auto; background: var(--card); border: 2px solid var(--ink); border-bottom: 0; border-radius: 28px 28px 0 0; padding: 22px 18px calc(18px + env(safe-area-inset-bottom)); }
+.dialog { position: fixed; left: 50%; bottom: 0; transform: translateX(-50%); z-index: 41; width: min(480px, 100%); max-height: 90vh; overflow: auto; background: var(--card); border: 2px solid var(--ink); border-bottom: 0; border-radius: 28px 28px 0 0; padding: 22px 18px calc(18px + var(--sab)); }
 .dialog h2 { font-size: 26px; margin-bottom: 8px; }
 .dialog > p { color: var(--ink2); margin-bottom: 16px; }
 .dialog-actions { display: flex; gap: 10px; margin-top: 18px; }
@@ -2543,6 +2547,14 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     if ((code === 'fetch-error' && !st) || navigator.onLine === false || /failed to fetch|networkerror|load failed|importing a module/i.test(msg)) return offline;
     return 'Couldn\'t read that receipt. Try a clearer photo, or type it in.';
   }
+  /* The technical reason, in small print under the friendly one, so a screenshot says exactly what went wrong. */
+  function errDetail(e) {
+    const st = (e && e.customData && e.customData.httpStatus) || (e && e.customErrorData && e.customErrorData.status) || '';
+    let m = String((e && e.message) || '').replace(/https?:\/\/\S+/g, '').replace(/Error fetching from\s*:?/i, '').replace(/\s+/g, ' ').trim();
+    if (e && e.code && m.indexOf(e.code) < 0) m = e.code + (m ? ': ' + m : '');
+    if (st && m.indexOf(String(st)) < 0) m += ' (HTTP ' + st + ')';
+    return m.slice(0, 220);
+  }
   /* A smaller JPEG is plenty for reading, and quicker to send. */
   function shrinkPhoto(file) {
     return new Promise((res, rej) => {
@@ -2583,7 +2595,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       render();
     }, (e) => {
       if (!mine()) return;
-      S.dialog.busy = false; S.dialog.err = receiptError(e); render();
+      S.dialog.busy = false; S.dialog.err = receiptError(e); S.dialog.why = e && !e.photo ? errDetail(e) : ''; render();
     });
   }
   function receiptSums(f) {
@@ -2609,7 +2621,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     const head = '<div class="dlg-head"><h2 id="dlgT">Check the receipt</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>';
     if (d.busy) return head + '<div class="rcp-busy" role="status"><span class="spin" aria-hidden="true"></span><p><strong>Reading the receipt</strong></p><p class="muted">Gemini is reading the shop, the total and each item. It takes a few seconds.</p></div>';
     if (d.err) {
-      return head + '<p class="err-text" role="alert">' + esc(d.err) + '</p><div class="dialog-actions">' +
+      return head + '<p class="err-text" role="alert">' + esc(d.err) + '</p>' + (d.why ? '<p class="hint err-why">Details: ' + esc(d.why) + '</p>' : '') + '<div class="dialog-actions">' +
         '<label class="btn btn-secondary file-btn">Another photo<input type="file" accept="image/*" data-change="rcpfile" aria-label="Choose another photo of the receipt"></label>' +
         '<button class="btn btn-primary" data-act="rcptype">Type it in</button></div>';
     }
