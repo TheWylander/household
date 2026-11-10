@@ -551,6 +551,18 @@
       .sort(function (a, b) { return (b.hit - a.hit) || ((b.x.off || 0) - (a.x.off || 0)) || (weeksSince(b.x.last) - weeksSince(a.x.last)) || (a.i - b.i); })
       .map(function (o) { return o.x; });
   }
+  /* What to type into a supermarket's search for a list item: the name without price talk ("WAS $30.99 NOW $25.99", "SAVE 22%",
+     "1/2 price") or brackets, keeping the brand and size so the same pack comes up. */
+  function priceSearch(n) {
+    return String(n || '').replace(/[\[\](){}]/g, ' ').replace(/\b(?:was|now|save|saving|special|half price|1\/2 price|½ price)\b[^,;]*/gi, ' ')
+      .replace(/\$\s?\d[\d.,]*(?:\s?\/\s?\w+)?/g, ' ').replace(/\b\d+(?:\.\d+)?\s?%(?:\s?off)?/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 60).trim();
+  }
+  /* Search pages at Coles and Woolworths for it, or '' when there's nothing to search for. */
+  function priceLinks(n) {
+    var q = priceSearch(n);
+    if (!q) return null;
+    return { coles: 'https://www.coles.com.au/search/products?q=' + encodeURIComponent(q), woolies: 'https://www.woolworths.com.au/shop/search/products?searchTerm=' + encodeURIComponent(q) };
+  }
   /* The Wednesday-to-Tuesday week that supermarket specials run in, for a date. */
   function specialsWeek(s) {
     var back = (parseYmd(s).getDay() + 4) % 7, from = addDays(s, -back);
@@ -560,7 +572,7 @@
   var L = {
     MONTHS: MONTHS, MONTHS_FULL: MONTHS_FULL, DAYS: DAYS, DAYS_FULL: DAYS_FULL,
     nthWeekday: nthWeekday, saleDates: saleDates, saleRuleLabel: saleRuleLabel, ordinalDay: ordinalDay, storeName: storeName,
-    watchHits: watchHits, weeksSince: weeksSince, sortSpecials: sortSpecials, specialsWeek: specialsWeek,
+    watchHits: watchHits, priceSearch: priceSearch, priceLinks: priceLinks, weeksSince: weeksSince, sortSpecials: sortSpecials, specialsWeek: specialsWeek,
     pad: pad, ymd: ymd, parseYmd: parseYmd, addDays: addDays, addMonths: addMonths, daysInMonth: daysInMonth,
     daysBetweenInclusive: daysBetweenInclusive, clamp: clamp,
     toCents: toCents, fmt: fmt, fmtRound: fmtRound, fmtShort: fmtShort, parseMoneyInput: parseMoneyInput, parseExpr: parseExpr,

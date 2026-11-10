@@ -408,8 +408,14 @@ try:
         a.fill('#listIn', 'bread'); a.press('#listIn', 'Enter'); a.wait_for_timeout(300)
         dlg = a.locator('.dialog').inner_text()
         check('Anywhere' in dlg and 'bread' in dlg and '2 to get' in dlg and a.evaluate('document.activeElement.id') == 'listIn', 'add your own, ready for the next one')
+        chk = a.evaluate("[...document.querySelectorAll('.dialog .sl-row')].map((r) => [r.querySelector('.sl-n').textContent, [...r.querySelectorAll('.sl-chk a')].map((x) => x.getAttribute('href')), [...r.querySelectorAll('.sl-chk a')].map((x) => x.target + '/' + x.rel)])")
+        check(len(chk) == 2 and chk[0][0] == 'Sanitarium Weet-Bix 575g' and chk[0][1] == ['https://www.coles.com.au/search/products?q=Sanitarium%20Weet-Bix%20575g', 'https://www.woolworths.com.au/shop/search/products?searchTerm=Sanitarium%20Weet-Bix%20575g']
+              and chk[1][0] == 'bread' and chk[1][1][0].endswith('q=bread') and chk[1][1][1].endswith('searchTerm=bread') and all(x == '_blank/noopener' for r in chk for x in r[2]),
+              'Check price: each item gets a Coles and a Woolies search, opening in their own tab: ' + json.dumps(chk))
+        shot(a, 'p08a-check-price')
         a.locator('.dialog .sl-tick').first.click(); a.wait_for_timeout(250)
         check(a.input_value('#listIn') == '', 'the box is empty again after adding')
+        check(a.locator('.dialog .sl-row.done .sl-chk').count() == 0 and a.locator('.dialog .sl-row:not(.done) .sl-chk').count() == 1, 'a ticked item has no price check')
         check(a.locator('.dialog .sl-row.done').count() == 1 and '1 to get' in a.locator('.dialog').inner_text() and a.locator('.dialog [data-act="listclear"]').inner_text() == 'Clear 1 ticked',
               'tick things off as you go')
         shot(a, 'p08b-shop-list')

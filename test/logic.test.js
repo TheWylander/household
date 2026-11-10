@@ -204,6 +204,19 @@ t('sale days repeat by rule', () => {
   assert.strictEqual(L.saleRuleLabel({ k: 'once', date: '2026-11-28' }), 'One day only');
 });
 
+t('price check: the search for a list item at Coles and Woolies', () => {
+  assert.strictEqual(L.priceSearch('Sanitarium Weet-Bix 575g'), 'Sanitarium Weet-Bix 575g', 'brand and size are kept so the same pack comes up');
+  assert.strictEqual(L.priceSearch('Beef Rump Cap WAS $30.99/KG NOW $25.99/KG'), 'Beef Rump Cap');
+  assert.strictEqual(L.priceSearch('Fats Duo SAVE 22%'), 'Fats Duo');
+  assert.strictEqual(L.priceSearch('Tim Tam Original (2 for $6)'), 'Tim Tam Original 2 for', 'brackets and amounts go');
+  assert.strictEqual(L.priceSearch('bread'), 'bread');
+  assert.strictEqual(L.priceSearch('$5'), '');
+  assert.strictEqual(L.priceLinks('  '), null);
+  const u = L.priceLinks('Sanitarium Weet-Bix 575g & more');
+  assert.strictEqual(u.coles, 'https://www.coles.com.au/search/products?q=Sanitarium%20Weet-Bix%20575g%20%26%20more');
+  assert.strictEqual(u.woolies, 'https://www.woolworths.com.au/shop/search/products?searchTerm=Sanitarium%20Weet-Bix%20575g%20%26%20more');
+  assert.ok(L.priceSearch('x'.repeat(200)).length <= 60);
+});
 t('specials: stores, watch words and order', () => {
   assert.strictEqual(L.storeName('WW'), 'Woolworths');
   assert.strictEqual(L.storeName('Woolies'), 'Woolworths');

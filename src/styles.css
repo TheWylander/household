@@ -691,6 +691,8 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
 .sl-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .sl-n { font-weight: 700; overflow-wrap: anywhere; }
 .sl-main .k { font-size: 13px; }
+.sl-chk { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: -2px; font-size: 13px; color: var(--ink2); font-weight: 600; }
+.sl-chk a { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 999px; border: 2px solid var(--input); background: var(--card); color: var(--ink); font-weight: 800; text-decoration: none; }
 .sl-row.done .sl-n { text-decoration: line-through; color: var(--ink2); font-weight: 600; }
 .sl-p { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sl-row.done .sl-p { color: var(--ink2); }

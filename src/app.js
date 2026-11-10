@@ -90,7 +90,7 @@
       ['check', 'Tidy categories.', 'In Insights, tap a category to see every spend in it, and move any that belong somewhere else.'],
       ['star', 'Fun fact.', 'A little fact about how we spend, a new one each time you open the app.'],
       ['arrow', 'Swipe through months.', 'Swipe left or right in Insights and the Calendar. Numbers count up and charts grow as each screen opens.'],
-      ['tag', 'Deals.', "Deals has its own tab. Everything on special this week is at the top, from Coles, Woolies, Harris Farm, Umall, Liquorland and Meat Emporium (with photos for Harris Farm, Umall and Meat Emporium), with filters by shop and category and the things that are rarely this cheap. Below it, the best deal for each thing on our watch list, then OzBargain."],
+      ['tag', 'Deals.', "Deals has its own tab. Everything on special this week is at the top, from Coles, Woolies, Harris Farm, Umall, Liquorland and Meat Emporium (with photos for Harris Farm, Umall and Meat Emporium), with filters by shop and category and the things that are rarely this cheap. On the weekend list (the cart), Check price searches Coles or Woolies for the same thing. Below it, the best deal for each thing on our watch list, then OzBargain."],
       ['cal', 'Sale days.', "Sale days are in the Calendar: marked on the month, with a Keen button on each. Home shows the next one we're keen on, like Lucky Mart's monthly sale, with the address."],
       ['camera', 'Capture a receipt.', "Tap the plus and choose Capture a receipt. The app reads the shop, total and every item. Tap anything that's just one person's, and it adds the spends."],
       ['gear', 'Upload.', 'Bringing in the Westpac statement and Splitwise files has moved to Settings, under Upload. Spends to check still show on Home.'],
@@ -2276,6 +2276,12 @@
         : '<button class="btn btn-secondary btn-block" data-act="watchfor" data-arg="' + k + '">' + icon('bell') + 'Put it on the watch list</button>') +
       (x.link ? '<a class="link sm" href="' + esc(x.link) + '" target="_blank" rel="noopener">See it at ' + esc(shopLabel(x.s)) + '</a>' : '') + '</div>';
   }
+  /* Two links under each item still to get: the same thing searched for at Coles and at Woolies, to see what it costs on the shelf. */
+  function checkPrice(i) {
+    const u = i.done ? null : L.priceLinks(i.n);
+    return u ? '<span class="sl-chk"><span>Check price</span><a href="' + esc(u.coles) + '" target="_blank" rel="noopener" aria-label="Search for ' + esc(i.n) + ' at Coles">Coles</a>' +
+      '<a href="' + esc(u.woolies) + '" target="_blank" rel="noopener" aria-label="Search for ' + esc(i.n) + ' at Woolies">Woolies</a></span>' : '';
+  }
   function shopListDialog() {
     const D = dealsCfg(), t = today(), list = D.list, left = list.filter((i) => !i.done), ticked = list.length - left.length, sum = left.reduce((a, i) => a + i.p, 0);
     const groups = {};
@@ -2286,7 +2292,7 @@
       '<span class="sl-main"><span class="sl-n">' + esc(i.n) + '</span>' +
       (i.w > i.p || i.to ? '<span class="k">' + esc([i.w > i.p ? 'was ' + L.fmt(i.w) : '', i.to ? (i.to < t ? 'special has finished' : 'special till ' + L.fmtDay(i.to)) : ''].filter(Boolean).join(' · ')) + '</span>' : '') + '</span>' +
       (i.p ? '<span class="sl-p">' + L.fmt(i.p) + '</span>' : '<span></span>') +
-      (S.readOnly ? '' : '<button class="sl-del" data-act="listdel" data-arg="' + esc(i.id) + '" aria-label="Take ' + esc(i.n) + ' off the list">' + icon('close') + '</button>') + '</li>';
+      (S.readOnly ? '' : '<button class="sl-del" data-act="listdel" data-arg="' + esc(i.id) + '" aria-label="Take ' + esc(i.n) + ' off the list">' + icon('close') + '</button>') + checkPrice(i) + '</li>';
     return '<div class="dlg-head"><h2 id="dlgT">Weekend shopping list</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>' +
       '<p class="muted">' + (list.length ? (left.length ? left.length + ' to get' + (sum ? ', about <strong>' + L.fmt(sum) + '</strong> at the special prices' : '') + '.' : 'All ticked off.')
         : 'Nothing on it yet. Tap + on any special in Deals to add it, or add your own below.') + '</p>' +
