@@ -1481,7 +1481,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       ['camera', 'Capture a receipt.', "Tap the plus and choose Capture a receipt. The app reads the shop, total and every item. Tap anything that's just one person's, and it adds the spends."],
       ['gear', 'Upload.', 'Bringing in the Westpac statement and Splitwise files has moved to Settings, under Upload. Spends to check still show on Home.'],
       ['cart', 'Weekend shopping list.', "Tap + on any special, or on a match from the watch list, to add it to our list for the weekend shop or put it on the watch list. The list is under the trolley at the top of Deals: tick things off as you go, and add your own."],
-      ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up when the other of us adds a spend, the evening before a sale day we're keen on, and when something on the watch list is on special."]
+      ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up when the other of us adds a spend, the evening before a sale day we're keen on, with the top specials each Wednesday morning, and when something on the watch list is on special."]
     ] }
   ];
 
@@ -1501,7 +1501,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     photos: null, photoBusy: null, photoErr: null, newsShown: false, newsDoc: null, newsEdit: null, newsId: null, factN: 0,
     enterKey: null, enterAt: 0, enterDir: 0, enterDirNow: 0, countsShown: {},
     pushDoc: null, pushBusy: false, pushNote: null,
-    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, spStore: 'all', spAisle: 'all', spSort: 'best', spWatch: false, spQuery: '', spAll: false, ozbAll: false, watchNew: '', listNew: '', aiDoc: null, aiTokNew: '', ghTokNew: '',
+    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, dealsFetch: null, spStore: 'all', spAisle: 'all', spSort: 'best', spWatch: false, spQuery: '', spAll: false, ozbAll: false, watchNew: '', listNew: '', aiDoc: null, aiTokNew: '', ghTokNew: '',
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -1893,7 +1893,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       applyPhotos();
       parseStaged();
       S.hhLoaded = true; S.offline = false;
-      markLive('hh', snap); resolveMe(); ensureRent(); ensureEditor(); pushCheck(); safeRender();
+      markLive('hh', snap); resolveMe(); ensureRent(); ensureEditor(); pushCheck(); refreshDeals(); safeRender();
     }, (e) => subError('hh', e, subHH));
   }
   function subMonths() {
@@ -3460,7 +3460,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   /* ---------- deals ---------- */
   /* Sale days (a shop's regular sale, like a monthly 20% off Saturday) and this week's supermarket specials.
      Sale days, the watch list and what you're keen on live in hh/deals with the rest of your data. Specials come from
-     deals.json, which a free GitHub job builds every Wednesday from public sources. Each phone filters it, so nothing about
+     deals.json, which a free GitHub job builds every morning from public sources. Each phone filters it, so nothing about
      the two of you goes into that file. */
   const SALE_IDEAS = [
     { key: 'luckymart', store: 'Lucky Mart', offer: 'Up to 20% off', where: 'Shop 2, 2 Wilkes Ave, Artarmon', rule: { k: 'nth', n: 2, dow: 6 },
@@ -3515,11 +3515,13 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     return SALE_IDEAS.filter((x) => !D.sales.some((s) => s.key === x.key || s.store.toLowerCase() === x.store.toLowerCase()));
   }
 
-  /* This week's specials file. On GitHub Pages it's next door on the repo's "deals" branch. */
-  function dealsUrl() {
+  /* This week's specials file. On GitHub Pages it's next door on the repo's "deals" branch. Straight after a refresh,
+     GitHub's API has the new file within a minute, where the plain link can take five. */
+  function dealsUrl(fresh) {
     if (window.HH_DEALS_URL) return String(window.HH_DEALS_URL);
     const m = /^([a-z0-9-]+)\.github\.io$/i.exec(location.hostname || ''), repo = (location.pathname || '').split('/').filter(Boolean)[0];
-    return m && repo ? 'https://raw.githubusercontent.com/' + m[1] + '/' + repo + '/deals/deals.json' : '';
+    if (!m || !repo) return '';
+    return fresh ? 'https://api.github.com/repos/' + m[1] + '/' + repo + '/contents/deals.json?ref=deals' : 'https://raw.githubusercontent.com/' + m[1] + '/' + repo + '/deals/deals.json';
   }
   /* Only what the app expects gets through: plain text, whole cents, real dates, links to the stores and OzBargain. */
   /* Product photos from Harris Farm, Umall and Meat Emporium's Shopify stores: only plain image files on Shopify's image CDN, asked for
@@ -3552,7 +3554,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       .then((j) => { const f = cleanFeed(j); if (!f) throw 'bad'; S.feed = f; S.feedErr = null; lsSet('hh.deals', JSON.stringify(j)); },
         (e) => { S.feedErr = e === 'none' ? 'none' : 'net'; })
       .catch(() => { S.feedErr = 'bad'; })
-      .then(() => { S.feedBusy = false; S.feedAt = Date.now(); if (S.settings && S.me) safeRender(); });
+      .then(() => { S.feedBusy = false; S.feedAt = Date.now(); refreshDeals(); if (S.settings && S.me) safeRender(); });
   }
   /* Which list a special belongs to: Harris Farm's and Meat Emporium's run for the specials week, Umall's carry their own end day. */
   const feedKey = (x) => (x.src === 'hf' ? 'harris' : x.src === 'me' ? 'meat' : 'report');
@@ -3562,6 +3564,40 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     if (!F) return [];
     const live = (k) => { const s = F.sources[k]; return !!(s && s.to && s.to >= t); };
     return F.specials.filter((x) => (x.src === 'um' ? !!x.to && x.to >= t : live(feedKey(x))));
+  }
+  /* GitHub often runs the morning refresh hours late. When a list here has run out (Umall's picks end on Tuesdays and
+     Fridays, the rest on Tuesdays), the app starts the refresh itself with the token kept for instant pop-ups, at most
+     every two hours from each phone, and looks for the new lists over the next few minutes. The refresh then sends
+     any pop-ups that are due, like the week's top specials. */
+  const DUE_NAMES = { report: 'Coles and Woolies', harris: 'Harris Farm', umall: 'Umall', meat: 'Meat Emporium' };
+  function dealsDue() {
+    const F = S.feed, t = today();
+    return F ? Object.keys(DUE_NAMES).filter((k) => { const s = F.sources[k]; return !!(s && s.ok && s.to && s.to < t); }) : [];
+  }
+  function refreshDeals() {
+    const tok = ghToken(), last = Number(lsGet('hh.dealsKick') || 0);
+    if (!tok || S.dealsFetch || !dealsDue().length || Date.now() - last < 2 * 3600e3) return;
+    lsSet('hh.dealsKick', String(Date.now()));
+    startJob(tok, 'deals.yml').then((st) => {
+      if (st === -1) lsSet('hh.dealsKick', '');
+      if (!jobOk(st)) return;
+      const polls = window.HH_FEED_POLLS || [90, 180, 300, 480];
+      S.dealsFetch = dealsDue();
+      polls.forEach((sec, i) => setTimeout(() => pollFeed(i === polls.length - 1), sec * 1000));
+      if (S.settings && S.me) safeRender();
+    });
+  }
+  function pollFeed(lastTry) {
+    if (!S.dealsFetch) return;
+    fetch(dealsUrl(true), { cache: 'no-store', headers: window.HH_DEALS_URL ? {} : { Accept: 'application/vnd.github.raw' } })
+      .then((r) => (r.ok ? r.json() : null)).then((j) => {
+        const f = j && cleanFeed(j);
+        if (f) { S.feed = f; S.feedErr = null; S.feedAt = Date.now(); lsSet('hh.deals', JSON.stringify(j)); }
+      }, () => {})
+      .then(() => {
+        if (lastTry || !dealsDue().length) S.dealsFetch = null;
+        if (S.settings && S.me) safeRender();
+      });
   }
   /* Shops you actually go to, from this past year of shared spends: Coles 19 trips and so on. */
   function shopVisits() {
@@ -3720,7 +3756,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   }
   function feedWhy() {
     return !dealsUrl() ? 'Specials show here in the app on your phones.' : S.feedBusy || !S.feedAt ? 'Getting this week\'s specials.'
-      : S.feedErr === 'none' ? 'The deals job hasn\'t run yet. It runs every Wednesday morning, when the specials change.' : 'This week\'s specials couldn\'t be reached. Check your connection.';
+      : S.feedErr === 'none' ? 'The deals job hasn\'t run yet. It runs every morning, and the specials change on Wednesdays.' : 'This week\'s specials couldn\'t be reached. Check your connection.';
   }
   /* Everything on special this week, with shop and aisle filters and a search. */
   function everythingCard() {
@@ -3731,7 +3767,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
         (S.feedErr === 'net' || S.feedErr === 'bad' ? '<button class="link sm" data-act="feedretry">Try again</button>' : '') + '</section>';
     }
     const all = specialsNow();
-    if (!all.length) return '<section class="card bold specials" id="spCard">' + head(0) + '<p class="muted">This week\'s specials haven\'t come through yet. They update on Wednesdays.</p></section>';
+    const fetching = S.dealsFetch && S.dealsFetch.length ? '<p class="hint sp-fetch" role="status">Getting the new lists from ' + esc(listNames(S.dealsFetch.map((k) => DUE_NAMES[k]))) + '. They\'ll show here in a minute or two.</p>' : '';
+    if (!all.length) return '<section class="card bold specials" id="spCard">' + head(0) + (fetching || '<p class="muted">This week\'s specials haven\'t come through yet. The new ones come in on Wednesday mornings.</p>') + '</section>';
     const counts = {};
     all.forEach((x) => { counts[x.s] = (counts[x.s] || 0) + 1; });
     const visits = shopVisits(), stores = Object.keys(counts).sort((a, b) => (visits[b] || 0) - (visits[a] || 0) || counts[b] - counts[a]);
@@ -3750,8 +3787,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     const pick = (id, act, name, shown, options) => '<label class="sp-pick" for="' + id + '"><span class="sp-pick-t">' + esc(shown) + '</span>' +
       '<select id="' + id + '" data-change="' + act + '" aria-label="' + esc(name) + '">' + options + '</select></label>';
     const cat = S.spWatch ? 'watch' : S.spAisle;
-    return '<section class="card bold specials" id="spCard">' + head(all.length) +
-      '<label class="sr" for="spQ">Search specials</label><input class="input sp-search" id="spQ" type="search" placeholder="Search ' + all.length + ' specials" autocomplete="off" enterkeyhint="search" data-bind="spQuery" data-input="spsearch" value="' + esc(S.spQuery) + '">' +
+    return '<section class="card bold specials" id="spCard">' + head(all.length) + fetching +
+      '<label class="sr" for="spQ">Search specials</label><input class="input sp-search" id="spQ" type="search" placeholder="Search ' + all.length + (all.length === 1 ? ' special' : ' specials') + '" autocomplete="off" enterkeyhint="search" data-bind="spQuery" data-input="spsearch" value="' + esc(S.spQuery) + '">' +
       '<div class="sp-filters">' +
       pick('spShop', 'spshopsel', 'Shop', S.spStore === 'all' ? 'Shops' : shopLabel(S.spStore) + ' · ' + counts[S.spStore],
         opt('all', 'All shops', null, S.spStore === 'all') + stores.map((x) => opt(x, shopLabel(x), counts[x], S.spStore === x)).join('')) +
@@ -4073,14 +4110,15 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
      The repo is picked by hand. */
   const TOKEN_LINK = 'https://github.com/settings/personal-access-tokens/new?name=Household+pop-ups&description=' +
     encodeURIComponent('Lets the household app start its Phone notifications job when a spend is added') + '&expires_in=364&actions=write';
-  /* Starts the job for new spends. Resolves with GitHub's answer: 204 means it's on its way, -1 that GitHub couldn't be reached. */
-  function startJob(token) {
-    const repo = ghRepo();
+  /* Starts the job for new spends, or the deals refresh. Resolves with GitHub's answer: 204 means it's on its way, -1
+     that GitHub couldn't be reached. */
+  function startJob(token, file) {
+    const repo = ghRepo(), deals = file === 'deals.yml';
     if (!repo || !token) return Promise.resolve(0);
-    return fetch('https://api.github.com/repos/' + repo + '/actions/workflows/notify.yml/dispatches', {
+    return fetch('https://api.github.com/repos/' + repo + '/actions/workflows/' + (deals ? 'deals.yml' : 'notify.yml') + '/dispatches', {
       method: 'POST', cache: 'no-store',
       headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ref: 'main', inputs: { mode: 'spends' } })
+      body: JSON.stringify(deals ? { ref: 'main' } : { ref: 'main', inputs: { mode: 'spends' } })
     }).then((r) => r.status, () => -1);
   }
   const jobOk = (st) => st === 204 || st === 200;
@@ -4169,14 +4207,14 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       error: 'That didn\'t work. Check your connection and try again.'
     };
     let out = '<section class="card" id="pushCard"><div class="card-head"><h2>Phone notifications</h2></div>' +
-      '<p class="muted">A pop-up when ' + esc(nm(other(me))) + ' adds a spend, the evening before a sale day you\'re keen on, and when something on the watch list is on special.</p>' +
+      '<p class="muted">A pop-up when ' + esc(nm(other(me))) + ' adds a spend, the evening before a sale day you\'re keen on, with the top specials each Wednesday, and when something on the watch list is on special.</p>' +
       '<p class="hint">' + esc(who) + '</p>';
     if (!S.readOnly) {
       if (mine) {
         out += '<p class="push-on">' + icon('check') + 'On for this phone</p>' +
           '<label class="switch-row"><span>Spends ' + esc(nm(other(me))) + ' adds</span><input type="checkbox" class="switch" role="switch" data-change="pushpref" data-arg="spends"' + (pref.spends ? ' checked' : '') + '></label>' +
           '<label class="switch-row"><span>Sale days we\'re keen on</span><input type="checkbox" class="switch" role="switch" data-change="pushpref" data-arg="sale"' + (pref.sale ? ' checked' : '') + '></label>' +
-          '<label class="switch-row"><span>Specials on our watch list</span><input type="checkbox" class="switch" role="switch" data-change="pushpref" data-arg="specials"' + (pref.specials ? ' checked' : '') + '></label>' +
+          '<label class="switch-row"><span>Top specials and our watch list</span><input type="checkbox" class="switch" role="switch" data-change="pushpref" data-arg="specials"' + (pref.specials ? ' checked' : '') + '></label>' +
           '<button class="link sm" data-act="pushoff"' + (S.pushBusy ? ' disabled' : '') + '>Turn off for this phone</button>';
       } else {
         const blocked = sup === 'install' || sup === 'unsupported', n = S.pushNote || (sup !== 'ok' ? sup : null);

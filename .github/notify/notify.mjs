@@ -1,5 +1,6 @@
-/* Sends the household app's phone notifications. GitHub runs it each morning and evening for free, and the app
-   starts it the moment one of us adds a spend (with NOTIFY_MODE=spends).
+/* Sends the household app's phone notifications. GitHub runs it each morning and evening for free, straight after
+   each deals refresh, and the app starts it the moment one of us adds a spend (with NOTIFY_MODE=spends). GitHub can run
+   its timers hours late, so a run at night sends nothing and leaves what's due for the morning.
    It signs in to Firebase as its own bot user, whose email and password are in two GitHub secrets, BOT_EMAIL and
    BOT_PASSWORD. The Firestore rules only let that user read the sale days, watch list, phones and new-spend notes in
    hh/deals and hh/push, and note what it sent. Without the secrets, it stops quietly. Each pop-up is encrypted for the phone it goes to.
@@ -15,10 +16,14 @@ const L = require(existsSync(new URL('./logic.js', import.meta.url)) ? './logic.
 
 export function sydneyNow(d) {
   const p = {};
-  new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' })
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
     .formatToParts(d).forEach((x) => { p[x.type] = x.value; });
-  return { day: p.year + '-' + p.month + '-' + p.day, hour: Number(p.hour) };
+  return { day: p.year + '-' + p.month + '-' + p.day, hour: Number(p.hour), min: Number(p.minute) };
 }
+/* Pop-ups go out between 6:30am and 9:30pm in Sydney. GitHub sometimes runs the morning and evening jobs hours late, and
+   a late run in the night keeps what's due for the next one. New spends started from the app go straight away. */
+export const AWAKE = [6 * 60 + 30, 21 * 60 + 30];
+export const awake = (t) => t.hour * 60 + t.min >= AWAKE[0] && t.hour * 60 + t.min < AWAKE[1];
 /* Every pop-up's bold title, so it's always clear it's from our app. What it's about goes on the first line under it. */
 export const APP = 'Two of Us';
 export const popBody = (n) => [n.title, n.body].filter(Boolean).join('\n');
@@ -26,18 +31,21 @@ const keenOn = (s, d) => (s.keen !== false ? (s.skip || []).indexOf(d) < 0 : (s.
 const shop = (s) => (s === 'Woolworths' ? 'Woolies' : s);
 const short = (n) => String(n).split(' ').slice(0, 4).join(' ');
 
-/* The week's specials key, from whichever list is still running. */
+/* The week's specials key, from whichever list has started and is still running. */
 export function weekKey(feed, day) {
-  const s = (feed && feed.sources) || {}, r = s.report || {}, h = s.harris || {};
-  const from = (r.ok !== false && r.to >= day && r.from) || (h.ok !== false && h.to >= day && h.from) || '';
+  const s = (feed && feed.sources) || {}, on = (x) => !!(x && x.ok !== false && x.from && x.from <= day && x.to >= day);
+  const from = (on(s.report) && s.report.from) || (on(s.harris) && s.harris.from) || '';
   return from ? 'sp:' + from : '';
+}
+/* Whether a special is running on a day. A list counts once it has started: next week's half-price list is posted days early. */
+function runningOn(feed, day) {
+  const s = (feed && feed.sources) || {}, live = (k) => !!(s[k] && s[k].to && s[k].to >= day && (!s[k].from || s[k].from <= day));
+  return (x) => (x.src === 'um' ? !!x.to && x.to >= day : live(x.src === 'hf' ? 'harris' : x.src === 'me' ? 'meat' : 'report'));
 }
 /* This week's specials and OzBargain deals that match the watch list. A deal matches on its shop too. */
 export function weekHits(feed, watch, day) {
   if (!feed || !Array.isArray(watch) || !watch.length) return [];
-  /* A list counts once it has started: next week's half-price list is posted days early. */
-  const s = feed.sources || {}, live = (k) => !!(s[k] && s[k].to && s[k].to >= day && (!s[k].from || s[k].from <= day));
-  const running = (x) => (x.src === 'um' ? !!x.to && x.to >= day : live(x.src === 'hf' ? 'harris' : x.src === 'me' ? 'meat' : 'report'));
+  const running = runningOn(feed, day);
   const specials = L.sortSpecials((feed.specials || []).filter((x) => x && x.n && running(x) && L.watchHits(x.n, watch).length), watch)
     .map((x) => ({ n: x.n, s: L.storeName(x.s), now: x.now }));
   const deals = (feed.deals || []).filter((d) => d && d.t && !d.hp && (!d.to || d.to >= day) && L.watchHits(d.t + ' ' + d.s, watch).length)
@@ -50,12 +58,34 @@ export function wordHits(feed, watch, day) {
 }
 const andList = (a) => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]);
 const itemLine = (h) => short(h.n) + (h.now > 0 ? ' · ' + L.fmt(h.now) : '') + (h.s ? ' at ' + shop(h.s) : '');
+/* How many weeks since a half-price item was last this cheap, from the list's note ("26 weeks ago @ WW"). */
+const rareWeeks = (x) => { const t = String(x.last || '').trim(); return !t || x.src !== 'hp' ? 0 : /never|first/i.test(t) ? 99 : L.weeksSince(t) || 0; };
+/* Food and drink aisles, from each shop's own categories, so the week's top picks are things we'd buy, one from each. */
+const AISLES = [['meat', /poultry|meat|butcher|seafood|fish/i], ['fresh', /fruit|veg/i], ['fridge', /dairy|cheese|deli|antipasto/i], ['frozen', /freezer|frozen/i],
+  ['snacks', /snack|confection/i], ['drinks', /drinks/i], ['pantry', /pantry|bakery|breakfast/i]];
+const aisleOf = (cat) => (AISLES.filter((a) => a[1].test(String(cat || '')))[0] || [''])[0];
+/* The week's best food and drink specials that aren't on the watch list: the biggest savings, one from each aisle so
+   it isn't all chocolate, and on a tie the one not this cheap for longest. Cookware, SIM cards and razors are left to the app. */
+export function topPicks(feed, watch, day, n = 3) {
+  const running = runningOn(feed, day), w = Array.isArray(watch) ? watch : [], seen = {};
+  return (feed && Array.isArray(feed.specials) ? feed.specials : [])
+    .filter((x) => x && x.n && x.now > 0 && x.was > x.now && aisleOf(x.cat) && running(x) && !L.watchHits(x.n, w).length)
+    .map((x, i) => ({ x, i, save: x.was - x.now, rare: rareWeeks(x) }))
+    .sort((a, b) => b.save - a.save || b.rare - a.rare || a.i - b.i)
+    .filter((o) => { const k = aisleOf(o.x.cat); return seen[k] ? false : (seen[k] = true); })
+    .slice(0, n).map((o) => ({ n: o.x.n, s: L.storeName(o.x.s), now: o.x.now }));
+}
 /* One line per thing we buy, with its best deal. Under the heading, three lines fit on an iPhone lock screen: up to three,
    or two and the rest by name. */
 export function specialsPop(groups, more) {
   const shown = groups.length > 3 ? groups.slice(0, 2) : groups;
   const body = shown.map((g) => itemLine(g.hits[0])).concat(groups.length > 3 ? ['+ ' + andList(groups.slice(2).map((g) => g.w)) + ' in the app'] : []).join('\n');
   return { title: '🏷️ ' + (more ? 'More top specials this week' : 'Check out the top weekly specials'), body };
+}
+/* The week's first specials pop-up: the watch list's matches, then the week's best, three lines under the heading. */
+export function weeklyPop(groups, picks) {
+  if (groups.length > 3) return specialsPop(groups, false);
+  return { title: '🏷️ Check out the top weekly specials', body: groups.map((g) => itemLine(g.hits[0])).concat(picks.map(itemLine)).slice(0, 3).join('\n') };
 }
 
 /* Several new spends from one person in a single pop-up: the total, what they were on one line, and your share. */
@@ -88,14 +118,15 @@ export function spendEvents(P, sent, now) {
    spend is added; that run leaves sale days and specials to the morning and evening runs. */
 export function plan({ push, deals, feed, now, mode = 'all' }) {
   const P = push || {}, D = deals || {}, sent = P.sent || {}, pub = P.vapid && P.vapid.pub, out = [];
-  const { day, hour } = sydneyNow(now);
+  const t = sydneyNow(now), { day, hour } = t;
   const subs = Object.keys(P.subs || {}).map((id) => Object.assign({ id }, P.subs[id]))
     .filter((s) => s && s.endpoint && s.keys && s.keys.p256dh && s.keys.auth && s.vapid === pub && !s.stale);
   const wants = (who, k) => !(P.prefs && P.prefs[who] && P.prefs[who][k] === false);
+  if (mode !== 'spends' && !awake(t)) return { day, hour, subs, out, night: true };
 
   subs.filter((s) => !s.welcomed).forEach((s) => out.push({
     key: 'welcome:' + s.id, to: [s.id], welcome: true, title: '🔔 Notifications are on',
-    body: "💸 New spends from the other of us\n📅 Sale days we're keen on\n🏷️ Our watch list on special", url: './'
+    body: "💸 New spends from the other of us\n📅 Sale days we're keen on\n🏷️ Top specials each Wednesday, and our watch list", url: './'
   }));
 
   /* New spends, as one pop-up per person; with nobody to tell, they're only marked as done. */
@@ -124,13 +155,22 @@ export function plan({ push, deals, feed, now, mode = 'all' }) {
     });
   });
 
-  /* Watch-list specials: once a week, and again only for new matches. */
-  const wk = weekKey(feed, day), hits = wk ? weekHits(feed, D.watch, day) : [];
-  if (hits.length) {
-    const before = Array.isArray(sent[wk]) ? sent[wk] : [], fresh = hits.filter((h) => before.indexOf(h.n) < 0);
-    const to = subs.filter((x) => wants(x.who, 'specials')).map((x) => x.id);
-    const names = fresh.map((h) => h.n), groups = wordHits(feed, D.watch, day).map((g) => ({ w: g.w, hits: g.hits.filter((h) => names.indexOf(h.n) >= 0) })).filter((g) => g.hits.length);
-    if (groups.length && to.length) out.push(Object.assign({ key: wk, names: hits.map((h) => h.n).slice(0, 60), to, url: './#deals', tag: 'specials' }, specialsPop(groups, before.length > 0)));
+  /* Specials. The week's first pop-up, once its lists have started (by Friday), has the top specials with the watch
+     list's matches first. After that, only new watch-list matches. */
+  const wk = weekKey(feed, day), from = wk.slice(3), top = from ? 'top:' + from : '';
+  const toSp = subs.filter((x) => wants(x.who, 'specials')).map((x) => x.id);
+  if (wk && toSp.length) {
+    const hits = weekHits(feed, D.watch, day), before = Array.isArray(sent[wk]) ? sent[wk] : null;
+    if (!before && !sent[top] && day <= L.addDays(from, 2)) {
+      const groups = wordHits(feed, D.watch, day), picks = topPicks(feed, D.watch, day, 3);
+      if (groups.length || picks.length) {
+        out.push(Object.assign({ key: top, marks: { [top]: now.getTime(), [wk]: hits.map((h) => h.n).slice(0, 60) }, to: toSp, url: './#deals', tag: 'specials', top: true }, weeklyPop(groups, picks)));
+      }
+    } else if (hits.length) {
+      const prev = before || [], names = hits.filter((h) => prev.indexOf(h.n) < 0).map((h) => h.n);
+      const groups = wordHits(feed, D.watch, day).map((g) => ({ w: g.w, hits: g.hits.filter((h) => names.indexOf(h.n) >= 0) })).filter((g) => g.hits.length);
+      if (groups.length) out.push(Object.assign({ key: wk, names: hits.map((h) => h.n).slice(0, 60), to: toSp, url: './#deals', tag: 'specials' }, specialsPop(groups, prev.length > 0 || !!sent[top])));
+    }
   }
   return { day, hour, subs, out };
 }
@@ -161,6 +201,7 @@ export async function run({ push, deals, feed, now = new Date(), mode = 'all', s
     }
     if (!any) continue;
     if (n.welcome) { if (subs[n.to[0]] !== null) subs[n.to[0]] = Object.assign(subs[n.to[0]] || {}, { welcomed: true }); }
+    else if (n.marks) Object.keys(n.marks).forEach((k) => { sent[k] = n.marks[k]; });
     else if (n.keys) n.keys.forEach((k) => { sent[k] = Date.now(); });
     else sent[n.key] = n.names || Date.now();
   }
@@ -283,7 +324,8 @@ export async function job({ email, password, config, feed, now = new Date(), mod
 /* The run log on GitHub is public, so it says what kind of pop-ups went out, never what they said. */
 export function runSummary(r) {
   if (!r) return 'No phone has turned notifications on yet.';
-  const kinds = r.plan.out.filter((n) => !n.quiet).map((n) => (n.welcome ? 'a welcome' : n.test ? 'a test' : n.spend ? (n.keys.length === 1 ? 'a new spend' : 'new spends') : /^sale:/.test(n.key) ? 'a sale day reminder' : 'watch-list specials'));
+  if (r.plan.night) return 'Night time in Sydney, so nothing went out. Anything due goes on the first run after 6:30am.';
+  const kinds = r.plan.out.filter((n) => !n.quiet).map((n) => (n.welcome ? 'a welcome' : n.test ? 'a test' : n.spend ? (n.keys.length === 1 ? 'a new spend' : 'new spends') : /^sale:/.test(n.key) ? 'a sale day reminder' : n.top ? "the week's top specials" : 'watch-list specials'));
   const what = kinds.filter((k, i) => kinds.indexOf(k) === i);
   return 'Sent ' + r.ok + (r.ok === 1 ? ' pop-up' : ' pop-ups') + (what.length ? ' (' + what.join(', ') + ')' : '') + (r.failed ? ', ' + r.failed + " couldn't be sent" : '') + '.';
 }

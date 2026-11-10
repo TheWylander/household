@@ -3,7 +3,9 @@
 # to Firebase as its own bot user, whose login is in two secrets, BOT_EMAIL and BOT_PASSWORD, and does nothing until
 # they're there. The Firestore rules only let that user read the sale days, watch list, phones and new-spend notes, and
 # note what it sent. No Google Cloud key is needed. The app starts it with mode "spends" the moment a spend is added,
-# using a GitHub token kept privately in Firebase; the morning and evening runs send anything that missed out.
+# using a GitHub token kept privately in Firebase; the morning and evening runs send anything that missed out. It also
+# runs straight after each deals refresh, so the week's top specials pop up as soon as they're in. GitHub can start
+# its timers hours late, so a run between 9:30pm and 6:30am in Sydney sends nothing and leaves it for the morning.
 # Run it by hand to send a test to phones that have just turned notifications on. Each run's result shows as a note
 # on the run's page, which says what kind of pop-ups went out, never what they said.
 name: Phone notifications
@@ -12,6 +14,9 @@ on:
   schedule:
     - cron: '37 20 * * *'   # about 7:40am in Sydney (6:40am in winter)
     - cron: '7 8 * * *'     # about 7pm in Sydney (6pm in winter)
+  workflow_run:             # straight after each deals refresh
+    workflows: ['Grocery deals']
+    types: [completed]
   workflow_dispatch:
     inputs:
       mode:
