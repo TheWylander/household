@@ -166,6 +166,44 @@ try:
         add_spend(['1', '2'], 'Uber')
         check(len(events()) == 4 and len({e['id'] for e in events()}) == 4, 'quick saves each keep their note')
 
+        # GitHub ran the morning refresh late, so lists in Deals have run out: the app starts the refresh with the saved
+        # token, says what it's getting, picks up the new lists, and doesn't ask again for two hours
+        sy = datetime.now(ZoneInfo('Australia/Sydney')).date()
+        def deals_feed(fresh):
+            y, nxt, old = (sy - timedelta(days=1)).isoformat(), (sy + timedelta(days=6)).isoformat(), (sy - timedelta(days=7)).isoformat()
+            return {'v': 1, 'updated': '2026-11-10T22:14:00Z', 'sources': {
+                'ozb': {'ok': True, 'n': 0}, 'report': {'ok': True, 'from': sy.isoformat(), 'to': nxt, 'n': 1},
+                'harris': {'ok': True, 'from': sy.isoformat() if fresh else old, 'to': nxt if fresh else y, 'n': 1},
+                'umall': {'ok': True, 'from': sy.isoformat() if fresh else old, 'to': nxt if fresh else y, 'n': 1}, 'meat': {'ok': False}},
+              'specials': [{'s': 'Coles', 'n': 'Sanitarium Weet-Bix 575g', 'was': 500, 'now': 250, 'off': 50, 'cat': 'Pantry', 'last': '', 'link': '', 'src': 'hp'},
+                           {'s': 'Harris Farm', 'n': 'Imperfect Avocados 600g', 'was': 0, 'now': 350, 'off': 0, 'cat': 'Fruit & Veg', 'last': '', 'link': '', 'src': 'hf'},
+                           {'s': 'Umall', 'n': 'Frozen Pork Dumplings 1kg', 'was': 1869, 'now': 999, 'off': 47, 'cat': 'Frozen', 'last': '', 'link': '', 'src': 'um', 'to': nxt if fresh else y}],
+              'deals': []}
+        feed_state, feed_hits = {'fresh': False}, []
+        def deals_route(r):
+            feed_hits.append(r.request.url)
+            r.fulfill(status=200, content_type='application/json', headers={'access-control-allow-origin': '*'}, body=json.dumps(deals_feed(feed_state['fresh'])))
+        ctx.route('https://deals.test/**', deals_route)
+        ctx.add_init_script("window.HH_DEALS_URL = 'https://deals.test/deals.json'; window.HH_FEED_POLLS = [3, 6];")
+        n = len(gh)
+        a.reload(); a.wait_for_timeout(2200)
+        kicks = [x for x in gh[n:] if x['url'].endswith('/deals.yml/dispatches')]
+        check(len(kicks) == 1 and kicks[0]['auth'] == 'Bearer ' + tok and kicks[0]['body'] == {'ref': 'main'} and len(gh) == n + 1,
+              'a list that has run out starts the deals refresh, once, with the saved token: ' + json.dumps(gh[n:]))
+        act(a, 'go', 'deals'); a.wait_for_timeout(300)
+        card = a.locator('#spCard').inner_text()
+        check('Getting the new lists from Harris Farm and Umall' in card and 'Weet-Bix' in card and 'Dumplings' not in card and 'Avocados' not in card,
+              "Deals says which lists it's getting, and shows what's still running: " + card.replace('\n', ' | ')[:300])
+        a.locator('#spCard').screenshot(path=str(ROOT / 'shots' / 'p13-deals-refresh.png'))
+        feed_state['fresh'] = True
+        a.wait_for_timeout(3600)
+        card = a.locator('#spCard').inner_text()
+        check('Getting the new lists' not in card and 'Dumplings' in card and 'Avocados' in card, 'the new lists show up a few minutes later, without reopening: ' + card.replace('\n', ' | ')[:200])
+        feed_state['fresh'] = False
+        a.reload(); a.wait_for_timeout(2200)
+        check(len(gh) == n + 1, 'and opening the app again soon after leaves GitHub alone')
+        feed_state['fresh'] = True
+
         # GitHub turns the token down later: Settings says so, and why
         gh_status[0] = 401
         add_spend(['9'], 'Bread')
