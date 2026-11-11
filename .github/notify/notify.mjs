@@ -24,9 +24,10 @@ export function sydneyNow(d) {
    a late run in the night keeps what's due for the next one. New spends started from the app go straight away. */
 export const AWAKE = [6 * 60 + 30, 21 * 60 + 30];
 export const awake = (t) => t.hour * 60 + t.min >= AWAKE[0] && t.hour * 60 + t.min < AWAKE[1];
-/* Every pop-up's bold title, so it's always clear it's from our app. What it's about goes on the first line under it. */
+/* A pop-up's bold title says what it's about. The iPhone adds "from Two of Us" under it itself, so the app's name
+   isn't repeated: it only stands in for a pop-up that has no title. */
 export const APP = 'Two of Us';
-export const popBody = (n) => [n.title, n.body].filter(Boolean).join('\n');
+export const payloadOf = (n) => ({ title: n.title || APP, body: n.body || '', url: n.url, tag: n.tag });
 const keenOn = (s, d) => (s.keen !== false ? (s.skip || []).indexOf(d) < 0 : (s.on || []).indexOf(d) >= 0);
 const shop = (s) => (s === 'Woolworths' ? 'Woolies' : s);
 const short = (n) => String(n).split(' ').slice(0, 4).join(' ');
@@ -191,7 +192,7 @@ export async function run({ push, deals, feed, now = new Date(), mode = 'all', s
     for (const id of n.to) {
       if (subs[id] === null) continue;
       const s = p.subs.find((x) => x.id === id);
-      const r = await send(s, { title: APP, body: popBody(n), url: n.url, tag: n.tag }, push.vapid);
+      const r = await send(s, payloadOf(n), push.vapid);
       if (r && r.ok) { any = true; ok++; continue; }
       failed++;
       const st = r ? r.status : 0;
