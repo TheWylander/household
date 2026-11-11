@@ -1,0 +1,130 @@
+{
+ "products": [
+  {
+   "id": 1,
+   "title": "Beef Rump Cap WAS $30.99/KG NOW $25.99/KG",
+   "handle": "beef-rump-cap",
+   "product_type": "Beef",
+   "tags": [],
+   "variants": [
+    {
+     "title": "Default Title",
+     "price": "57.18",
+     "compare_at_price": "68.18",
+     "available": true
+    }
+   ],
+   "images": [
+    {
+     "src": "https://cdn.shopify.com/s/files/1/0347/3729/1402/products/rump-cap.jpg?v=1632136984"
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "title": "Fats Duo SAVE 22%",
+   "handle": "fats-duo",
+   "product_type": "",
+   "tags": [
+    "bundle"
+   ],
+   "variants": [
+    {
+     "title": "Default Title",
+     "price": "17.99",
+     "compare_at_price": "22.99",
+     "available": true
+    }
+   ],
+   "images": [
+    {
+     "src": "//cdn.shopify.com/s/files/1/0347/3729/1402/files/fats-duo.png?v=1700000000"
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "title": "Wagyu Denver Steak",
+   "handle": "wagyu-denver",
+   "product_type": "Wagyu",
+   "tags": [],
+   "variants": [
+    {
+     "title": "Default Title",
+     "price": "52.00",
+     "compare_at_price": "65.00",
+     "available": false
+    }
+   ],
+   "images": []
+  },
+  {
+   "id": 4,
+   "title": "Wagyu Bavette Steak",
+   "handle": "wagyu-bavette",
+   "product_type": "Wagyu",
+   "tags": [],
+   "variants": [
+    {
+     "title": "Default Title",
+     "price": "48.00",
+     "compare_at_price": "0.00",
+     "available": true
+    }
+   ],
+   "images": []
+  },
+  {
+   "id": 5,
+   "title": "Lamb Cutlets",
+   "handle": "lamb-cutlets",
+   "product_type": "Lamb",
+   "tags": [],
+   "variants": [
+    {
+     "title": "Default Title",
+     "price": "39.99",
+     "compare_at_price": null,
+     "available": true
+    }
+   ],
+   "images": []
+  },
+  {
+   "id": 6,
+   "title": "Chimichurri Rub 200g",
+   "handle": "chimichurri-rub",
+   "product_type": "Sauces & Rubs",
+   "tags": [],
+   "variants": [
+    {
+     "title": "Default Title",
+     "price": "8.99",
+     "compare_at_price": "11.99",
+     "available": true
+    }
+   ],
+   "images": [
+    {
+     "src": "https://example.com/rub.jpg"
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "title": "BBQ Tongs",
+   "handle": "bbq-tongs",
+   "product_type": "BBQ Equipment & Accessories",
+   "tags": [],
+   "variants": [
+    {
+     "title": "Default Title",
+     "price": "15.00",
+     "compare_at_price": "20.00",
+     "available": true
+    }
+   ],
+   "images": []
+  }
+ ]
+}
