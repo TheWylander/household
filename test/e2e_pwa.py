@@ -15,7 +15,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SHOTS = ROOT / 'shots'
-PORT = 8768
+PORT = 8768 + int(__import__('os').environ.get('HH_PORT_SHIFT', '0'))
 SITE = f'http://127.0.0.1:{PORT}/pwa/site/'
 BASE = SITE + 'index.html'
 FONT_CSS = (
@@ -160,6 +160,8 @@ try:
         fonts(ctx)
         TODAY = datetime.now(ZoneInfo('Australia/Sydney')).date()
         ctx.add_init_script("window.HH_DEALS_URL = '%s';" % deals_fixture.URL)
+        # the loading screen's cut-out comes from MediaPipe on a CDN tests can't reach: a stand-in that finds nobody (test/loading.py covers it)
+        ctx.add_init_script("window.HH_CUTOUT = () => null;")
         # a stand-in for the phone's keyboard: window.__kb(px) shrinks the visible area the way an iPhone keyboard does
         ctx.add_init_script("""(() => {
           const fake = new EventTarget(); let h = null;

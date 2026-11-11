@@ -70,6 +70,21 @@ t('budget periods', () => {
   assert.strictEqual(feb.end, '2027-02-28');
 });
 
+t('the budget: spends marked not in it, and categories left out', () => {
+  const sp = (id, amount, o) => Object.assign({ id, kind: 'expense', status: 'shared', amount, category: 'Groceries', paid: { a: amount, b: 0 }, owed: { a: amount / 2, b: amount / 2 } }, o || {});
+  const list = [sp('s1', 10000), sp('s2', 4000, { offBudget: true }), sp('s3', 2500, { category: 'Bills' }), sp('s4', 1500, { category: 'Bills', offBudget: true }),
+    sp('s5', 900, { status: 'personal' }), { id: 'r1', kind: 'rent', status: 'shared', amount: 30000, paid: { a: 30000, b: 0 }, owed: { a: 0, b: 30000 } }];
+  assert.deepStrictEqual(list.map((e) => L.inBudget(e, ['Bills'])), [true, false, false, false, false, false], 'only plain shared spends count; rent and personal spends never do');
+  assert.deepStrictEqual(list.map((e) => L.inBudget(e)), [true, false, true, false, false, false], 'with nothing left out in Customise, only the marked ones stay out');
+  assert.strictEqual(L.inBudget(sp('s6', 100, { category: undefined }), ['Other']), false, 'a spend with no category is Other');
+  assert.deepStrictEqual(L.budgetTotals(list, ['Bills']), { all: 18000, towards: 10000, marked: 4000, markedN: 1 },
+    'marked ones are counted once: a marked Bills spend is already out with Bills');
+  assert.deepStrictEqual(L.budgetTotals(list), { all: 18000, towards: 12500, marked: 5500, markedN: 2 });
+  assert.deepStrictEqual(L.budgetTotals([], []), { all: 0, towards: 0, marked: 0, markedN: 0 });
+  const B = L.netBalances(list), plain = L.netBalances(list.map((e) => Object.assign({}, e, { offBudget: false })));
+  assert.deepStrictEqual(B, plain, 'marking a spend not in the budget leaves the balance alone');
+});
+
 t('dates', () => {
   assert.strictEqual(L.parseDate('07/11/2026'), '2026-11-07');
   assert.strictEqual(L.parseDate('7/11/26'), '2026-11-07');

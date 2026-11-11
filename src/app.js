@@ -95,7 +95,9 @@
       ['camera', 'Capture a receipt.', "Tap the plus and choose Capture a receipt. The app reads the shop, total and every item. Tap anything that's just one person's, and it adds the spends."],
       ['gear', 'Upload.', 'Bringing in the Westpac statement and Splitwise files has moved to Settings, under Upload. Spends to check still show on Home.'],
       ['cart', 'Weekend shopping list.', "Tap + on any special, or on a match from the watch list, to add it to our list for the weekend shop or put it on the watch list. The list is under the trolley at the top of Deals: tick things off as you go, and add your own."],
-      ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up when the other of us adds a spend, the evening before a sale day we're keen on, with the top specials each Wednesday morning, and when something on the watch list is on special."]
+      ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up when the other of us adds a spend, the evening before a sale day we're keen on, with the top specials each Wednesday morning, and when something on the watch list is on special."],
+      ['check', 'Not in the budget.', "When you add a spend, untick Counts towards our monthly budget for one-offs. It still splits, but leaves the month's budget alone."],
+      ['duo', 'Loading screen.', 'While the app opens, it shows the other one of us turning round, cut out from their photo.']
     ] }
   ];
 
@@ -226,7 +228,9 @@
   const curPeriod = () => L.periodFor(today(), cfg().resetDay);
   const spendsIn = (p) => S.entries.filter((e) => L.isSpend(e) && L.inPeriod(e.date, p));
   const pendingAll = () => S.entries.filter((e) => e.kind === 'expense' && e.status === 'check');
-  const counted = (list) => { const skip = cfg().budgetSkip; return skip.length ? list.filter((e) => skip.indexOf(e.category || 'Other') < 0) : list; };
+  /* What counts towards the monthly budget (L.inBudget): not a category left out in Customise, nor a spend marked as not
+     in the budget. Both still count in the balance. */
+  const counted = (list) => { const skip = cfg().budgetSkip; return list.filter((e) => L.inBudget(e, skip)); };
   const listNames = (a) => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]);
   const dateY = (d) => { const x = L.parseYmd(d); return x.getDate() + ' ' + L.MONTHS[x.getMonth()] + ' ' + x.getFullYear(); };
   function fmtForeign(o) {
@@ -373,7 +377,7 @@
       amount, items: o.items && o.items.length > 1 ? o.items.slice(0, 50) : null,
       notes: o.notes && o.items && o.items.length > 1 && o.notes.length === o.items.length && o.notes.some(Boolean) ? o.notes.slice(0, 50).map((n) => String(n || '').slice(0, 60)) : null,
       parts: o.parts && o.parts.length ? o.parts : null,
-      payer: o.kind === 'settlement' || o.kind === 'rent' ? o.from : (o.payer || null), splitA, paid, owed, onCard: !!o.onCard,
+      payer: o.kind === 'settlement' || o.kind === 'rent' ? o.from : (o.payer || null), splitA, paid, owed, onCard: !!o.onCard, offBudget: !!o.offBudget,
       category: o.kind === 'settlement' ? null : o.kind === 'rent' ? 'Rent' : (o.category || 'Other'), dupOf: o.dupOf || null, orig: o.orig || null,
       createdAt: o.createdAt || Date.now(), updatedAt: Date.now(), by: o.by || S.me || null
     };
@@ -462,6 +466,7 @@
     try { if (!fb.apps.length) fb.initializeApp(fbConfig()); S.auth = fb.auth(); } catch (e) { S.fbMissing = true; render(); return; }
     S.auth.onAuthStateChanged((u) => {
       S.authUser = u || null; S.authReady = true;
+      if (!u) splashSet(null);
       if (u && u.emailVerified && !S.db) {
         S.db = FirebaseDB(fb.firestore()); S.myId = u.uid; S.idResolved = true;
         subHH(); subMonths();
@@ -507,7 +512,7 @@
       applyPhotos();
       parseStaged();
       S.hhLoaded = true; S.offline = false;
-      markLive('hh', snap); resolveMe(); ensureRent(); ensureEditor(); pushCheck(); refreshDeals(); safeRender();
+      markLive('hh', snap); resolveMe(); ensureRent(); ensureEditor(); pushCheck(); refreshDeals(); updateSplash(); safeRender();
     }, (e) => subError('hh', e, subHH));
   }
   function subMonths() {
@@ -554,6 +559,7 @@
   function claim(slot) {
     if (slot !== 'a' && slot !== 'b') return;
     S.me = slot; lsSet('hh.me', slot);
+    updateSplash();
     if (S.myId && S.settings && !S.readOnly) {
       const m = cfg().members, patch = {};
       patch[slot] = S.myId;
@@ -776,9 +782,108 @@
       item('deals', 'tag', 'Deals', fresh ? '<span class="dot-badge" aria-hidden="true"></span><span class="sr">, new specials</span>' : '') +
       item('insights', 'chart', 'Insights') + '</nav>';
   }
+  /* While it opens: the other one of us turning round, or the blob before there's a photo. Each redraw picks the turn up
+     where it was rather than starting it again. */
   function viewLoading() {
-    return '<div class="loading"><div class="blob" aria-hidden="true"></div><p class="title sm">Opening your household</p>' +
+    const sp = splashGet();
+    const pic = sp ? '<div class="twirl' + (sp.cut ? ' cut' : '') + '" aria-hidden="true"><div class="twirl-turn" style="animation-delay:-' + Math.round(performance.now() % TWIRL_MS) + 'ms">' +
+      '<img class="twirl-pic" src="' + esc(sp.src) + '" alt=""><span class="twirl-floor"></span></div></div>' : '<div class="blob" aria-hidden="true"></div>';
+    return '<div class="loading">' + pic + '<p class="title sm">Opening your household</p>' +
       (S.slow ? '<p class="muted">This is taking a while. Check your connection.</p>' : '<p class="muted">Just a moment</p>') + '</div>';
+  }
+  /* ---------- the loading screen's photo ---------- */
+  /* The loading screen shows the other one of us: each phone shows the other person. It shows before sign-in
+     and the data, so each phone keeps the picture in its own storage: the other one's photo straight away, then a
+     cut-out of just them once the phone has made one. It's kept with a fingerprint of the photo, so a new photo is
+     picked up, and cleared on signing out. */
+  const SPLASH = 'hh.splash', SPLASH_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/, TWIRL_MS = 2200;
+  function splashGet() {
+    try {
+      const v = JSON.parse(lsGet(SPLASH) || 'null');
+      return v && (v.p === 'a' || v.p === 'b') && typeof v.src === 'string' && v.src.length < 400000 && SPLASH_RE.test(v.src) ? v : null;
+    } catch (e) { return null; }
+  }
+  const splashSet = (v) => lsSet(SPLASH, v ? JSON.stringify(v) : '');
+  /* A short fingerprint of a photo, to tell when it changes. */
+  function printOf(s) {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return (h >>> 0).toString(36) + s.length.toString(36);
+  }
+  let splashKey = '', cutting = false;
+  function updateSplash() {
+    if (S.mode !== 'firebase' || !S.hhLoaded || (S.me !== 'a' && S.me !== 'b')) return;
+    const o = other(S.me), url = hasPhoto(o) ? S.photos[o] : '', h = url ? printOf(url) : '';
+    if (o + h === splashKey) return;
+    splashKey = o + h;
+    if (!url) { splashSet(null); return; }
+    let sp = splashGet();
+    if (!sp || sp.p !== o || sp.h !== h) { sp = { p: o, h, src: url, cut: false, tries: 0, at: 0 }; splashSet(sp); }
+    /* A cut-out that didn't work is tried again a day later, three times at most. Nobody found in the photo won't change, so that's it for that photo. */
+    if (sp.cut || cutting || sp.tries >= 3 || Date.now() - (sp.at || 0) < 864e5) return;
+    cutting = true;
+    setTimeout(() => cutOut(url).then((png) => {
+      const now = splashGet();
+      if (now && now.h === h) splashSet({ p: o, h, src: png, cut: true });
+    }, (e) => {
+      const now = splashGet();
+      if (now && now.h === h) splashSet(Object.assign(now, { tries: e && e.message === 'nobody' ? 3 : (now.tries || 0) + 1, at: Date.now() }));
+    }).then(() => { cutting = false; }), window.HH_CUTOUT_WAIT != null ? Number(window.HH_CUTOUT_WAIT) : 3000);
+  }
+  /* Finds the person in a photo on this phone, so the photo never leaves it: Google's MediaPipe, fetched from a CDN only
+     when a cut-out is needed (a new photo), gives how sure it is that each pixel is the person. Tests swap in window.HH_CUTOUT. */
+  const MP_LIB = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.2';
+  const MP_MODEL = 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite';
+  function personMask(img) {
+    if (typeof window.HH_CUTOUT === 'function') return Promise.resolve().then(() => window.HH_CUTOUT(img));
+    return import(MP_LIB + '/vision_bundle.mjs')
+      .then((v) => v.FilesetResolver.forVisionTasks(MP_LIB + '/wasm').then((files) => v.ImageSegmenter.createFromOptions(files, {
+        baseOptions: { modelAssetPath: MP_MODEL, delegate: 'CPU' }, runningMode: 'IMAGE', outputConfidenceMasks: true, outputCategoryMask: false })))
+      .then((seg) => {
+        try {
+          /* Two masks come back, the background's then the person's. */
+          const r = seg.segment(img), ms = r.confidenceMasks || [], m = ms[ms.length > 1 ? 1 : 0];
+          const out = m ? { w: m.width, h: m.height, data: Float32Array.from(m.getAsFloat32Array()) } : null;
+          r.close();
+          return out;
+        } finally { seg.close(); }
+      });
+  }
+  /* The photo with everything but the person see-through, a soft edge, and cropped to them with a little room. */
+  function cutOut(url) {
+    return new Promise((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = () => reject(new Error('image')); img.src = url; })
+      .then((img) => personMask(img).then((mk) => {
+        if (!mk || !(mk.w > 0) || !(mk.h > 0) || !mk.data || mk.data.length < mk.w * mk.h) throw new Error('nobody');
+        const W = img.naturalWidth, H = img.naturalHeight, c = document.createElement('canvas');
+        c.width = W; c.height = H;
+        const g = c.getContext('2d');
+        g.drawImage(img, 0, 0);
+        const px = g.getImageData(0, 0, W, H), d = px.data, a = new Float32Array(W * H);
+        const at = (x, y) => mk.data[Math.min(mk.h - 1, Math.floor(y * mk.h / H)) * mk.w + Math.min(mk.w - 1, Math.floor(x * mk.w / W))];
+        /* In case a mask comes back the other way round: the top corners of a portrait are background. */
+        const flip = (at(1, 1) + at(W - 2, 1)) / 2 > at(W >> 1, Math.round(H * 0.6));
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const v = flip ? 1 - at(x, y) : at(x, y); a[y * W + x] = Math.min(1, Math.max(0, (v - 0.3) / 0.4)); }
+        let n = 0, x0 = W, y0 = H, x1 = -1, y1 = -1;
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          let t = 0, k = 0;
+          for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const xx = x + i, yy = y + j; if (xx >= 0 && yy >= 0 && xx < W && yy < H) { t += a[yy * W + xx]; k++; } }
+          const v = t / k;
+          d[(y * W + x) * 4 + 3] = Math.round(v * 255);
+          if (v > 0.5) n++;
+          if (v > 0.1) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+        }
+        /* Hardly any of it a person, or nearly all of it: that's not a cut-out, so the round photo stays. */
+        if (n < W * H * 0.04 || n > W * H * 0.97) throw new Error('nobody');
+        g.putImageData(px, 0, 0);
+        const pad = Math.round(Math.max(W, H) * 0.05);
+        x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(W - 1, x1 + pad); y1 = Math.min(H - 1, y1 + pad);
+        const o = document.createElement('canvas');
+        o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
+        o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+        const png = o.toDataURL('image/png');
+        if (!SPLASH_RE.test(png) || png.length >= 400000) throw new Error('size');
+        return png;
+      }));
   }
   function viewNotSetUp() {
     return '<div class="setup"><h1>Not set up yet</h1><p class="lead">Once this is set up, your shared spends will show here.</p></div>';
@@ -786,7 +891,7 @@
 
   /* ---------- home ---------- */
   function viewHome() {
-    const C = cfg(), t = today(), p = curPeriod(), all = spendsIn(p), spent = sumAmt(C.budget ? counted(all) : all);
+    const C = cfg(), t = today(), p = curPeriod(), all = spendsIn(p), bt = L.budgetTotals(all, C.budgetSkip), spent = C.budget ? bt.towards : bt.all;
     const daysLeft = L.daysBetweenInclusive(t, p.end);
     let hero;
     if (C.budget) {
@@ -796,7 +901,8 @@
         '<span class="blob" aria-hidden="true"></span>' +
         '<p class="hero-k">' + (over ? 'Over budget by' : 'Left to spend') + '</p>' +
         '<p class="hero-v' + (over ? ' over' : '') + '" data-count="' + Math.abs(left) + '" data-ck="home-left">' + L.fmtRound(Math.abs(left)) + '</p>' +
-        '<p class="hero-sub">Spent ' + L.fmt(spent) + ' of ' + L.fmtRound(C.budget) + (C.budgetSkip.length ? '<span class="hint" style="display:block;margin-top:2px">Not counting ' + esc(listNames(C.budgetSkip)) + '</span>' : '') + '</p>' +
+        '<p class="hero-sub">Spent ' + L.fmt(spent) + ' of ' + L.fmtRound(C.budget) + (C.budgetSkip.length ? '<span class="hint" style="display:block;margin-top:2px">Not counting ' + esc(listNames(C.budgetSkip)) + '</span>' : '') +
+          (bt.marked ? '<span class="hint" style="display:block;margin-top:2px">+ ' + L.fmt(bt.marked) + ' not in the budget</span>' : '') + '</p>' +
         '<div class="meter" role="img" aria-label="' + pct + ' percent of the budget spent"><span style="width:' + pct + '%"></span></div>' +
         '<div class="hero-foot"><span class="sticker' + (over ? ' coral' : '') + '">' + (over ? 'Over budget' : 'About ' + L.fmtRound(perDay) + ' a day') + '</span>' +
         '<span class="muted">' + (daysLeft === 1 ? 'Last day' : daysLeft + ' days left') + '</span></div></section>';
@@ -972,7 +1078,7 @@
       const twin = e.dupOf && S.byId[String(e.dupOf).split(':')[0]];
       tag = '<span class="tag">' + (twin && twin.e ? 'Same as ' + esc(twin.e.title || 'a spend you added') : 'Already added by hand') + '</span>';
       if (!S.readOnly) actions = '<div class="e-actions"><button class="btn btn-small btn-ghost" data-act="mark" data-arg="' + id + '|shared">Count it too</button></div>';
-    }
+    } else if (e.offBudget && cfg().budget) tag = '<span class="tag">Not in budget</span>';
     const dim = e.status === 'personal' || e.status === 'dupe';
     return '<li class="entry' + (dim ? ' dim' : '') + '"><div class="e-row">' + av(payerOf(e)) + '<div class="e-main"><p class="e-title">' + esc(e.title || 'Spend') + '</p>' +
       '<p class="e-meta">' + esc(inUpload ? (e.category || 'Other') : (e.category || 'Other') + ' · ' + src) + '</p>' + sub + tag + '</div>' +
@@ -984,7 +1090,7 @@
     const C = cfg(), H = holder();
     S.add = {
       id: null, date: opts.date || today(), expr: '', notes: [], title: '', category: null,
-      payer: H, onCard: true, splitMode: 'even', splitA: C.splitA, locked: false, orig: null,
+      payer: H, onCard: true, budget: true, splitMode: 'even', splitA: C.splitA, locked: false, orig: null,
       from: S.view === 'add' ? 'home' : S.view
     };
     S.view = 'add'; render(); window.scrollTo(0, 0);
@@ -1000,7 +1106,7 @@
       expr: e.items && e.items.length > 1 ? e.items.map(centsToStr).join(' + ') : centsToStr(e.amount),
       notes: e.notes && e.items && e.notes.length === e.items.length ? e.notes.slice() : [],
       title: e.title || '', category: e.category || 'Other', payer: payer === 'mixed' ? 'mixed' : payer,
-      onCard: !!e.onCard, splitMode: (e.splitA == null || e.splitA === C.splitA) ? 'even' : 'custom', splitA: e.splitA == null ? C.splitA : e.splitA,
+      onCard: !!e.onCard, budget: !e.offBudget, splitMode: (e.splitA == null || e.splitA === C.splitA) ? 'even' : 'custom', splitA: e.splitA == null ? C.splitA : e.splitA,
       locked: payer === 'mixed', orig: e, from: S.view === 'add' ? 'home' : S.view
     };
     S.view = 'add'; render(); window.scrollTo(0, 0);
@@ -1054,6 +1160,13 @@
       payerBlock = '<fieldset><legend>Who paid?</legend><div class="seg">' + segBtn('addpayer', 'a', A.payer === 'a', nm('a'), 'a') + segBtn('addpayer', 'b', A.payer === 'b', nm('b'), 'b') + segBtn('addpayer', 'both', A.payer === 'both', 'Both') + '</div></fieldset>' +
         '<label class="check-row"><input type="checkbox" id="addCard" data-bind="add.onCard"' + (A.onCard ? ' checked' : '') + '> On ' + esc(poss(nm(H))) + ' ' + esc(cardLabel()) + '</label>';
     }
+    /* Whether it counts towards the monthly budget: on unless it's a one-off you'd rather keep out. A category left out in
+       Customise is out anyway, so then the box says so. Only shown once there's a budget. */
+    const skipCat = C.budgetSkip.indexOf(A.category || 'Other') >= 0;
+    const budgetRow = !C.budget ? '' : skipCat
+      ? '<label class="check-row off"><input type="checkbox" id="addBudget" disabled> Counts towards our monthly budget</label>' +
+        '<p class="hint" style="margin:-10px 0 14px">' + esc(A.category || 'Other') + ' is left out of the budget in Customise.</p>'
+      : '<label class="check-row"><input type="checkbox" id="addBudget" data-bind="add.budget"' + (A.budget !== false ? ' checked' : '') + '> Counts towards our monthly budget</label>';
     const usual = C.splitA + '/' + (100 - C.splitA);
     const split = '<fieldset><legend>Split</legend><div class="seg">' + segBtn('addsplit', 'even', A.splitMode === 'even', 'Our usual ' + usual) + segBtn('addsplit', 'custom', A.splitMode === 'custom', 'Custom') + '</div>' +
       (A.splitMode === 'custom' ? stepper('addstep', A.splitA) : '') + '</fieldset>';
@@ -1069,7 +1182,7 @@
       (isImport ? '<p class="hint" style="margin:-10px 0 16px">On the statement: ' + esc(A.orig.raw || '') + '</p>' : '') +
       '<fieldset><legend>Category</legend><div class="chips">' + cats.map((c) => '<button type="button" class="chip" data-act="addcat" data-arg="' + esc(c) + '" aria-pressed="' + (A.category === c) + '">' + esc(c) + '</button>').join('') + '</div>' +
       (C.categories.length ? '' : '<p class="hint">Add your own categories in Customise.</p>') + '</fieldset>' +
-      split + '<div id="nudge">' + nudgeHtml(A, r) + '</div></section>' +
+      budgetRow + split + '<div id="nudge">' + nudgeHtml(A, r) + '</div></section>' +
       '<p class="after-card">' + (A.id ? (isImport ? '<button class="link" data-act="markadd">Not shared? Mark it as ' + esc(poss(nm(H))) + '</button>' : '<button class="link danger" data-act="deladd">Delete this spend</button>')
         : '<button class="link" data-act="go" data-arg="tab">Out all day? Start a tab instead</button>') + '</p>' +
       '<div class="savebar"><button class="btn btn-primary btn-block" id="saveBtn" data-act="saveadd"' + (r.ok && r.total > 0 ? '' : ' disabled') + '>' + esc(saveLabel(A, r)) + '</button></div>';
@@ -1123,12 +1236,12 @@
     const title = String(A.title || '').trim() || (r.items.length > 1 && !A.locked ? L.DAYS_FULL[L.parseYmd(A.date).getDay()] + ' spends' : A.category && A.category !== 'Other' ? A.category : 'Spend');
     let e;
     if (A.locked) {
-      e = Object.assign(clone(base), { date: A.date, title, category: A.category || 'Other', splitA, owed: L.splitOwed(base.amount, splitA, base.id), updatedAt: Date.now() });
+      e = Object.assign(clone(base), { date: A.date, title, category: A.category || 'Other', splitA, owed: L.splitOwed(base.amount, splitA, base.id), offBudget: A.budget === false, updatedAt: Date.now() });
     } else {
       e = makeEntry({
         id: A.id || uid('m'), kind: 'expense', source: base.source || 'manual', status: base.status || 'shared',
         date: A.date, title, raw: base.raw, key: base.key, amount: r.total, items: r.items, notes,
-        parts: base.parts && base.amount === r.total ? base.parts : null, payer: A.payer, onCard: A.onCard, splitA,
+        parts: base.parts && base.amount === r.total ? base.parts : null, payer: A.payer, onCard: A.onCard, offBudget: A.budget === false, splitA,
         category: A.category || 'Other', dupOf: base.dupOf, orig: base.orig && base.amount === r.total ? base.orig : null, createdAt: base.createdAt, by: base.by
       });
     }
@@ -1183,7 +1296,7 @@
     items[id] = item;
     S.tab = Object.assign({}, t, { items });
   }
-  function closeTab(title, category) {
+  function closeTab(title, category, budget) {
     const items = tabItems();
     if (!items.length || !S.tab) return;
     const C = cfg(), H = holder(), total = sumAmt(items), paid = { a: 0, b: 0 };
@@ -1194,7 +1307,7 @@
     const e = makeEntry({
       id: uid('t'), source: 'tab', date, title: String(title || '').trim() || 'Day out', amount: total,
       items: items.map((i) => i.amount), parts: items.map((i) => ({ amount: i.amount, label: i.label || '', payer: i.payer === 'a' ? 'a' : 'b' })),
-      payer, paid, onCard: payer === H, splitA: C.splitA, category: category || 'Other'
+      payer, paid, onCard: payer === H, offBudget: budget === false, splitA: C.splitA, category: category || 'Other'
     });
     putEntries(date.slice(0, 7), { [e.id]: e }).then((ok) => {
       if (!ok) return;
@@ -1328,7 +1441,7 @@
     const d = String((j && j.date) || ''), cats = C.categories.concat(C.categories.indexOf('Other') >= 0 ? [] : ['Other']);
     const cat = cats.indexOf(j && j.category) >= 0 ? j.category : cats.indexOf('Groceries') >= 0 ? 'Groceries' : 'Other';
     return { shop: String((j && j.shop) || '').trim().replace(/\s+/g, ' ').slice(0, 60) || 'Receipt', date: ISO_DAY.test(d) && d <= t && d >= L.addDays(t, -400) ? d : t,
-      total: (total / 100).toFixed(2), category: cat, payer: S.me === 'b' ? 'b' : 'a', onCard: (S.me === 'b' ? 'b' : 'a') === holder(), items };
+      total: (total / 100).toFixed(2), category: cat, payer: S.me === 'b' ? 'b' : 'a', onCard: (S.me === 'b' ? 'b' : 'a') === holder(), budget: true, items };
   }
   function startReceipt(file) {
     if (!file) return;
@@ -1392,6 +1505,7 @@
       '<label class="field"><span>Category</span><select class="input" id="rcpCat" data-bind="dialog.form.category">' + cats.map((c) => '<option' + (c === f.category ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select></label></div>' +
       '<div class="seg" role="group" aria-label="Who paid">' + segBtn('rcppaid', 'a', f.payer === 'a', nm('a') + ' paid', 'a') + segBtn('rcppaid', 'b', f.payer === 'b', nm('b') + ' paid', 'b') + '</div>' +
       '<label class="check-row"><input type="checkbox" id="rcpCard" data-bind="dialog.form.onCard"' + (f.onCard ? ' checked' : '') + '> On ' + esc(poss(nm(H))) + ' ' + esc(cardLabel()) + '</label>' +
+      (C.budget ? '<label class="check-row"><input type="checkbox" id="rcpBudget" data-bind="dialog.form.budget"' + (f.budget !== false ? ' checked' : '') + '> Counts towards our monthly budget</label>' : '') +
       (rows ? '<p class="k rcp-k">Tap anything that\'s just one person\'s</p><ul class="rcp-list">' + rows + '</ul>' : '') +
       '<div class="rcp-sum" id="rcpSum" aria-live="polite">' + receiptSumHtml(f) + '</div>' +
       (d.error ? '<p class="err-text" role="alert">' + esc(d.error) + '</p>' : '') +
@@ -1409,7 +1523,7 @@
     const made = [], mk = (amount, list, title, splitA) => {
       const fits = list.length > 1 && list.reduce((a, x) => a + x.c, 0) === amount;
       made.push(makeEntry({ id: uid('m'), kind: 'expense', source: 'manual', status: 'shared', date: f.date, title, amount, items: fits ? list.map((x) => x.c) : null,
-        notes: fits ? list.map((x) => x.name) : null, payer: s.payer, onCard: !!f.onCard, splitA, category: f.category || 'Other' }));
+        notes: fits ? list.map((x) => x.name) : null, payer: s.payer, onCard: !!f.onCard, offBudget: f.budget === false, splitA, category: f.category || 'Other' }));
     };
     if (s.shared > 0) mk(s.shared, f.items.filter((x) => x.who === 'shared'), shop, C.splitA);
     if (s.theirs > 0) mk(s.theirs, f.items.filter((x) => x.who === s.other), (shop + ', just ' + nm(s.other)).slice(0, 80), s.other === 'a' ? 100 : 0);
@@ -1629,7 +1743,7 @@
       sticker = diff >= 0 ? '<span class="sticker fern">Under by ' + L.fmtRound(diff) + '</span>' : '<span class="sticker coral">Over by ' + L.fmtRound(-diff) + '</span>';
     }
     out += '<section class="hero"><span class="blob" aria-hidden="true"></span><p class="hero-k">Shared spend</p><p class="hero-v" data-count="' + total + '" data-ck="insm-' + p.start + '">' + L.fmtRound(total) + '</p>' +
-      '<p class="hero-sub">' + (C.budget ? (C.budgetSkip.length ? L.fmtRound(budgetTotal) + ' counts towards the ' + L.fmtRound(C.budget) + ' budget · ' : 'of ' + L.fmtRound(C.budget) + ' budget · ') : '') + list.length + (list.length === 1 ? ' spend' : ' spends') + '</p>' + (sticker ? '<div class="hero-foot">' + sticker + '</div>' : '') + '</section>';
+      '<p class="hero-sub">' + (C.budget ? (C.budgetSkip.length || budgetTotal !== total ? L.fmtRound(budgetTotal) + ' counts towards the ' + L.fmtRound(C.budget) + ' budget · ' : 'of ' + L.fmtRound(C.budget) + ' budget · ') : '') + list.length + (list.length === 1 ? ' spend' : ' spends') + '</p>' + (sticker ? '<div class="hero-foot">' + sticker + '</div>' : '') + '</section>';
     if (!list.length) return out + '<section class="card empty"><h2>Nothing shared yet</h2><p>Spends you add or mark shared for ' + esc(L.periodLabel(p, t)) + ' will show up here.</p></section>';
 
     // a month in progress is compared with the same stretch of the month before
@@ -1772,10 +1886,12 @@
       k2 = kpi('Biggest month', L.fmtRound(bm.total), L.MONTHS_FULL[bm.p.m]);
     }
     out += '<div class="kpis">' + kpi('Per month', L.fmtRound(avgM), done.length ? 'on average' : 'so far', avgM, 'k-pm-' + Y.y) + k2 + kpi('Typical spend', L.fmtRound(Math.round(total / list.length)), 'on average', Math.round(total / list.length), 'k-ts-' + Y.y) + '</div>';
+    const markedY = useB && L.budgetTotals(list, C.budgetSkip).markedN > 0;
     const rows = started.map((m) => [L.periodLabel(m.p, t) + (m.current ? ' so far' : ''), L.fmt(m.total),
       useB ? (C.budget - m.towards >= 0 ? L.fmtRound(C.budget - m.towards) + ' under' : L.fmtRound(m.towards - C.budget) + ' over') : String(m.n)]);
     out += '<section class="card"><div class="card-head"><h2>Month by month</h2></div>' +
-      (useB && C.budgetSkip.length ? '<p class="hint" style="margin:-6px 0 0">Bars show what counts towards the budget, so they leave out ' + esc(listNames(C.budgetSkip)) + '.</p>' : '') +
+      (useB && (C.budgetSkip.length || markedY) ? '<p class="hint" style="margin:-6px 0 0">Bars show what counts towards the budget, so they leave out ' +
+        esc(listNames(C.budgetSkip.concat(markedY ? ['spends marked not in it'] : []))) + '.</p>' : '') +
       monthsChart(Y) + tableView(['Month', 'Shared spend', useB ? 'Vs budget' : 'Spends'], rows) + '</section>';
     out += catCard(list, (c, v) => L.fmtRound(Math.round(v / started.length)) + ' a month on average');
     const w = weekdayStats(list, Y.range), all = w.days ? sumAmt(list) / w.days : 0, top = w.avg.indexOf(Math.max.apply(null, w.avg));
@@ -1870,7 +1986,7 @@
       h += '<h3 class="sub-h">Most of it</h3><ul class="places">' + groups.map((x) => '<li class="place"><span class="place-n">' + esc(x.name) + '</span><span class="place-c">' + (x.n === 1 ? 'once' : x.n + ' times') + '</span><span class="place-t">' + L.fmt(x.total) + '</span></li>').join('') + '</ul>';
     }
     h += '<h3 class="sub-h">Every spend</h3>' + (S.readOnly ? '' : '<p class="hint" style="margin:-4px 0 6px">Tap one to move it to another category.</p>') + '<ul class="cat-list">' + items.slice(0, 300).map((e) =>
-      '<li><button type="button" class="cat-row" data-act="inscatopen" data-arg="' + esc(e.id) + '"' + (S.readOnly ? ' disabled' : '') + ' aria-expanded="' + (d.open === e.id) + '"><span class="cr-d">' + esc(shortDay(e.date)) + '</span><span class="cr-t">' + esc(e.title || 'Spend') + '</span><span class="cr-a">' + L.fmt(e.amount) + '</span></button>' +
+      '<li><button type="button" class="cat-row" data-act="inscatopen" data-arg="' + esc(e.id) + '"' + (S.readOnly ? ' disabled' : '') + ' aria-expanded="' + (d.open === e.id) + '"><span class="cr-d">' + esc(shortDay(e.date)) + '</span><span class="cr-t">' + esc(e.title || 'Spend') + (e.offBudget && C.budget ? '<span class="cr-nb">Not in budget</span>' : '') + '</span><span class="cr-a">' + L.fmt(e.amount) + '</span></button>' +
       (d.open === e.id ? '<div class="chips cat-move">' + cats.map((c) => '<button type="button" class="chip" data-act="inscatset" data-arg="' + esc(e.id + '|' + c) + '">' + esc(c) + '</button>').join('') + '</div>' : '') + '</li>').join('') + '</ul>' +
       '<div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
     return h;
@@ -3451,6 +3567,7 @@
       body = '<h2 id="dlgT">Close the tab</h2><p>' + items.length + (items.length === 1 ? ' spend' : ' spends') + ', ' + L.fmt(sumAmt(items)) + '. It saves as one spend on ' + esc(L.fmtDay((S.tab && S.tab.date) || today())) + '.</p>' +
         '<label class="field"><span>Call it</span><input class="input" id="dlgTitle" maxlength="60" data-bind="dialog.title" value="' + esc(d.title) + '"></label>' +
         '<fieldset><legend>Category</legend><div class="chips">' + cats.map((c) => '<button type="button" class="chip" data-act="dlgcat" data-arg="' + esc(c) + '" aria-pressed="' + (d.category === c) + '">' + esc(c) + '</button>').join('') + '</div></fieldset>' +
+        (C.budget ? '<label class="check-row"><input type="checkbox" id="dlgBudget" data-bind="dialog.budget"' + (d.budget !== false ? ' checked' : '') + '> Counts towards our monthly budget</label>' : '') +
         actions('Not yet', 'dlgtabclose', 'Save as one spend');
     } else if (d.type === 'tabdiscard') {
       body = '<h2 id="dlgT">Discard this tab?</h2><p>The ' + tabItems().length + ' spends on it won\'t be saved.</p>' + actions('Keep the tab', 'dlgtabdiscard', 'Discard tab', true);
@@ -3560,7 +3677,7 @@
       const el = document.getElementById('tabAmt'); if (el) el.focus();
     },
     tabdel: (id) => { upsert('hh/tab', { items: { [id]: null } }, { open: true, date: today(), startedAt: Date.now(), items: {} }); localTabItem(id, null); render(); },
-    tabclose: () => openDialog({ type: 'tabclose', title: 'Day out', category: null }),
+    tabclose: () => openDialog({ type: 'tabclose', title: 'Day out', category: null, budget: true }),
     tabdiscard: () => openDialog({ type: 'tabdiscard' }),
     recapmove: (n) => { S.enterDir = Number(n) > 0 ? 1 : -1; S.recapOffset = Math.min(0, S.recapOffset + Number(n)); render(); },
     insmode: (m) => { S.insMode = m === 'year' ? 'year' : 'month'; render(); },
@@ -3593,7 +3710,7 @@
       const u = S.auth && S.auth.currentUser, A = S.signin || (S.signin = { mode: 'in', email: '', password: '', error: null, note: null, busy: false });
       if (u) u.sendEmailVerification().then(() => { A.error = null; A.note = 'Sent. Check your inbox.'; render(); }, (e) => { A.error = authMsg(e); render(); });
     },
-    auout: () => { if (S.auth) S.auth.signOut().then(() => location.reload(), () => location.reload()); },
+    auout: () => { splashSet(null); if (S.auth) S.auth.signOut().then(() => location.reload(), () => location.reload()); },
     reload: () => location.reload(),
     welcomein: () => welcomeIn(),
     wnotme: () => { S.whoPick = true; render(); window.scrollTo(0, 0); },
@@ -3851,7 +3968,7 @@
       if (d.fromAdd) { const back = (S.add && S.add.from) || 'home'; S.add = null; S.view = back; }
       render();
     },
-    dlgtabclose: () => closeTab(S.dialog.title, S.dialog.category),
+    dlgtabclose: () => closeTab(S.dialog.title, S.dialog.category, S.dialog.budget),
     dlgtabdiscard: () => {
       enqueue('hh/tab', (ref) => doSet(ref, { open: false, date: null, startedAt: null, items: {} }));
       S.dialog = null; S.tabForm = { amount: '', label: '', payer: null }; render(); toast('Tab discarded');

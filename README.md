@@ -48,6 +48,14 @@ It signs in to Firebase as its own bot user through Firebase's REST APIs, so it 
 
 It does nothing until both secrets exist. It also runs once whenever its code changes on `main`. Its run log is public, so each run's note says how many pop-ups went out and what kind, never what they said. The list of runs shows when the app started one for a new spend, but nothing about the spend.
 
+## Loading screen
+
+While the app opens, it shows the other person's photo turning round (a CSS `rotateY` loop that stands still with reduced motion). Each phone keeps that picture in localStorage (`hh.splash`), keyed to a fingerprint of the photo and cleared on signing out, since the loading screen shows before sign-in. It cuts the person out on the phone itself with MediaPipe's selfie segmenter (`@mediapipe/tasks-vision` 1.2.2 from jsDelivr, about 15MB, fetched only when a new photo needs a cut-out), so the photo never leaves the phone. If that fails, or there's nobody in the photo, the round photo turns instead. Tests swap the segmenter for `window.HH_CUTOUT`.
+
+## Spends left out of the budget
+
+A spend can be kept out of the monthly budget with the Counts towards our monthly budget box (entry field `offBudget`), on adding, editing, closing a day tab or checking a receipt. It still counts in the split and the balance, is marked Not in budget where it's listed, and is left out of every budget number alongside categories left out in Customise (`L.inBudget`, `L.budgetTotals`). Where a month's spend sits next to the budget, the app adds a note such as + $120.00 not in the budget.
+
 ## Welcome
 
 The first time the other person signs in, they land on a welcome page: a five-item tour of what they can do (add a spend, stay square, grab the specials, every day and sale days, pop-ups), with Come on in at the bottom. The person who set the app up can add a note in Settings (Customise the welcome), which then shows at the end of the tour; with no note there's just the tour. Coming in marks the latest update note as read, so the tour isn't followed by an update dialog. It only shows to someone who hasn't been in yet.

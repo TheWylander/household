@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 from playwright.sync_api import sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-PORT = 8771
+PORT = 8771 + int(__import__('os').environ.get('HH_PORT_SHIFT', '0'))
 BASE = f'http://127.0.0.1:{PORT}/pwa/site/index.html'
 TEST_CONFIG = "window.HH_FIREBASE = { apiKey: 'test-key', authDomain: 'test-project.firebaseapp.com', projectId: 'test-project', appId: '1:1:web:1' };"
 STUB = """

@@ -68,6 +68,24 @@
   function isSpend(e) { return !!e && e.kind === 'expense' && e.status === 'shared'; }
   /* Rent is one person paying the other: it moves the balance but isn't shared spending. */
   function counts(e) { return !!e && (e.kind === 'settlement' || e.kind === 'rent' || isSpend(e)); }
+  /* What counts towards the monthly budget: shared spends, less any category left out in Customise (skip) and any
+     spend marked as not in the budget when it was added (offBudget). Both still count in the balance. */
+  function inBudget(e, skip) {
+    return isSpend(e) && !e.offBudget && (skip || []).indexOf(e.category || 'Other') < 0;
+  }
+  /* A period's shared spends against the budget, in cents: all of them, what counts towards the budget, and the spends
+     marked as not in it (leaving out ones a left-out category keeps out anyway), with how many. */
+  function budgetTotals(list, skip) {
+    var s = skip || [], out = { all: 0, towards: 0, marked: 0, markedN: 0 };
+    (list || []).forEach(function (e) {
+      if (!isSpend(e)) return;
+      var v = e.amount || 0;
+      out.all += v;
+      if (inBudget(e, s)) out.towards += v;
+      else if (e.offBudget && s.indexOf(e.category || 'Other') < 0) { out.marked += v; out.markedN++; }
+    });
+    return out;
+  }
   /* Every date on a given weekday (0 = Sunday) from start to until, inclusive. */
   function weeklyDates(start, day, until) {
     var re = /^\d{4}-\d{2}-\d{2}$/, out = [];
@@ -576,7 +594,7 @@
     pad: pad, ymd: ymd, parseYmd: parseYmd, addDays: addDays, addMonths: addMonths, daysInMonth: daysInMonth,
     daysBetweenInclusive: daysBetweenInclusive, clamp: clamp,
     toCents: toCents, fmt: fmt, fmtRound: fmtRound, fmtShort: fmtShort, parseMoneyInput: parseMoneyInput, parseExpr: parseExpr,
-    splitOwed: splitOwed, isSpend: isSpend, counts: counts, netBalances: netBalances, weeklyDates: weeklyDates,
+    splitOwed: splitOwed, isSpend: isSpend, counts: counts, inBudget: inBudget, budgetTotals: budgetTotals, netBalances: netBalances, weeklyDates: weeklyDates,
     periodFor: periodFor, shiftPeriod: shiftPeriod, periodLabel: periodLabel, inPeriod: inPeriod,
     parseCSV: parseCSV, parseDate: parseDate, parseMoney: parseMoney, mapColumns: mapColumns, rowsToSpends: rowsToSpends,
     merchantKey: merchantKey, cleanTitle: cleanTitle, guessCategory: guessCategory, hash: hash, csvCell: csvCell,
