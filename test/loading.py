@@ -1,5 +1,6 @@
-"""The loading screen: the other one of us, turning round. Each phone cuts the person out of the other one's photo
+"""The loading screen: the other one of us, rotating. Each phone cuts the person out of the other one's photo
 itself and keeps it for the next time the app opens. MediaPipe is stood in for, as tests can't reach its CDN."""
+import math
 import base64
 import io
 import json
@@ -146,22 +147,31 @@ try:
               'only the person is left: the wall behind is see-through, and it\'s cropped to them: ' + json.dumps(cut))
         check(not cdn, 'nothing is fetched from the MediaPipe CDN when the cut-out is stood in for')
 
-        # opening the app again: Jules turning round while it loads
+        # opening the app again: Jules rotating while it loads
         hold(a)
         pic = a.locator('.loading .twirl.cut .twirl-pic')
         check(pic.count() == 1 and pic.get_attribute('src') == sp['src'], 'the loading screen shows the cut-out of Jules')
         anim = a.evaluate("""() => { const t = document.querySelector('.loading .twirl-turn'), s = getComputedStyle(t);
-          return { name: s.animationName, dur: s.animationDuration, n: s.animationIterationCount, delay: parseFloat(t.style.animationDelay), persp: getComputedStyle(t.parentNode).perspective }; }""")
-        check(anim['name'] == 'twirl' and anim['dur'] == '2.2s' and anim['n'] == 'infinite' and anim['delay'] <= 0 and anim['persp'] == '640px',
-              'turning round and round, picking up where it was on each redraw: ' + json.dumps(anim))
+          const k = t.getAnimations()[0].effect.getKeyframes(), box = t.parentNode.getBoundingClientRect(), img = t.querySelector('img').getBoundingClientRect();
+          return { name: s.animationName, dur: s.animationDuration, n: s.animationIterationCount, ease: s.animationTimingFunction, delay: parseFloat(t.style.animationDelay),
+            to: k[k.length - 1].transform, shadow: getComputedStyle(t.parentNode).filter, floor: document.querySelectorAll('.twirl-floor').length }; }""")
+        check(anim['name'] == 'twirl' and anim['dur'] == '2.2s' and anim['n'] == 'infinite' and anim['ease'] == 'linear' and anim['delay'] <= 0 and anim['to'] == 'rotate(360deg)',
+              'rotating flat, round and round, picking up where it was on each redraw: ' + json.dumps(anim))
         a.evaluate("document.getAnimations().forEach((x) => { x.pause(); x.currentTime = 0; })")
+        fit = a.evaluate("""() => { const box = document.querySelector('.loading .twirl').getBoundingClientRect(), img = document.querySelector('.loading .twirl-pic').getBoundingClientRect();
+          const el = document.querySelector('.loading .twirl-pic');
+          return { box: box.width, w: el.offsetWidth, h: el.offsetHeight, dx: (img.left + img.width / 2) - (box.left + box.width / 2), dy: (img.top + img.height / 2) - (box.top + box.height / 2) }; }""")
+        check('drop-shadow' in anim['shadow'] and anim['floor'] == 0 and math.hypot(fit['w'], fit['h']) <= fit['box'] + 1 and abs(fit['dx']) < 1 and abs(fit['dy']) < 1,
+              'centred so it goes round on the spot, never poking out of its box, with the shadow staying underneath: ' + json.dumps([anim['shadow'], fit]))
         a.screenshot(path=str(ROOT / 'shots' / 'l01-loading-cutout.png'))
-        a.evaluate("document.getAnimations().forEach((x) => { x.currentTime = 760; })")
+        a.evaluate("document.getAnimations().forEach((x) => { x.currentTime = 550; })")
         a.screenshot(path=str(ROOT / 'shots' / 'l02-loading-cutout-turning.png'))
+        a.evaluate("document.getAnimations().forEach((x) => { x.currentTime = 1100; })")
+        a.screenshot(path=str(ROOT / 'shots' / 'l02b-loading-cutout-upside-down.png'))
         release(a)
         check('Opening your household' not in a.locator('#app').inner_text(), 'and the app opens as usual once the data is in')
 
-        # reduced motion: no turning
+        # reduced motion: no rotating
         a.emulate_media(reduced_motion='reduce')
         hold(a)
         check(a.evaluate("getComputedStyle(document.querySelector('.loading .twirl-turn')).animationName") == 'none' and a.locator('.loading .twirl-pic').count() == 1,
@@ -169,7 +179,7 @@ try:
         release(a)
         a.emulate_media(reduced_motion='no-preference')
 
-        # a new photo with nobody the phone can find: the round photo turns instead, and it isn't tried again
+        # a new photo with nobody the phone can find: the round photo rotates instead, and it isn't tried again
         a.evaluate("localStorage.setItem('__cutMode', 'nobody')")
         put_photo(a, 'b', NEW_JULES)
         opened(a)
@@ -222,7 +232,7 @@ try:
         sp = splash(a)
         check(sp is not None and sp['p'] == 'a' and sp['cut'] is True, "Jules's phone keeps a cut-out of Robin")
         hold(a)
-        check(a.locator('.loading .twirl.cut .twirl-pic').get_attribute('src') == sp['src'], 'and shows Robin turning round while it opens')
+        check(a.locator('.loading .twirl.cut .twirl-pic').get_attribute('src') == sp['src'], 'and shows Robin rotating while it opens')
         release(a)
         browser.close()
 finally:

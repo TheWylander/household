@@ -351,13 +351,11 @@ textarea.input.wl-text { min-height: 160px; font: 600 16px/1.5 var(--body); resi
 .loading .blob { position: relative; right: auto; top: auto; margin: 0 auto 10px; width: 120px; height: 104px; background: var(--marigold-soft); border: 2px solid var(--ink); animation: wobble 2.4s ease-in-out infinite; }
 @keyframes wobble { 50% { border-radius: 45% 55% 42% 58% / 60% 44% 56% 40%; transform: rotate(6deg); } }
 /* The other one of us turning round while the app opens, standing on a soft shadow that narrows as they turn side on. */
-.loading .twirl { width: 164px; height: 186px; margin: 0 auto 6px; perspective: 640px; }
-.loading .twirl-turn { position: relative; width: 100%; height: 100%; animation: twirl 2.2s cubic-bezier(.45, 0, .55, 1) infinite; }
-.loading .twirl-pic { position: absolute; left: 0; right: 0; bottom: 12px; margin: 0 auto; width: auto; height: auto; max-width: 164px; max-height: 168px;
-  filter: drop-shadow(0 5px 6px color-mix(in srgb, var(--ink) 24%, transparent)); }
-.loading .twirl:not(.cut) .twirl-pic { width: 136px; height: 136px; bottom: 24px; border-radius: 50%; border: 2px solid var(--ink); object-fit: cover; }
-.loading .twirl-floor { position: absolute; left: 50%; bottom: 0; width: 124px; height: 16px; margin-left: -62px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 20%, transparent); filter: blur(2px); }
-@keyframes twirl { to { transform: rotateY(360deg); } }
+.loading .twirl { width: 196px; height: 196px; margin: 0 auto; filter: drop-shadow(0 6px 8px color-mix(in srgb, var(--ink) 24%, transparent)); }
+.loading .twirl-turn { width: 100%; height: 100%; display: grid; place-items: center; animation: twirl 2.2s linear infinite; }
+.loading .twirl-pic { display: block; width: auto; height: auto; max-width: 136px; max-height: 136px; }
+.loading .twirl:not(.cut) .twirl-pic { width: 136px; height: 136px; border-radius: 50%; border: 2px solid var(--ink); object-fit: cover; }
+@keyframes twirl { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .loading .twirl-turn { animation: none; } }
 
 /* nav */

@@ -50,7 +50,7 @@ It does nothing until both secrets exist. It also runs once whenever its code ch
 
 ## Loading screen
 
-While the app opens, it shows the other person's photo turning round (a CSS `rotateY` loop that stands still with reduced motion). Each phone keeps that picture in localStorage (`hh.splash`), keyed to a fingerprint of the photo and cleared on signing out, since the loading screen shows before sign-in. It cuts the person out on the phone itself with MediaPipe's selfie segmenter (`@mediapipe/tasks-vision` 1.2.2 from jsDelivr, about 15MB, fetched only when a new photo needs a cut-out), so the photo never leaves the phone. If that fails, or there's nobody in the photo, the round photo turns instead. Tests swap the segmenter for `window.HH_CUTOUT`.
+While the app opens, it shows the other person's photo rotating (a CSS `rotate` loop, 2.2s a turn, that stands still with reduced motion). The picture fits inside a circle its box can hold, so it never pokes out as it goes round, and the drop shadow sits on the box so it stays underneath. Each phone keeps that picture in localStorage (`hh.splash`), keyed to a fingerprint of the photo and cleared on signing out, since the loading screen shows before sign-in. It cuts the person out on the phone itself with MediaPipe's selfie segmenter (`@mediapipe/tasks-vision` 1.2.2 from jsDelivr, about 15MB, fetched only when a new photo needs a cut-out), so the photo never leaves the phone. If that fails, or there's nobody in the photo, the round photo turns instead. Tests swap the segmenter for `window.HH_CUTOUT`.
 
 ## Spends left out of the budget
 

@@ -97,7 +97,7 @@
       ['cart', 'Weekend shopping list.', "Tap + on any special, or on a match from the watch list, to add it to our list for the weekend shop or put it on the watch list. The list is under the trolley at the top of Deals: tick things off as you go, and add your own."],
       ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up when the other of us adds a spend, the evening before a sale day we're keen on, with the top specials each Wednesday morning, and when something on the watch list is on special."],
       ['check', 'Not in the budget.', "When you add a spend, untick Counts towards our monthly budget for one-offs. It still splits, but leaves the month's budget alone."],
-      ['duo', 'Loading screen.', 'While the app opens, it shows the other one of us turning round, cut out from their photo.']
+      ['duo', 'Loading screen.', 'While the app opens, it shows the other one of us rotating, cut out from their photo.']
     ] }
   ];
 
@@ -782,12 +782,13 @@
       item('deals', 'tag', 'Deals', fresh ? '<span class="dot-badge" aria-hidden="true"></span><span class="sr">, new specials</span>' : '') +
       item('insights', 'chart', 'Insights') + '</nav>';
   }
-  /* While it opens: the other one of us turning round, or the blob before there's a photo. Each redraw picks the turn up
-     where it was rather than starting it again. */
+  /* While it opens: the other one of us rotating, or the blob before there's a photo. Each redraw picks the turn up
+     where it was rather than starting it again. The picture fits a circle the box can hold, so it never pokes out as it
+     goes round, and its shadow stays underneath. */
   function viewLoading() {
     const sp = splashGet();
     const pic = sp ? '<div class="twirl' + (sp.cut ? ' cut' : '') + '" aria-hidden="true"><div class="twirl-turn" style="animation-delay:-' + Math.round(performance.now() % TWIRL_MS) + 'ms">' +
-      '<img class="twirl-pic" src="' + esc(sp.src) + '" alt=""><span class="twirl-floor"></span></div></div>' : '<div class="blob" aria-hidden="true"></div>';
+      '<img class="twirl-pic" src="' + esc(sp.src) + '" alt=""></div></div>' : '<div class="blob" aria-hidden="true"></div>';
     return '<div class="loading">' + pic + '<p class="title sm">Opening your household</p>' +
       (S.slow ? '<p class="muted">This is taking a while. Check your connection.</p>' : '<p class="muted">Just a moment</p>') + '</div>';
   }
