@@ -1,6 +1,6 @@
 /* What the notification job sends, and to whom, without Firebase or a push service. node test/notify.test.mjs */
 import assert from 'node:assert';
-import { APP, popBody, plan, run, sydneyNow, awake, weekKey, weekHits, wordHits, specialsPop, weeklyPop, topPicks, spendsPop, oldKeys, webConfig, fromFs, toFs, fieldPath, toUpdate, job, runSummary } from '../src/github/notify.mjs';
+import { APP, payloadOf, plan, run, sydneyNow, awake, weekKey, weekHits, wordHits, specialsPop, weeklyPop, topPicks, spendsPop, oldKeys, webConfig, fromFs, toFs, fieldPath, toUpdate, job, runSummary } from '../src/github/notify.mjs';
 
 let passed = 0;
 async function t(name, fn) {
@@ -181,14 +181,16 @@ await t('sending: what gets written back', async () => {
   const pp = push(), calls = [];
   pp.sent = { 'sale:s1|2026-08-01:eve': 1 };
   const send = async (s, payload, vapid) => {
-    calls.push([s.id, payload.title === APP ? payload.body.split('\n')[0] : 'title: ' + payload.title, vapid.pub]);
+    calls.push([s.id, payload.title, vapid.pub]);
     if (s.id === 'p2') return { ok: false, status: 410 };
     return { ok: true };
   };
   const r = await run({ push: pp, deals: deals(), feed, now: FRI_EVENING, send });
-  assert.deepStrictEqual(calls, [['p1', '🔔 Notifications are on', 'KEY'], ['p1', '📅 Lucky Mart sale tomorrow', 'KEY'], ['p2', '📅 Lucky Mart sale tomorrow', 'KEY'], ['p1', '🏷️ Check out the top weekly specials', 'KEY']], 'every pop-up is titled Two of Us, with what it is about on the first line');
-  assert.strictEqual(popBody({ title: '📅 Lucky Mart sale tomorrow', body: 'Up to 20% off' }), '📅 Lucky Mart sale tomorrow\nUp to 20% off');
-  assert.strictEqual(APP, 'Two of Us');
+  assert.deepStrictEqual(calls, [['p1', '🔔 Notifications are on', 'KEY'], ['p1', '📅 Lucky Mart sale tomorrow', 'KEY'], ['p2', '📅 Lucky Mart sale tomorrow', 'KEY'], ['p1', '🏷️ Check out the top weekly specials', 'KEY']],
+    "each pop-up's title says what it's about (the iPhone adds \"from Two of Us\" itself), sent with the household's key")
+  assert.deepStrictEqual(payloadOf({ title: '📅 Lucky Mart sale tomorrow', body: 'Up to 20% off', url: './#cal=2026-11-14', tag: 'sale-s1', key: 'x', to: ['p1'] }),
+    { title: '📅 Lucky Mart sale tomorrow', body: 'Up to 20% off', url: './#cal=2026-11-14', tag: 'sale-s1' }, 'only what the phone shows goes in the pop-up');
+  assert.deepStrictEqual([APP, payloadOf({ body: 'No title' }).title], ['Two of Us', 'Two of Us'], "the app's name only stands in for a missing title");
   assert.deepStrictEqual(r.write.subs, { p1: { welcomed: true }, p2: null }, 'welcomed, and a phone that has gone is removed');
   assert.deepStrictEqual(Object.keys(r.write.sent).sort(), ['sale:s1|2026-11-14:eve', 'sp:2026-11-11', 'top:2026-11-11']);
   assert.deepStrictEqual(r.write.sent['sp:2026-11-11'], ['Sanitarium Weet-Bix 575g', '20% off Everything In-Store'], 'the watch-list matches it had, so only new ones pop up later');
@@ -242,8 +244,8 @@ await t("the setup's test pop-up goes to the person's own phones, while it's fre
 
 await t('sending spends: what gets written back, and the public log', async () => {
   const calls = [], pp = spendPush({ a: [ev('e1', 3), ev('e2', 2)], b: [ev('e9', 1, { n: 'Jules' })] }, { prefs: { a: { spends: false } } });
-  const r = await run({ push: pp, deals: deals(), feed, now: FRI_EVENING, mode: 'spends', send: async (s, payload) => { calls.push([s.id, payload.title, payload.body.split('\n')[0], payload.url]); return { ok: true }; } });
-  assert.deepStrictEqual(calls, [['p2', 'Two of Us', '💸 Robin added 2 spends, $84.20', './']], "Robin's two spends go to Jules; Robin turned spends off");
+  const r = await run({ push: pp, deals: deals(), feed, now: FRI_EVENING, mode: 'spends', send: async (s, payload) => { calls.push([s.id, payload.title, payload.url]); return { ok: true }; } });
+  assert.deepStrictEqual(calls, [['p2', '💸 Robin added 2 spends, $84.20', './']], "Robin's two spends go to Jules, as the title; Robin turned spends off");
   assert.deepStrictEqual(Object.keys(r.write.sent).sort(), ['ev:2026-11-13:e1', 'ev:2026-11-13:e2', 'ev:2026-11-13:e9'], 'all three marked done');
   assert.strictEqual(runSummary(r), 'Sent 1 pop-up (new spends).');
   assert.ok(!/Robin|Woolworths|42/.test(runSummary(r)), 'the public log never says what was spent');
