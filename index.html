@@ -369,13 +369,11 @@ textarea.input.wl-text { min-height: 160px; font: 600 16px/1.5 var(--body); resi
 .loading .blob { position: relative; right: auto; top: auto; margin: 0 auto 10px; width: 120px; height: 104px; background: var(--marigold-soft); border: 2px solid var(--ink); animation: wobble 2.4s ease-in-out infinite; }
 @keyframes wobble { 50% { border-radius: 45% 55% 42% 58% / 60% 44% 56% 40%; transform: rotate(6deg); } }
 /* The other one of us turning round while the app opens, standing on a soft shadow that narrows as they turn side on. */
-.loading .twirl { width: 164px; height: 186px; margin: 0 auto 6px; perspective: 640px; }
-.loading .twirl-turn { position: relative; width: 100%; height: 100%; animation: twirl 2.2s cubic-bezier(.45, 0, .55, 1) infinite; }
-.loading .twirl-pic { position: absolute; left: 0; right: 0; bottom: 12px; margin: 0 auto; width: auto; height: auto; max-width: 164px; max-height: 168px;
-  filter: drop-shadow(0 5px 6px color-mix(in srgb, var(--ink) 24%, transparent)); }
-.loading .twirl:not(.cut) .twirl-pic { width: 136px; height: 136px; bottom: 24px; border-radius: 50%; border: 2px solid var(--ink); object-fit: cover; }
-.loading .twirl-floor { position: absolute; left: 50%; bottom: 0; width: 124px; height: 16px; margin-left: -62px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 20%, transparent); filter: blur(2px); }
-@keyframes twirl { to { transform: rotateY(360deg); } }
+.loading .twirl { width: 196px; height: 196px; margin: 0 auto; filter: drop-shadow(0 6px 8px color-mix(in srgb, var(--ink) 24%, transparent)); }
+.loading .twirl-turn { width: 100%; height: 100%; display: grid; place-items: center; animation: twirl 2.2s linear infinite; }
+.loading .twirl-pic { display: block; width: auto; height: auto; max-width: 136px; max-height: 136px; }
+.loading .twirl:not(.cut) .twirl-pic { width: 136px; height: 136px; border-radius: 50%; border: 2px solid var(--ink); object-fit: cover; }
+@keyframes twirl { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .loading .twirl-turn { animation: none; } }
 
 /* nav */
@@ -1512,7 +1510,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       ['cart', 'Weekend shopping list.', "Tap + on any special, or on a match from the watch list, to add it to our list for the weekend shop or put it on the watch list. The list is under the trolley at the top of Deals: tick things off as you go, and add your own."],
       ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up when the other of us adds a spend, the evening before a sale day we're keen on, with the top specials each Wednesday morning, and when something on the watch list is on special."],
       ['check', 'Not in the budget.', "When you add a spend, untick Counts towards our monthly budget for one-offs. It still splits, but leaves the month's budget alone."],
-      ['duo', 'Loading screen.', 'While the app opens, it shows the other one of us turning round, cut out from their photo.']
+      ['duo', 'Loading screen.', 'While the app opens, it shows the other one of us rotating, cut out from their photo.']
     ] }
   ];
 
@@ -2197,12 +2195,13 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       item('deals', 'tag', 'Deals', fresh ? '<span class="dot-badge" aria-hidden="true"></span><span class="sr">, new specials</span>' : '') +
       item('insights', 'chart', 'Insights') + '</nav>';
   }
-  /* While it opens: the other one of us turning round, or the blob before there's a photo. Each redraw picks the turn up
-     where it was rather than starting it again. */
+  /* While it opens: the other one of us rotating, or the blob before there's a photo. Each redraw picks the turn up
+     where it was rather than starting it again. The picture fits a circle the box can hold, so it never pokes out as it
+     goes round, and its shadow stays underneath. */
   function viewLoading() {
     const sp = splashGet();
     const pic = sp ? '<div class="twirl' + (sp.cut ? ' cut' : '') + '" aria-hidden="true"><div class="twirl-turn" style="animation-delay:-' + Math.round(performance.now() % TWIRL_MS) + 'ms">' +
-      '<img class="twirl-pic" src="' + esc(sp.src) + '" alt=""><span class="twirl-floor"></span></div></div>' : '<div class="blob" aria-hidden="true"></div>';
+      '<img class="twirl-pic" src="' + esc(sp.src) + '" alt=""></div></div>' : '<div class="blob" aria-hidden="true"></div>';
     return '<div class="loading">' + pic + '<p class="title sm">Opening your household</p>' +
       (S.slow ? '<p class="muted">This is taking a while. Check your connection.</p>' : '<p class="muted">Just a moment</p>') + '</div>';
   }
