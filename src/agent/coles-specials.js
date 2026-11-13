@@ -48,7 +48,8 @@
         n++;
       });
       page++;
-      if (page <= pages && page <= MAX_PAGES) await sleep(PAUSE_MS);
+      /* A hidden browser pane holds timers back for up to a minute, so there the page loads themselves do the spacing. */
+      if (page <= pages && page <= MAX_PAGES && !document.hidden) await sleep(PAUSE_MS);
     }
     counts[slug] = n;
   }
@@ -59,6 +60,6 @@
   let bin = '';
   for (let i = 0; i < zipped.length; i += 0x8000) bin += String.fromCharCode.apply(null, zipped.subarray(i, i + 0x8000));
   const packed = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  setTimeout(() => { location.href = APP + '#web=' + packed; }, 500);
+  location.href = APP + '#web=' + packed; /* the summary still comes back: this page stays until the app's starts loading */
   return { ok: true, counts, total: items.length, where, size: packed.length, sample: items.slice(0, 3) };
 })()

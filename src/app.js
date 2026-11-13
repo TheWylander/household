@@ -2678,6 +2678,8 @@
       const to = L.specialsWeek(today()).to, per = {};
       lines.forEach((l) => { const f = l.split('\t'), k = f[0] === 'Coles' ? f[5] : f[0]; per[k] = (per[k] || 0) + 1; });
       const save = saveDeals({ web: { at: new Date().toISOString(), by: S.me, to, items: lines } });
+      /* Noted on this browser too, so the weekly run's Thursday catch-up can see Wednesday's went in. */
+      lsSet('hh.webLast', JSON.stringify({ at: new Date().toISOString(), to, n: lines.length }));
       S.dialog = { type: 'webdone', n: lines.length, per, to };
       S.spStore = 'all'; S.spAisle = 'all'; S.spWatch = false; S.spQuery = ''; S.spAll = false;
       /* The deals refresh runs the pop-ups after it, so a watch-list match from Coles pops up now, not tomorrow morning. */

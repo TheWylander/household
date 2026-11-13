@@ -163,6 +163,8 @@ try:
         check(web.get('to') == str(WEEK_END) and web.get('by') == 'a' and len(lines) == 55 and all(isinstance(x, str) and x.count('\t') == 7 for x in lines),
               'kept in hh/deals for both phones and the pop-up job, one line each, till Tuesday')
         check(any(j.endswith('/repos/robin/household/actions/workflows/deals.yml/dispatches') for j in jobs), 'it starts the deals refresh, so watch-list pop-ups go out now')
+        last = json.loads(a.evaluate("localStorage.getItem('hh.webLast')") or '{}')
+        check(last.get('to') == str(WEEK_END) and last.get('n') == 55, "this browser notes it, so Thursday's catch-up run can skip")
         act(a, 'dlgclose')
         check('Coles fresh food and Liquorland from Coles\' website, read in the browser on Robin\'s laptop' in a.locator('.sp-src').inner_text(),
               'the sources note says where they came from')
