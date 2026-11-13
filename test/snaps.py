@@ -97,7 +97,7 @@ try:
         # ---------- the button ----------
         act(a, 'go', 'deals'); a.wait_for_timeout(500)
         box = a.locator('.sp-snap')
-        check(box.count() == 1 and 'Add specials from screenshots' in box.inner_text() and 'Coles fresh food, Liquorland' in box.inner_text(),
+        check(box.count() == 1 and 'Add specials from screenshots' in box.inner_text() and 'like ALDI or IGA' in box.inner_text(),
               'Deals has an Add specials from screenshots button under the list, saying what it is for')
         inp = a.locator('.sp-snap input[data-change="snapfile"]')
         check(inp.get_attribute('accept') == 'image/*,application/pdf' and inp.get_attribute('multiple') is not None, 'it takes several screenshots at once, or a PDF')

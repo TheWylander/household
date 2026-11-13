@@ -98,7 +98,8 @@
       ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up when the other of us adds a spend, the evening before a sale day we're keen on, with the top specials each Wednesday morning, and when something on the watch list is on special."],
       ['check', 'Not in the budget.', "When you add a spend, untick Counts towards our monthly budget for one-offs. It still splits, but leaves the month's budget alone."],
       ['duo', 'Loading screen.', 'While the app opens, it shows the other one of us rotating, cut out from their photo.'],
-      ['image', 'Specials from screenshots.', "For Coles fresh food, Liquorland or any shop the lists miss: screenshot their specials, then in Deals tap Add specials from screenshots. Gemini reads in each product and price for both of us, and the watch list sees them. Meat and seafood has its own aisle now too."]
+      ['tag', 'Coles fresh food and Liquorland.', "Every Wednesday morning, Coles' fruit and veg, meat and seafood, and Liquorland specials come into Deals by themselves, straight from Coles' website, and the watch list sees them. Meat and seafood has its own aisle now too."],
+      ['image', 'Specials from screenshots.', 'For a shop the lists miss, like ALDI or IGA: screenshot its specials, then in Deals tap Add specials from screenshots. Gemini reads in each product and price for both of us.']
     ] }
   ];
 
@@ -437,6 +438,8 @@
       if (calHash) initCal(calHash[1]);
       try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* fine either way */ }
     }
+    webHash();
+    window.addEventListener('hashchange', () => { if (webHash()) { webPending(); safeRender(); } });
     setTimeout(() => loadFeed(), 1200);
     render();
     slowTimer = setTimeout(() => { if (!(S.live.hh && S.live.months)) { S.slow = true; safeRender(); } }, 10000);
@@ -513,7 +516,7 @@
       applyPhotos();
       parseStaged();
       S.hhLoaded = true; S.offline = false;
-      markLive('hh', snap); resolveMe(); ensureRent(); ensureEditor(); pushCheck(); refreshDeals(); updateSplash(); safeRender();
+      markLive('hh', snap); resolveMe(); ensureRent(); ensureEditor(); pushCheck(); refreshDeals(); webPending(); updateSplash(); safeRender();
     }, (e) => subError('hh', e, subHH));
   }
   function subMonths() {
@@ -2211,6 +2214,9 @@
     'Household', 'Health & Beauty', 'Baby', 'Pet', 'Other'];
   const SNAP_MAX = 400, SNAP_FILES = 12;
   const flat = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  /* Specials read from Coles' own website in the browser on our laptop each week (src/agent/coles-specials.js):
+     Coles fresh food and Liquorland. Kept in hh/deals as one line each, so the pop-up job can read them too. */
+  const WEB_SHOPS = ['Coles', 'Liquorland'], WEB_MAX = 2500, WEB_PATH = /^\/product\/[a-z0-9.\-]+-\d+$/;
   const shopLabel = (s) => (s === 'Woolworths' ? 'Woolies' : s);
   function saleRule(r) {
     if (!r || typeof r !== 'object') return null;
@@ -2313,14 +2319,22 @@
     snapMemo = { doc: S.dealsDoc, day: t, list };
     return list;
   }
-  /* Specials whose week hasn't ended, then ours from screenshots, leaving out any the lists already have. */
+  /* Specials whose week hasn't ended, then ours from screenshots and from Coles' website, leaving out any already there.
+     Worked out once for each change to the lists, so the many places that ask stay quick with a thousand or more. */
+  let spMemo = { feed: undefined, doc: undefined, day: '', list: [] };
   function specialsNow() {
-    const F = S.feed, t = today(), snaps = snapSpecials();
+    const F = S.feed, t = today();
+    if (spMemo.feed === F && spMemo.doc === S.dealsDoc && spMemo.day === t) return spMemo.list;
     const live = (k) => { const s = F.sources[k]; return !!(s && s.to && s.to >= t); };
-    const list = F ? F.specials.filter((x) => (x.src === 'um' ? !!x.to && x.to >= t : live(feedKey(x)))) : [];
-    if (!snaps.length) return list;
-    const have = new Set(list.map((x) => x.s + '|' + flat(x.n)));
-    return list.concat(snaps.filter((x) => !have.has(x.s + '|' + flat(x.n))));
+    let list = F ? F.specials.filter((x) => (x.src === 'um' ? !!x.to && x.to >= t : live(feedKey(x)))) : [];
+    const snaps = snapSpecials(), web = webSpecials();
+    if (snaps.length || web.length) {
+      const have = new Set(list.map((x) => x.s + '|' + flat(x.n)));
+      const fresh = (x) => { const k = x.s + '|' + flat(x.n); if (have.has(k)) return false; have.add(k); return true; };
+      list = list.concat(snaps.filter(fresh), web.filter(fresh));
+    }
+    spMemo = { feed: F, doc: S.dealsDoc, day: t, list };
+    return list;
   }
   /* GitHub often runs the morning refresh hours late. When a list here has run out (Umall's picks end on Tuesdays and
      Fridays, the rest on Tuesdays), the app starts the refresh itself with the token kept for instant pop-ups, at most
@@ -2419,13 +2433,13 @@
     return listMemo.keys.has(listKey(x));
   }
   function specialEnd(x) {
-    if (x.src === 'um' || x.src === 'snap') return x.to || '';
+    if (x.src === 'um' || x.src === 'snap' || x.src === 'web') return x.to || '';
     const F = S.feed, src = F && F.sources[feedKey(x)];
     return (src && ISO_DAY.test(src.to || '') && src.to) || '';
   }
   /* When a special's list starts, if that's after today: next week's half-price list is sometimes all there is. */
   function specialStart(x) {
-    if (x.src === 'um' || x.src === 'snap') return '';
+    if (x.src === 'um' || x.src === 'snap' || x.src === 'web') return '';
     const F = S.feed, src = F && F.sources[feedKey(x)], f = src && ISO_DAY.test(src.from || '') ? src.from : '';
     return f > today() ? f : '';
   }
@@ -2614,16 +2628,108 @@
     toast('Added ' + add.length + (add.length === 1 ? ' special' : ' specials') + ' from ' + shopLabel(shop));
     render();
   }
+  /* ---------- specials from Coles' website ---------- */
+  /* Once a week, the browser on our laptop reads Coles' fresh food and Liquorland specials from Coles' own pages
+     and opens the app with them packed into the link after the # (src/agent/coles-specials.js). They wait on this
+     device until we're signed in and the household has loaded, then go into hh/deals for both phones, replacing last
+     week's. */
+  function webHash() {
+    const m = /^#web=([A-Za-z0-9_-]{20,})$/.exec(location.hash || '');
+    if (!m) return false;
+    lsSet('hh.webIn', JSON.stringify({ at: Date.now(), d: m[1] }));
+    S.view = 'deals';
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* fine either way */ }
+    return true;
+  }
+  function unpackWeb(b64) {
+    return Promise.resolve().then(() => {
+      if (typeof DecompressionStream !== 'function') throw new Error('This browser can\'t unpack them.');
+      const bin = atob(b64.replace(/-/g, '+').replace(/_/g, '/')), bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+    }).then((t) => { if (t.length > 3e6) throw new Error('too big'); return JSON.parse(t); });
+  }
+  /* Only what the app expects: Coles or Liquorland, plain text without tabs, whole cents, a known aisle, a Coles product link. */
+  function webLines(j) {
+    const clean = (v, max) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max);
+    const seen = new Set(), out = [];
+    (j && j.v === 1 && Array.isArray(j.items) ? j.items : []).slice(0, WEB_MAX).forEach((x) => {
+      if (!Array.isArray(x)) return;
+      const s = L.storeName(clean(x[0], 40)), n = clean(x[1], 120), now = centsOk(x[2]), was = centsOk(x[3]), k = s + '|' + flat(n);
+      if (WEB_SHOPS.indexOf(s) < 0 || !flat(n) || !now || seen.has(k)) return;
+      seen.add(k);
+      out.push([s, n, now, was > now ? was : 0, clean(x[4], 40), SNAP_CATS.indexOf(x[5]) >= 0 ? x[5] : 'Other', clean(x[6], 30),
+        WEB_PATH.test(String(x[7] || '')) ? x[7] : ''].join('\t'));
+    });
+    return out;
+  }
+  let webBusy = false;
+  function webPending() {
+    if (webBusy || S.mode !== 'firebase' || !S.me || S.readOnly || !S.hhLoaded) return;
+    let st = null;
+    try { st = JSON.parse(lsGet('hh.webIn') || 'null'); } catch (e) { st = null; }
+    if (!st || typeof st.d !== 'string') return;
+    lsSet('hh.webIn', '');
+    if (!(Date.now() - Number(st.at) < 3 * 864e5)) return;
+    webBusy = true;
+    unpackWeb(st.d).then((j) => {
+      const lines = webLines(j);
+      if (!lines.length) throw new Error('There were no specials in it.');
+      const to = L.specialsWeek(today()).to, per = {};
+      lines.forEach((l) => { const f = l.split('\t'), k = f[0] === 'Coles' ? f[5] : f[0]; per[k] = (per[k] || 0) + 1; });
+      const save = saveDeals({ web: { at: new Date().toISOString(), by: S.me, to, items: lines } });
+      S.dialog = { type: 'webdone', n: lines.length, per, to };
+      S.spStore = 'all'; S.spAisle = 'all'; S.spWatch = false; S.spQuery = ''; S.spAll = false;
+      /* The deals refresh runs the pop-ups after it, so a watch-list match from Coles pops up now, not tomorrow morning. */
+      const tok = ghToken();
+      if (tok) startJob(tok, 'deals.yml');
+      return save;
+    }).catch((e) => { S.dialog = { type: 'webdone', err: String((e && e.message) || 'That link couldn\'t be read.').slice(0, 160) }; })
+      .then(() => { webBusy = false; safeRender(); });
+  }
+  let webMemo = { doc: undefined, day: '', list: [] };
+  function webSpecials() {
+    const t = today();
+    if (webMemo.doc === S.dealsDoc && webMemo.day === t) return webMemo.list;
+    const w = S.dealsDoc && S.dealsDoc.web, to = w && ISO_DAY.test(w.to || '') ? w.to : '', list = [];
+    if (to && to >= t && Array.isArray(w.items)) {
+      w.items.slice(0, WEB_MAX).forEach((line) => {
+        if (typeof line !== 'string') return;
+        const f = line.split('\t'), s = L.storeName(f[0]), now = centsOk(Number(f[2])), was = centsOk(Number(f[3])), path = WEB_PATH.test(f[7] || '') ? f[7] : '';
+        if (WEB_SHOPS.indexOf(s) < 0 || !f[1] || !now) return;
+        list.push({ s, n: f[1].slice(0, 120), was: was > now ? was : 0, now, off: was > now ? L.clamp(Math.round((1 - now / was) * 100), 0, 99) : 0,
+          cat: SNAP_CATS.indexOf(f[5]) >= 0 ? f[5] : 'Other', sub: String(f[6] || '').slice(0, 30), last: '', link: path ? linkOk('https://www.coles.com.au' + path) : '',
+          img: '', src: 'web', to, promo: String(f[4] || '').slice(0, 40) });
+      });
+    }
+    webMemo = { doc: S.dealsDoc, day: t, list };
+    return list;
+  }
+  /* When the website specials were last read, and on whose laptop, while they're still running. */
+  function webInfo() {
+    const w = S.dealsDoc && S.dealsDoc.web;
+    return w && typeof w.at === 'string' && webSpecials().length ? { at: w.at, by: w.by === 'b' ? 'b' : 'a' } : null;
+  }
+  const WEB_NAMES = { 'Fruit & Veg': 'Coles fruit and veg', 'Meat & Seafood': 'Coles meat and seafood', Liquorland: 'Liquorland' };
+  function webDoneDialog(d) {
+    const head = '<div class="dlg-head"><h2 id="dlgT">' + (d.err ? 'Those specials didn\'t come through' : 'This week\'s specials are in') + '</h2>' +
+      '<button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>';
+    if (d.err) return head + '<p class="err-text" role="alert" id="webDone" data-ok="0">' + esc(d.err) + '</p><div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">OK</button></div>';
+    const parts = Object.keys(d.per).map((k) => d.per[k] + ' ' + (WEB_NAMES[k] || 'other Coles'));
+    return head + '<p id="webDone" data-ok="1" data-n="' + d.n + '" role="status">Saved ' + d.n + ' specials for both phones: ' + esc(listNames(parts)) + '. On special till ' + esc(L.fmtDay(d.to)) + '.</p>' +
+      '<p class="hint">Read from Coles\' website. Anything on our watch list pops up as usual.</p>' +
+      '<div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">See them</button></div>';
+  }
   function snapAdd() {
     if (!snapReady()) return '';
     return '<div class="sp-snap"><label class="btn btn-secondary btn-block file-btn">' + icon('image') + 'Add specials from screenshots' +
       '<input type="file" accept="image/*,application/pdf" multiple data-change="snapfile" aria-label="Choose screenshots of a shop\'s specials"></label>' +
-      '<p class="hint">For Coles fresh food, Liquorland or any shop not here: screenshot their specials page and Gemini reads in each product and price.</p></div>';
+      '<p class="hint">For a shop the lists miss, like ALDI or IGA: screenshot its specials page and Gemini reads in each product and price.</p></div>';
   }
   function spRow(x, words) {
     const hit = L.watchHits(x.n, words).length > 0, w = rareWeeks(x), st = specialStart(x);
     const name = x.link ? '<a class="sp-n" href="' + esc(x.link) + '" target="_blank" rel="noopener">' + esc(x.n) + '</a>' : '<span class="sp-n">' + esc(x.n) + '</span>';
-    return '<li class="sp-row' + (hit ? ' hit' : '') + (S.readOnly ? '' : ' has-add') + (x.img ? ' has-img' : '') + '">' + thumb(x, 48) + '<span class="sp-main">' + name + '<span class="k">' + esc([shopLabel(x.s), x.cat, st ? 'from ' + L.fmtDay(st) : ''].filter(Boolean).join(' · ')) + '</span>' +
+    return '<li class="sp-row' + (hit ? ' hit' : '') + (S.readOnly ? '' : ' has-add') + (x.img ? ' has-img' : '') + '">' + thumb(x, 48) + '<span class="sp-main">' + name + '<span class="k">' + esc([shopLabel(x.s), x.sub || x.cat, st ? 'from ' + L.fmtDay(st) : ''].filter(Boolean).join(' · ')) + '</span>' +
       (hit || w >= 8 || x.src === 'snap' ? '<span class="sp-tags">' + (hit ? '<span class="tag hit">On our list</span>' : '') + (w >= 8 ? '<span class="tag rare">' + esc(rareLabel(w)) + '</span>' : '') +
         (x.src === 'snap' ? '<span class="tag snap">From a screenshot</span>' : '') + '</span>' : '') + '</span>' +
       '<span class="sp-price"><span class="sp-now">' + L.fmt(x.now) + '</span>' + (x.was > x.now ? '<s class="sp-was"><span class="sr">was </span>' + L.fmt(x.was) + '</s>' : '') +
@@ -2752,6 +2858,8 @@
     if (hf.ok || hf.stale) srcs.push('Harris Farm from its online specials');
     if (F.sources.umall.ok || F.sources.umall.stale) srcs.push('Umall, Sydney\'s online Asian supermarket, from its half-price and weekly specials (delivery only)');
     if (F.sources.meat.ok || F.sources.meat.stale) srcs.push('Meat Emporium, Sydney\'s big meat market, from what its online shop has marked down');
+    const W = webInfo();
+    if (W) srcs.push('Coles fresh food and Liquorland from Coles\' website, read in the browser on ' + esc(poss(nm(W.by))) + ' laptop ' + esc(agoLabel(W.at)));
     return srcs.length ? '<p class="hint sp-src">' + srcs.join('. ') + '. Updated ' + esc(agoLabel(F.updated)) + '. Prices can differ by store.</p>' : '';
   }
   /* OzBargain deals at our shops or on the watch list, most votes first. */
@@ -3758,6 +3866,8 @@
       body = receiptDialog(d);
     } else if (d.type === 'snaps') {
       body = snapsDialog(d);
+    } else if (d.type === 'webdone') {
+      body = webDoneDialog(d);
     } else if (d.type === 'aitoken') {
       body = aiTokenDialog(d);
     } else if (d.type === 'ghtoken') {

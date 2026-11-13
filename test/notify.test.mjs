@@ -1,6 +1,6 @@
 /* What the notification job sends, and to whom, without Firebase or a push service. node test/notify.test.mjs */
 import assert from 'node:assert';
-import { APP, payloadOf, plan, run, sydneyNow, awake, weekKey, weekHits, wordHits, specialsPop, weeklyPop, topPicks, withSnaps, spendsPop, oldKeys, webConfig, fromFs, toFs, fieldPath, toUpdate, job, runSummary } from '../src/github/notify.mjs';
+import { APP, payloadOf, plan, run, sydneyNow, awake, weekKey, weekHits, wordHits, specialsPop, weeklyPop, topPicks, withSnaps, withWeb, spendsPop, oldKeys, webConfig, fromFs, toFs, fieldPath, toUpdate, job, runSummary } from '../src/github/notify.mjs';
 
 let passed = 0;
 async function t(name, fn) {
@@ -169,6 +169,30 @@ await t('specials from our screenshots join the lists', () => {
   const q = plan({ push: sentAlready, deals: { sales: [], watch: ['coopers'], snaps: SNAPS }, feed: week(), now: new Date('2026-11-12T22:00:00Z') });
   assert.deepStrictEqual(q.out.map((n) => [n.title, n.body]), [['🏷️ More top specials this week', 'Coopers Pale Ale 24 · $55.00 at Liquorland']],
     'after the week\'s pop-up, a watch-list match added from a screenshot pops up on the next run');
+});
+
+/* Coles fresh food and Liquorland, read from Coles' website in the laptop's browser, one tab-separated line each. */
+const WEB = { at: '2026-11-11T22:47:00Z', by: 'a', to: '2026-11-17', items: [
+  ['Coles', 'Coles Australian Pork Loin Chops 1kg', 1100, 1600, '', 'Meat & Seafood', 'Pork', '/product/coles-australian-pork-loin-chops-1kg-123'].join('\t'),
+  ['Coles', 'Coles Medium Calypso Mangoes', 290, 0, 'Buy 2 for $5', 'Fruit & Veg', 'Fruit', ''].join('\t'),
+  ['Liquorland', 'Jameson Irish Whiskey 700ml', 5500, 6800, '', 'Liquor', 'Spirits', ''].join('\t'),
+  ['Coles', 'Bread Loaf 650g', 200, 400, '', 'Bakery', '', ''].join('\t'),
+  ['Coles', '', 100, 0, '', 'Fruit & Veg', '', ''].join('\t'), 42, null] };
+await t("specials from Coles' website join the lists", () => {
+  const f = withWeb(week(), WEB), mine = f.specials.filter((x) => x.src === 'web');
+  assert.deepStrictEqual(mine.map((x) => [x.s, x.n, x.now, x.was, x.to]), [['Coles', 'Coles Australian Pork Loin Chops 1kg', 1100, 1600, '2026-11-17'],
+    ['Coles', 'Coles Medium Calypso Mangoes', 290, 0, '2026-11-17'], ['Liquorland', 'Jameson Irish Whiskey 700ml', 5500, 6800, '2026-11-17']],
+    'the bread already on the half-price list is left out, and so is a line without a name or one that is not text');
+  const w0 = week();
+  assert.ok(withWeb(w0, null) === w0 && withWeb(undefined, { to: 'soon', items: ['x'] }) === undefined && withWeb(w0, { to: '2026-11-17', items: [] }) === w0, 'nothing to add, nothing changes');
+  assert.deepStrictEqual(weekHits(f, ['jameson', 'mangoes'], '2026-11-13').map((h) => h.n), ['Jameson Irish Whiskey 700ml', 'Coles Medium Calypso Mangoes'], 'they count for the watch list');
+  assert.deepStrictEqual(weekHits(f, ['jameson'], '2026-11-18'), [], 'until their last day');
+  const sentAlready = Object.assign(onePhone(), { sent: { 'top:2026-11-11': WED_AM.getTime(), 'sp:2026-11-11': [] } });
+  const q = plan({ push: sentAlready, deals: { sales: [], watch: ['jameson'], web: WEB }, feed: week(), now: new Date('2026-11-12T22:00:00Z') });
+  assert.deepStrictEqual(q.out.map((n) => [n.title, n.body]), [['🏷️ More top specials this week', 'Jameson Irish Whiskey 700ml · $55.00 at Liquorland']],
+    'a watch-list match read from the website pops up on the next run');
+  const both = withWeb(withSnaps(week(), [{ s: 'Liquorland', n: 'Jameson Irish Whiskey 700ml', now: 5000, to: '2026-11-17' }]), WEB);
+  assert.strictEqual(both.specials.filter((x) => /Jameson/.test(x.n)).length, 1, 'one we added from a screenshot is not doubled up by the website');
 });
 
 await t("the top specials wait for the week's lists, and stop after Friday", () => {

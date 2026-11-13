@@ -41,16 +41,30 @@ export function weekKey(feed, day) {
 /* Whether a special is running on a day. A list counts once it has started: next week's half-price list is posted days early. */
 function runningOn(feed, day) {
   const s = (feed && feed.sources) || {}, live = (k) => !!(s[k] && s[k].to && s[k].to >= day && (!s[k].from || s[k].from <= day));
-  return (x) => (x.src === 'um' || x.src === 'snap' ? !!x.to && x.to >= day : live(x.src === 'hf' ? 'harris' : x.src === 'me' ? 'meat' : 'report'));
+  return (x) => (x.src === 'um' || x.src === 'snap' || x.src === 'web' ? !!x.to && x.to >= day : live(x.src === 'hf' ? 'harris' : x.src === 'me' ? 'meat' : 'report'));
 }
 /* Specials we read in from screenshots in the app (Coles fresh food, Liquorland), kept in hh/deals until their last day,
    join the lists, so the watch list and the week's picks see them. One the lists already have is left out. */
 const flat = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+/* The % off, for sorting the biggest discounts first like the lists' own. */
+const offOf = (now, was) => (was > now && now > 0 ? Math.round((1 - now / was) * 100) : 0);
 export function withSnaps(feed, snaps) {
   const f = feed || {}, have = new Set((Array.isArray(f.specials) ? f.specials : []).map((x) => x && L.storeName(x.s) + '|' + flat(x.n)));
   const list = (Array.isArray(snaps) ? snaps : []).filter((x) => x && typeof x.n === 'string' && x.n.trim() && x.now > 0 && /^\d{4}-\d{2}-\d{2}$/.test(x.to || ''))
-    .map((x) => ({ s: L.storeName(x.s), n: x.n.trim(), now: x.now, was: x.was > x.now ? x.was : 0, cat: String(x.cat || ''), src: 'snap', to: x.to }))
+    .map((x) => ({ s: L.storeName(x.s), n: x.n.trim(), now: x.now, was: x.was > x.now ? x.was : 0, off: offOf(x.now, x.was), cat: String(x.cat || ''), src: 'snap', to: x.to }))
     .filter((x) => !have.has(x.s + '|' + flat(x.n)));
+  return list.length ? Object.assign({}, f, { specials: (Array.isArray(f.specials) ? f.specials : []).concat(list) }) : feed;
+}
+/* Coles fresh food and Liquorland, read each week from Coles' website in the browser on the laptop, kept in hh/deals as
+   one tab-separated line each: shop, name, price and usual price in cents, deal words, aisle, finer aisle, link. */
+export function withWeb(feed, web) {
+  const w = web && typeof web === 'object' ? web : null, to = w && /^\d{4}-\d{2}-\d{2}$/.test(w.to || '') ? w.to : '';
+  if (!to || !Array.isArray(w.items) || !w.items.length) return feed;
+  const f = feed || {}, have = new Set((Array.isArray(f.specials) ? f.specials : []).map((x) => x && L.storeName(x.s) + '|' + flat(x.n)));
+  const list = w.items.filter((l) => typeof l === 'string').map((l) => {
+    const x = l.split('\t'), now = Number(x[2]) || 0, was = Number(x[3]) || 0;
+    return { s: L.storeName(x[0]), n: String(x[1] || '').trim(), now, was: was > now ? was : 0, off: offOf(now, was), cat: String(x[5] || ''), src: 'web', to };
+  }).filter((x) => x.n && x.now > 0 && !have.has(x.s + '|' + flat(x.n)));
   return list.length ? Object.assign({}, f, { specials: (Array.isArray(f.specials) ? f.specials : []).concat(list) }) : feed;
 }
 /* This week's specials and OzBargain deals that match the watch list. A deal matches on its shop too. */
@@ -129,7 +143,7 @@ export function spendEvents(P, sent, now) {
    spend is added; that run leaves sale days and specials to the morning and evening runs. */
 export function plan({ push, deals, feed, now, mode = 'all' }) {
   const P = push || {}, D = deals || {}, sent = P.sent || {}, pub = P.vapid && P.vapid.pub, out = [];
-  feed = withSnaps(feed, D.snaps);
+  feed = withWeb(withSnaps(feed, D.snaps), D.web);
   const t = sydneyNow(now), { day, hour } = t;
   const subs = Object.keys(P.subs || {}).map((id) => Object.assign({ id }, P.subs[id]))
     .filter((s) => s && s.endpoint && s.keys && s.keys.p256dh && s.keys.auth && s.vapid === pub && !s.stale);
