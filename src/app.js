@@ -97,7 +97,8 @@
       ['cart', 'Weekend shopping list.', "Tap + on any special, or on a match from the watch list, to add it to our list for the weekend shop or put it on the watch list. The list is under the trolley at the top of Deals: tick things off as you go, and add your own."],
       ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up when the other of us adds a spend, the evening before a sale day we're keen on, with the top specials each Wednesday morning, and when something on the watch list is on special."],
       ['check', 'Not in the budget.', "When you add a spend, untick Counts towards our monthly budget for one-offs. It still splits, but leaves the month's budget alone."],
-      ['duo', 'Loading screen.', 'While the app opens, it shows the other one of us rotating, cut out from their photo.']
+      ['duo', 'Loading screen.', 'While the app opens, it shows the other one of us rotating, cut out from their photo.'],
+      ['image', 'Specials from screenshots.', "For Coles fresh food, Liquorland or any shop the lists miss: screenshot their specials, then in Deals tap Add specials from screenshots. Gemini reads in each product and price for both of us, and the watch list sees them. Meat and seafood has its own aisle now too."]
     ] }
   ];
 
@@ -1361,9 +1362,10 @@
         price: { type: 'number', description: 'What this line cost in dollars, after any discount printed under it.' } }, required: ['name', 'price'] } }
     }, required: ['shop', 'date', 'total', 'category', 'items'] };
   }
+  function readReceipt(data) { return aiRead(RECEIPT_PROMPT, receiptSchema(), data, 'image/jpeg'); }
   /* Tries the newest small model, and the one before it if that one isn't there. */
-  function readReceipt(data) {
-    const go = (i) => aiModel(AI_MODELS[i], receiptSchema()).then((model) => model.generateContent([RECEIPT_PROMPT, { inlineData: { mimeType: 'image/jpeg', data } }]))
+  function aiRead(prompt, schema, data, mime) {
+    const go = (i) => aiModel(AI_MODELS[i], schema).then((model) => model.generateContent([prompt, { inlineData: { mimeType: mime, data } }]))
       .then((r) => JSON.parse(r.response.text()), (e) => {
         const st = e && e.customErrorData && e.customErrorData.status;
         const m = String((e && e.message) || '');
@@ -1418,17 +1420,19 @@
       '<div class="dialog-actions">' + (has ? '<button class="btn btn-secondary" data-act="aitokdel">Remove it</button>' : '<button class="btn btn-secondary" data-act="dlgclose">Not now</button>') +
       '<button class="btn btn-primary" data-act="aitoksave">Save</button></div>';
   }
-  /* A smaller JPEG is plenty for reading, and quicker to send. */
-  function shrinkPhoto(file) {
+  /* A smaller JPEG is plenty for reading a receipt, and quicker to send. A screenshot of specials keeps its width (up to
+     1400px across) so the small print stays sharp, and a long scrolling one stays under what an iPhone can draw. */
+  function shrinkPhoto(file, shot) {
     return new Promise((res, rej) => {
       const url = URL.createObjectURL(file), img = new Image(), fail = () => { URL.revokeObjectURL(url); const e = new Error('photo'); e.photo = true; rej(e); };
       img.onload = () => {
-        const k = Math.min(1, 1600 / Math.max(img.naturalWidth || 1, img.naturalHeight || 1)), w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
+        const W = img.naturalWidth || 1, H = img.naturalHeight || 1, k = shot ? Math.min(1, 1400 / Math.min(W, H), Math.sqrt(15e6 / (W * H))) : Math.min(1, 1600 / Math.max(W, H));
+        const w = Math.max(1, Math.round(W * k)), h = Math.max(1, Math.round(H * k));
         const c = document.createElement('canvas');
         c.width = w; c.height = h;
         try { c.getContext('2d').drawImage(img, 0, 0, w, h); } catch (e) { fail(); return; }
         URL.revokeObjectURL(url);
-        res(c.toDataURL('image/jpeg', 0.82).split(',')[1]);
+        res(c.toDataURL('image/jpeg', shot ? 0.86 : 0.82).split(',')[1]);
       };
       img.onerror = fail;
       img.src = url;
@@ -2202,6 +2206,11 @@
   const LINK_OK = /^https:\/\/(www\.)?(ozbargain\.com\.au|coles\.com\.au|woolworths\.com\.au|harrisfarm\.com\.au|umall\.com\.au|meatemporium\.com\.au|sushifactory\.com\.au)\/[^\s"'<>]*$/;
   const linkOk = (u) => (LINK_OK.test(String(u || '')) ? String(u).slice(0, 300) : '');
   const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+  /* Specials read from our screenshots (see the reader further down): their categories match the shops' own, so they land in the right aisle. */
+  const SNAP_CATS = ['Fruit & Veg', 'Meat & Seafood', 'Deli', 'Dairy, Eggs & Fridge', 'Bakery', 'Pantry', 'Freezer', 'Snacks & Confectionery', 'Drinks', 'Liquor',
+    'Household', 'Health & Beauty', 'Baby', 'Pet', 'Other'];
+  const SNAP_MAX = 400, SNAP_FILES = 12;
+  const flat = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
   const shopLabel = (s) => (s === 'Woolworths' ? 'Woolies' : s);
   function saleRule(r) {
     if (!r || typeof r !== 'object') return null;
@@ -2224,6 +2233,11 @@
       list: (Array.isArray(d.list) ? d.list : []).filter((x) => x && typeof x.id === 'string' && typeof x.n === 'string' && x.n.trim()).slice(0, 80).map((x) => ({
         id: x.id.slice(0, 24), n: x.n.trim().replace(/\s+/g, ' ').slice(0, 80), s: typeof x.s === 'string' ? x.s.trim().slice(0, 30) : '',
         p: centsOk(x.p), w: centsOk(x.w), link: linkOk(x.link), to: ISO_DAY.test(x.to || '') ? x.to : '', done: x.done === true
+      })),
+      snaps: (Array.isArray(d.snaps) ? d.snaps : []).filter((x) => x && typeof x.n === 'string' && x.n.trim() && centsOk(x.now) && ISO_DAY.test(x.to || '')).slice(-SNAP_MAX).map((x) => ({
+        id: typeof x.id === 'string' ? x.id.slice(0, 24) : '', s: L.storeName(String(x.s || '').trim().replace(/\s+/g, ' ').slice(0, 40)) || 'Specials',
+        n: x.n.trim().replace(/\s+/g, ' ').slice(0, 120), now: centsOk(x.now), was: centsOk(x.was), promo: String(x.promo || '').trim().replace(/\s+/g, ' ').slice(0, 30),
+        cat: SNAP_CATS.indexOf(x.cat) >= 0 ? x.cat : 'Other', to: x.to, by: x.by === 'b' ? 'b' : 'a'
       }))
     };
   }
@@ -2289,12 +2303,24 @@
   }
   /* Which list a special belongs to: Harris Farm's and Meat Emporium's run for the specials week, Umall's carry their own end day. */
   const feedKey = (x) => (x.src === 'hf' ? 'harris' : x.src === 'me' ? 'meat' : 'report');
-  /* Specials whose week hasn't ended. */
+  /* Specials from our screenshots that haven't ended, shaped like the lists' own. */
+  let snapMemo = { doc: undefined, day: '', list: [] };
+  function snapSpecials() {
+    const t = today();
+    if (snapMemo.doc === S.dealsDoc && snapMemo.day === t) return snapMemo.list;
+    const list = dealsCfg().snaps.filter((x) => x.to >= t).map((x) => ({ s: x.s, n: x.n, was: x.was > x.now ? x.was : 0, now: x.now,
+      off: x.was > x.now ? L.clamp(Math.round((1 - x.now / x.was) * 100), 0, 99) : 0, cat: x.cat, last: '', link: '', img: '', src: 'snap', to: x.to, promo: x.promo, id: x.id, by: x.by }));
+    snapMemo = { doc: S.dealsDoc, day: t, list };
+    return list;
+  }
+  /* Specials whose week hasn't ended, then ours from screenshots, leaving out any the lists already have. */
   function specialsNow() {
-    const F = S.feed, t = today();
-    if (!F) return [];
+    const F = S.feed, t = today(), snaps = snapSpecials();
     const live = (k) => { const s = F.sources[k]; return !!(s && s.to && s.to >= t); };
-    return F.specials.filter((x) => (x.src === 'um' ? !!x.to && x.to >= t : live(feedKey(x))));
+    const list = F ? F.specials.filter((x) => (x.src === 'um' ? !!x.to && x.to >= t : live(feedKey(x)))) : [];
+    if (!snaps.length) return list;
+    const have = new Set(list.map((x) => x.s + '|' + flat(x.n)));
+    return list.concat(snaps.filter((x) => !have.has(x.s + '|' + flat(x.n))));
   }
   /* GitHub often runs the morning refresh hours late. When a list here has run out (Umall's picks end on Tuesdays and
      Fridays, the rest on Tuesdays), the app starts the refresh itself with the token kept for instant pop-ups, at most
@@ -2350,7 +2376,8 @@
   }
   const rareLabel = (w) => (w >= 99 ? 'First time at half price' : 'First time in ' + w + ' weeks');
   /* Aisles, from the categories on the half-price list. Everything from Harris Farm counts as fresh. */
-  const AISLES = [['pantry', 'Pantry', /^(pantry|bakery|deli|dairy, eggs & fridge|poultry, meat & seafood|meat & seafood)$/i], ['fresh', 'Fresh', /^fruit & veg$/i],
+  const AISLES = [['pantry', 'Pantry', /^(pantry|bakery|deli|dairy, eggs & fridge)$/i], ['fresh', 'Fresh', /^fruit & veg$/i],
+    ['meat', 'Meat and seafood', /^(poultry, meat & seafood|meat & seafood)$/i],
     ['snacks', 'Snacks', /^snacks & confectionery$/i], ['drinks', 'Drinks', /^(drinks|beer, wine & spirits|liquor)$/i], ['freezer', 'Freezer', /^freezer$/i],
     ['cleaning', 'Cleaning', /^(cleaning & maintenance|household|home & lifestyle|pet)$/i], ['health', 'Health and beauty', /^(health & beauty|personal care|baby)$/i]];
   function aisleOf(x) {
@@ -2392,13 +2419,13 @@
     return listMemo.keys.has(listKey(x));
   }
   function specialEnd(x) {
-    if (x.src === 'um') return x.to || '';
+    if (x.src === 'um' || x.src === 'snap') return x.to || '';
     const F = S.feed, src = F && F.sources[feedKey(x)];
     return (src && ISO_DAY.test(src.to || '') && src.to) || '';
   }
   /* When a special's list starts, if that's after today: next week's half-price list is sometimes all there is. */
   function specialStart(x) {
-    if (x.src === 'um') return '';
+    if (x.src === 'um' || x.src === 'snap') return '';
     const F = S.feed, src = F && F.sources[feedKey(x)], f = src && ISO_DAY.test(src.from || '') ? src.from : '';
     return f > today() ? f : '';
   }
@@ -2420,7 +2447,8 @@
     const x = findSpecial(d.key), head = (t) => '<div class="dlg-head"><h2 id="dlgT">' + esc(t) + '</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>';
     if (!x) return head('That special has finished') + '<p class="muted">The specials have moved on since. Have a look at this week\'s.</p><div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
     const k = esc(spKey(x)), on = onList(x), words = L.watchHits(x.n, dealsCfg().watch), end = specialEnd(x);
-    const line = '<p class="muted">' + esc([shopLabel(x.s), L.fmt(x.now) + (x.was > x.now ? ', was ' + L.fmt(x.was) : ''), end ? 'special till ' + L.fmtDay(end) : ''].filter(Boolean).join(' · ')) + '</p>';
+    const line = '<p class="muted">' + esc([shopLabel(x.s), L.fmt(x.now) + (x.was > x.now ? ', was ' + L.fmt(x.was) : ''), x.promo || '', end ? 'special till ' + L.fmtDay(end) : ''].filter(Boolean).join(' · ')) + '</p>' +
+      (x.src === 'snap' ? '<p class="hint">Read from ' + esc(poss(nm(x.by))) + ' screenshot.' + (S.readOnly ? '' : ' <button class="link sm" data-act="snapdel" data-arg="' + esc(x.id) + '">Got it wrong? Take it off</button>') + '</p>' : '');
     return head(x.n) + (x.img ? '<div class="sp-item-head">' + thumb(x, 88) + line + '</div>' : line) +
       '<div class="item-acts">' +
       (on ? '<button class="btn btn-secondary btn-block" data-act="listoff" data-arg="' + k + '">' + icon('check') + 'On the weekend list. Take it off</button>'
@@ -2454,13 +2482,152 @@
         '<button class="btn btn-secondary btn-small" data-act="listnew">Add</button></div>') +
       '<div class="dialog-actions">' + (ticked && !S.readOnly ? '<button class="btn btn-secondary" data-act="listclear">Clear ' + ticked + ' ticked</button>' : '') + '<button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
   }
+  /* ---------- specials from screenshots ---------- */
+  /* Coles and Liquorland don't let other sites read their specials, so we bring them in ourselves: screenshots of a shop's
+     specials page (or Safari's full-page PDF of it) go to Gemini, which reads each product and price the way it reads
+     receipts. They're kept in hh/deals for both phones until their last day, and join the watch list and pop-ups. */
+  const SPECIALS_PROMPT = 'These are screenshots, or a saved page, of the specials in an Australian shop\'s app or website, such as Coles, Woolworths, ALDI or Liquorland. ' +
+    'Read every product on special that is shown in full: its name with the brand and size, the special price, the usual price, any deal words, and the best category. ' +
+    'Give the shop, and the last day of the specials if it is shown. Leave out ads, banners, recipes, and products that are cut off or not on special. If there are no specials, give no items.';
+  function specialsSchema() {
+    return { type: 'object', properties: {
+      shop: { type: 'string', description: 'The shop these specials are from, such as Coles or Liquorland. Empty if it is not shown.' },
+      ends: { type: 'string', description: 'The last day of these specials as YYYY-MM-DD, or empty if it is not shown.' },
+      items: { type: 'array', items: { type: 'object', properties: {
+        name: { type: 'string', description: 'The product with its brand and size, as written. For example: Coles Australian Pork Loin Chops 1kg.' },
+        price: { type: 'number', description: 'The special price for one, in dollars.' },
+        was: { type: 'number', description: 'The usual price for one in dollars, as shown, or the special price plus the saving when it says Save $3. Otherwise 0.' },
+        deal: { type: 'string', description: 'Deal words shown on it, such as Half price, 2 for $10 or Save $3. Empty if there are none.' },
+        category: { type: 'string', enum: SNAP_CATS } }, required: ['name', 'price', 'was', 'deal', 'category'] } }
+    }, required: ['shop', 'ends', 'items'] };
+  }
+  const isPdf = (f) => /pdf/i.test(f.type || '') || /\.pdf$/i.test(f.name || '');
+  /* A screenshot keeps its full size, so small print stays readable. A PDF goes as it is, up to Gemini's limit. */
+  function shotData(file) {
+    if (!isPdf(file)) return shrinkPhoto(file, true).then((data) => ({ data, mime: 'image/jpeg' }));
+    if (file.size > 14e6) { const e = new Error('too big'); e.big = true; return Promise.reject(e); }
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res({ data: String(r.result || '').split(',')[1] || '', mime: 'application/pdf' });
+      r.onerror = () => { const e = new Error('photo'); e.photo = true; rej(e); };
+      r.readAsDataURL(file);
+    });
+  }
+  function snapError(e) {
+    if (e && e.big) return 'That PDF is too big to send. Take screenshots of the page instead.';
+    if (e && e.photo) return 'That screenshot couldn\'t be opened. Try another one.';
+    const m = receiptError(e);
+    return /^Couldn't read that receipt/.test(m) ? 'Couldn\'t read those specials. Try a clearer screenshot.' : m.replace(' Type this one in, or try again later.', ' Try again later.');
+  }
+  /* What Gemini read, tidied: whole cents, a known category, and each product once (screenshots overlap as you scroll). */
+  function snapItems(j, seen) {
+    const cents = (v) => Math.round((typeof v === 'number' ? v : parseFloat(String(v == null ? '' : v).replace(/[^0-9.-]/g, ''))) * 100) || 0;
+    return (Array.isArray(j && j.items) ? j.items : []).slice(0, 150).map((x) => {
+      const n = String((x && x.name) || '').trim().replace(/\s+/g, ' ').slice(0, 120), now = cents(x && x.price), was = cents(x && x.was);
+      return { n, now, was: was > now ? was : 0, promo: String((x && x.deal) || '').trim().replace(/\s+/g, ' ').slice(0, 30), cat: SNAP_CATS.indexOf(x && x.category) >= 0 ? x.category : 'Other', on: true };
+    }).filter((x) => {
+      const k = flat(x.n);
+      if (!k || x.now <= 0 || x.now >= 1e6 || seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+  /* Reads each file in turn, so a long scroll of screenshots shows how far it's got. A file that can't be read is skipped;
+     if Gemini itself says no (not set up, App Check, its limit), the rest would fail the same way, so it stops. */
+  function startSnaps(files) {
+    const list = files.filter(Boolean).slice(0, SNAP_FILES);
+    if (!list.length) return;
+    const d = { type: 'snaps', tok: uid('s'), busy: true, n: list.length, at: 1, form: null, fails: 0, last: null, err: null, why: '', fix: '', error: null };
+    const t = today(), seen = new Set(), form = { shop: '', to: '', items: [] }, skipped = files.length - list.length;
+    S.dialog = d;
+    render();
+    const mine = () => S.dialog === d;
+    const done = () => {
+      d.busy = false;
+      if (form.items.length) {
+        if (!form.to) form.to = L.specialsWeek(t).to;
+        d.form = form; d.skipped = skipped;
+      } else {
+        const e = d.last;
+        d.err = e ? snapError(e) : 'No specials in ' + (list.length > 1 ? 'those' : 'that') + '. Screenshot the shop\'s specials page, with the prices showing.';
+        d.why = e && !e.photo && !e.big ? errDetail(e) : '';
+        d.fix = e && !S.readOnly && /appCheck\/|app ?check|attestation/i.test(String(e.code || '') + ' ' + String(e.message || '')) ? 'aitoken' : '';
+      }
+      render();
+    };
+    const next = (i) => {
+      if (!mine()) return;
+      if (i >= list.length) { done(); return; }
+      if (d.at !== i + 1) { d.at = i + 1; render(); }
+      shotData(list[i]).then((x) => aiRead(SPECIALS_PROMPT, specialsSchema(), x.data, x.mime)).then((j) => {
+        const shop = L.storeName(String((j && j.shop) || '').trim().replace(/\s+/g, ' ').slice(0, 40)), ends = String((j && j.ends) || '');
+        if (!form.shop && shop) form.shop = shop;
+        if (!form.to && ISO_DAY.test(ends) && ends >= t && ends <= L.addDays(t, 60)) form.to = ends;
+        form.items = form.items.concat(snapItems(j, seen));
+        next(i + 1);
+      }, (e) => {
+        d.fails++; d.last = e;
+        next(e && (e.photo || e.big) ? i + 1 : list.length);
+      });
+    };
+    next(0);
+  }
+  const snapLabel = (n) => (n ? 'Add ' + n + (n === 1 ? ' special' : ' specials') : 'Tick the ones to add');
+  function snapsDialog(d) {
+    const head = '<div class="dlg-head"><h2 id="dlgT">' + (d.form ? 'Check the specials' : 'Reading the specials') + '</h2><button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>';
+    if (d.busy) {
+      return head + '<div class="rcp-busy" role="status"><span class="spin" aria-hidden="true"></span><p><strong>' + (d.n > 1 ? 'Reading ' + d.at + ' of ' + d.n : 'Reading the screenshot') + '</strong></p>' +
+        '<p class="muted">Gemini is reading each product and its price. It takes a few seconds for each one.</p></div>';
+    }
+    const again = (t) => '<label class="btn btn-secondary file-btn">' + t + '<input type="file" accept="image/*,application/pdf" multiple data-change="snapfile" aria-label="Choose screenshots of a shop\'s specials"></label>';
+    if (d.err) {
+      return head + '<p class="err-text" role="alert">' + esc(d.err) + '</p>' + (d.why ? '<p class="hint err-why">Details: ' + esc(d.why) + '</p>' : '') + '<div class="dialog-actions">' +
+        (d.fix === 'aitoken' ? '<button class="btn btn-secondary" data-act="dlgclose">Not now</button><button class="btn btn-primary" data-act="aitoken">Set it up</button>' : again('Try other screenshots')) + '</div>';
+    }
+    const f = d.form, n = f.items.filter((x) => x.on).length, t = today();
+    const rows = f.items.map((x, i) => '<li><label class="snap-row"><input type="checkbox" data-bind="dialog.form.items.' + i + '.on" data-change="snapcount"' + (x.on ? ' checked' : '') + '>' +
+      '<span class="snap-main"><span class="snap-n">' + esc(x.n) + '</span><span class="k">' + esc([x.cat, x.promo].filter(Boolean).join(' · ')) + '</span></span>' +
+      '<span class="sp-price"><span class="sp-now">' + L.fmt(x.now) + '</span>' + (x.was > x.now ? '<s class="sp-was"><span class="sr">was </span>' + L.fmt(x.was) + '</s>' : '') + '</span></label></li>').join('');
+    const missed = d.fails ? (d.fails === 1 ? ' One file couldn\'t be read.' : ' ' + d.fails + ' files couldn\'t be read.') : '';
+    return head + '<p class="muted">Gemini found ' + f.items.length + (f.items.length === 1 ? ' special' : ' specials') + '. Untick any it got wrong.' + esc(missed) +
+      (d.skipped ? ' It read the first ' + SNAP_FILES + ' files. Add the rest after.' : '') + '</p>' +
+      '<div class="row2"><label class="field"><span>Shop</span><input class="input" id="snapShop" maxlength="40" autocomplete="off" placeholder="Coles" data-bind="dialog.form.shop" value="' + esc(f.shop) + '"></label>' +
+      '<label class="field"><span>On special till</span><input class="input" id="snapTo" type="date" min="' + t + '" max="' + L.addDays(t, 60) + '" data-bind="dialog.form.to" value="' + esc(f.to) + '"></label></div>' +
+      '<ul class="snap-list">' + rows + '</ul>' +
+      (d.error ? '<p class="err-text" role="alert">' + esc(d.error) + '</p>' : '') +
+      '<div class="dialog-actions"><button class="btn btn-primary" id="snapGo" data-act="snapsave">' + snapLabel(n) + '</button></div>';
+  }
+  /* Saved with the rest of hh/deals. The same product from the same shop replaces the one before, and finished ones go. */
+  function saveSnaps() {
+    const d = S.dialog, f = d && d.form;
+    if (!f) return;
+    const t = today(), shop = L.storeName(String(f.shop || '').trim().replace(/\s+/g, ' ').slice(0, 40)), to = String(f.to || ''), pick = f.items.filter((x) => x.on);
+    const stop = (m) => { d.error = m; render(); };
+    if (!shop) return stop('Enter the shop.');
+    if (!ISO_DAY.test(to) || to < t) return stop('Pick the last day of these specials.');
+    if (!pick.length) return stop('Tick at least one special.');
+    const key = (x) => x.s + '|' + flat(x.n), by = S.me === 'b' ? 'b' : 'a';
+    const add = pick.map((x) => ({ id: uid('s'), s: shop, n: x.n, now: x.now, was: x.was > x.now ? x.was : 0, promo: x.promo, cat: x.cat, to, by }));
+    const fresh = new Set(add.map(key));
+    saveDeals({ snaps: dealsCfg().snaps.filter((x) => x.to >= t && !fresh.has(key(x))).concat(add).slice(-SNAP_MAX) });
+    Object.assign(S, { dialog: null, spStore: shop, spAisle: 'all', spWatch: false, spQuery: '', spAll: false });
+    toast('Added ' + add.length + (add.length === 1 ? ' special' : ' specials') + ' from ' + shopLabel(shop));
+    render();
+  }
+  function snapAdd() {
+    if (!snapReady()) return '';
+    return '<div class="sp-snap"><label class="btn btn-secondary btn-block file-btn">' + icon('image') + 'Add specials from screenshots' +
+      '<input type="file" accept="image/*,application/pdf" multiple data-change="snapfile" aria-label="Choose screenshots of a shop\'s specials"></label>' +
+      '<p class="hint">For Coles fresh food, Liquorland or any shop not here: screenshot their specials page and Gemini reads in each product and price.</p></div>';
+  }
   function spRow(x, words) {
     const hit = L.watchHits(x.n, words).length > 0, w = rareWeeks(x), st = specialStart(x);
     const name = x.link ? '<a class="sp-n" href="' + esc(x.link) + '" target="_blank" rel="noopener">' + esc(x.n) + '</a>' : '<span class="sp-n">' + esc(x.n) + '</span>';
     return '<li class="sp-row' + (hit ? ' hit' : '') + (S.readOnly ? '' : ' has-add') + (x.img ? ' has-img' : '') + '">' + thumb(x, 48) + '<span class="sp-main">' + name + '<span class="k">' + esc([shopLabel(x.s), x.cat, st ? 'from ' + L.fmtDay(st) : ''].filter(Boolean).join(' · ')) + '</span>' +
-      (hit || w >= 8 ? '<span class="sp-tags">' + (hit ? '<span class="tag hit">On our list</span>' : '') + (w >= 8 ? '<span class="tag rare">' + esc(rareLabel(w)) + '</span>' : '') + '</span>' : '') + '</span>' +
+      (hit || w >= 8 || x.src === 'snap' ? '<span class="sp-tags">' + (hit ? '<span class="tag hit">On our list</span>' : '') + (w >= 8 ? '<span class="tag rare">' + esc(rareLabel(w)) + '</span>' : '') +
+        (x.src === 'snap' ? '<span class="tag snap">From a screenshot</span>' : '') + '</span>' : '') + '</span>' +
       '<span class="sp-price"><span class="sp-now">' + L.fmt(x.now) + '</span>' + (x.was > x.now ? '<s class="sp-was"><span class="sr">was </span>' + L.fmt(x.was) + '</s>' : '') +
-      (x.off ? '<span class="sp-off">' + x.off + '% off</span>' : x.src === 'hf' ? '<span class="sp-off">Special</span>' : '') + '</span>' + addBtn(x) + '</li>';
+      (x.off ? '<span class="sp-off">' + x.off + '% off</span>' : x.src === 'hf' ? '<span class="sp-off">Special</span>' : x.promo ? '<span class="sp-off">' + esc(x.promo) + '</span>' : '') + '</span>' + addBtn(x) + '</li>';
   }
   /* With no filter on, a few rarely-cheap picks and a button for the lot; otherwise the list itself. */
   function spListHtml() {
@@ -2491,15 +2658,14 @@
   }
   /* Everything on special this week, with shop and aisle filters and a search. */
   function everythingCard() {
-    const F = S.feed;
+    const F = S.feed, all = specialsNow();
     const head = (n) => '<div class="card-head"><h2>Everything on special</h2>' + (n ? '<span class="k">' + n + ' this week</span>' : '') + '</div>';
-    if (!F) {
+    if (!F && !all.length) {
       return '<section class="card bold specials" id="spCard">' + head(0) + '<p class="muted">' + esc(feedWhy()) + '</p>' +
-        (S.feedErr === 'net' || S.feedErr === 'bad' ? '<button class="link sm" data-act="feedretry">Try again</button>' : '') + '</section>';
+        (S.feedErr === 'net' || S.feedErr === 'bad' ? '<button class="link sm" data-act="feedretry">Try again</button>' : '') + snapAdd() + '</section>';
     }
-    const all = specialsNow();
     const fetching = S.dealsFetch && S.dealsFetch.length ? '<p class="hint sp-fetch" role="status">Getting the new lists from ' + esc(listNames(S.dealsFetch.map((k) => DUE_NAMES[k]))) + '. They\'ll show here in a minute or two.</p>' : '';
-    if (!all.length) return '<section class="card bold specials" id="spCard">' + head(0) + (fetching || '<p class="muted">This week\'s specials haven\'t come through yet. The new ones come in on Wednesday mornings.</p>') + '</section>';
+    if (!all.length) return '<section class="card bold specials" id="spCard">' + head(0) + (fetching || '<p class="muted">This week\'s specials haven\'t come through yet. The new ones come in on Wednesday mornings.</p>') + snapAdd() + '</section>';
     const counts = {};
     all.forEach((x) => { counts[x.s] = (counts[x.s] || 0) + 1; });
     const visits = shopVisits(), stores = Object.keys(counts).sort((a, b) => (visits[b] || 0) - (visits[a] || 0) || counts[b] - counts[a]);
@@ -2528,7 +2694,7 @@
       '<label class="sp-sort' + (S.spSort !== 'best' ? ' on' : '') + '" for="spSort">' + icon('sort') + '<span class="sr">Sort by</span>' +
         '<select id="spSort" data-change="spsortsel" aria-label="Sort by, now ' + esc(sortName(S.spSort)) + '">' + SP_SORTS.map((o) => opt(o[0], o[1], null, S.spSort === o[0])).join('') + '</select></label>' +
       '</div>' +
-      '<div id="spList">' + spListHtml() + '</div></section>';
+      '<div id="spList">' + spListHtml() + '</div>' + snapAdd() + '</section>';
   }
   /* For each word on the watch list, what matches it this week: specials first, best first, then OzBargain posts. */
   function watchByWord() {
@@ -3590,6 +3756,8 @@
       body = shopListDialog();
     } else if (d.type === 'receipt') {
       body = receiptDialog(d);
+    } else if (d.type === 'snaps') {
+      body = snapsDialog(d);
     } else if (d.type === 'aitoken') {
       body = aiTokenDialog(d);
     } else if (d.type === 'ghtoken') {
@@ -3841,6 +4009,12 @@
     },
     rcppaid: (p) => { const f = S.dialog && S.dialog.form; if (!f) return; f.payer = p === 'b' ? 'b' : 'a'; S.dialog.error = null; render(); },
     rcpsave: () => saveReceipt(),
+    snapsave: () => saveSnaps(),
+    snapdel: (id) => {
+      if (S.readOnly) return;
+      saveDeals({ snaps: dealsCfg().snaps.filter((x) => x.id !== id) });
+      S.dialog = null; toast('Taken off the specials'); render();
+    },
     spmore: () => { S.spAll = !S.spAll; render(); if (!S.spAll) { const el = document.getElementById('spList'); if (el) el.scrollIntoView({ block: 'nearest' }); } },
     ozball: () => { S.ozbAll = !S.ozbAll; render(); },
     watchadd: () => {
@@ -3995,6 +4169,9 @@
     spsortsel: (el) => { S.spSort = SP_SORTS.some((o) => o[0] === el.value) ? el.value : 'best'; S.spAll = false; render(); },
     spcatsel: (el) => { const v = el.value || 'all'; S.spWatch = v === 'watch'; S.spAisle = v === 'watch' ? 'all' : v; S.spAll = false; render(); },
     rcpfile: (el) => { const f = el.files && el.files[0]; el.value = ''; startReceipt(f); },
+    snapfile: (el) => { const f = el.files ? Array.prototype.slice.call(el.files) : []; el.value = ''; startSnaps(f); },
+    /* Ticking keeps the list where it is: only the button's count changes. */
+    snapcount: () => { const d = S.dialog, b = document.getElementById('snapGo'); if (d && d.form && b) b.textContent = snapLabel(d.form.items.filter((x) => x.on).length); },
     remember: (el) => { upsert('hh/settings', { remember: !!el.checked }, defaults()); },
     dirty: () => { S.draftSaved = false; },
     swfiles: (el) => {

@@ -702,6 +702,18 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
 .sl-main .k { font-size: 13px; }
 .sl-chk { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: -2px; font-size: 13px; color: var(--ink2); font-weight: 600; }
 .sl-chk a { display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 999px; border: 2px solid var(--input); background: var(--card); color: var(--ink); font-weight: 800; text-decoration: none; }
+/* Specials from screenshots: the button under the list, the tag on each one, and the tick list to check what Gemini read. */
+.sp-snap { margin-top: 16px; padding-top: 14px; border-top: 2px dashed var(--line); }
+.sp-snap .hint { margin-top: 8px; }
+.tag.snap { margin-top: 4px; background: var(--cobalt-soft); border-color: var(--ink2); color: var(--ink); }
+.snap-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.snap-list li { border-top: 1px dashed var(--dash); }
+.snap-list li:first-child { border-top: 0; }
+.snap-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 52px; padding: 6px 0; cursor: pointer; }
+.snap-row input { width: 24px; height: 24px; margin: 0; accent-color: var(--ink); }
+.snap-main { display: flex; flex-direction: column; min-width: 0; }
+.snap-n { font-weight: 700; overflow-wrap: anywhere; }
+.snap-row:has(input:not(:checked)) .snap-main, .snap-row:has(input:not(:checked)) .sp-price { opacity: .45; }
 .sl-row.done .sl-n { text-decoration: line-through; color: var(--ink2); font-weight: 600; }
 .sl-p { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sl-row.done .sl-p { color: var(--ink2); }

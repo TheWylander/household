@@ -294,7 +294,7 @@ try:
         rare = a.locator('.sp-rare .sp-row').all_inner_texts()
         check(len(rare) == 3 and 'Vittoria' in rare[0] and 'First time at half price' in rare[0] and 'First time in 15 weeks' in rare[1], 'Rarely this cheap: the three not half price for longest')
         aisles = ' | '.join(a.locator('#spCat option').all_inner_texts())
-        check('All categories' in aisles and 'Pantry · 19' in aisles and 'Fresh · 2' in aisles and 'Freezer · 1' in aisles, 'categories with how many in each: ' + aisles)
+        check('All categories' in aisles and 'Pantry · 18' in aisles and 'Fresh · 2' in aisles and 'Meat and seafood · 1' in aisles and 'Freezer · 1' in aisles, 'categories with how many in each, meat on its own: ' + aisles)
         check(a.locator('[data-act="spmore"]').inner_text() == 'See all 22 specials', 'a button for the lot')
         act(a, 'spmore')
         check(a.locator('#spList .sp-row').count() == 22 and 'Frozen Pork & Cabbage Dumplings' in text(a) and 'Ended Umall pick' not in text(a) and 'Umall' in a.locator('.sp-src').inner_text() and 'Meat Emporium' in a.locator('.sp-src').inner_text() and a.evaluate('window.__xss') is None and a.locator('.specials img:not(.sp-img)').count() == 0 and '<img src=x' in text(a), 'every special, and text from the deals file shows as text and never runs')

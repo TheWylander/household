@@ -162,6 +162,14 @@ try:
             act(a, 'spmore'); act(a, 'ozball'); audit(a, 'deals with a watch list and every special', width)
             act(a, 'spwatch'); audit(a, 'deals, just the watch list', width)
             act(a, 'spwatch'); a.select_option('#spCat', 'pantry'); a.wait_for_timeout(200); audit(a, 'deals, one aisle', width)
+            # specials from a screenshot: the tick list to check, then how they show in the list
+            a.evaluate("(r) => { window.__aiReply = r; window.__aiMode = 'ok'; }", {'shop': 'Liquorland', 'ends': '', 'items': [
+                {'name': 'Jacob\'s Creek Classic Chardonnay Pinot Noir Sparkling 750mL', 'price': 9.5, 'was': 14, 'deal': '2 for $18', 'category': 'Liquor'},
+                {'name': 'Coopers Pale Ale 24 x 375mL', 'price': 55, 'was': 0, 'deal': 'Member price, ends Tuesday', 'category': 'Liquor'}]})
+            a.locator('.sp-snap input[data-change="snapfile"]').set_input_files(str(ROOT / 'test' / 'photo-sample.png'))
+            a.wait_for_function("() => !document.querySelector('.dialog .spin')", timeout=10000); a.wait_for_timeout(150)
+            audit(a, 'checking specials from a screenshot', width)
+            act(a, 'snapsave'); a.wait_for_timeout(300); audit(a, 'deals with specials from a screenshot', width)
             act(a, 'go', 'home'); a.wait_for_timeout(200)
             check(a.locator('.notice').count() == 2, f'{width}px: two heads-ups on Home')
             audit(a, 'home with two heads-ups', width)

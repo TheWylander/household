@@ -1,6 +1,6 @@
 /* What the notification job sends, and to whom, without Firebase or a push service. node test/notify.test.mjs */
 import assert from 'node:assert';
-import { APP, payloadOf, plan, run, sydneyNow, awake, weekKey, weekHits, wordHits, specialsPop, weeklyPop, topPicks, spendsPop, oldKeys, webConfig, fromFs, toFs, fieldPath, toUpdate, job, runSummary } from '../src/github/notify.mjs';
+import { APP, payloadOf, plan, run, sydneyNow, awake, weekKey, weekHits, wordHits, specialsPop, weeklyPop, topPicks, withSnaps, spendsPop, oldKeys, webConfig, fromFs, toFs, fieldPath, toUpdate, job, runSummary } from '../src/github/notify.mjs';
 
 let passed = 0;
 async function t(name, fn) {
@@ -143,6 +143,32 @@ await t("Wednesday's top specials, even with nothing from the watch list", async
   assert.deepStrictEqual(plan({ push: pp, deals: { sales: [], watch: [] }, feed: week(), now: FRI_EVENING }).out, [], 'once a week');
   const later = plan({ push: pp, deals: { sales: [], watch: ['tim tam'] }, feed: week(), now: FRI_EVENING }).out;
   assert.deepStrictEqual(later.map((n) => [n.title, n.body]), [['🏷️ More top specials this week', "Arnott's Tim Tam Original · $3.00 at Coles"]], 'a new watch-list match later in the week');
+});
+
+/* Coles fresh food and Liquorland come in from our screenshots in the app, kept in hh/deals until their last day. */
+const SNAPS = [
+  { id: 's1', s: 'Coles', n: 'Coles Australian Pork Loin Chops 1kg', now: 1100, was: 1600, promo: '', cat: 'Meat & Seafood', to: '2026-11-17', by: 'a' },
+  { id: 's2', s: 'Liquorland', n: 'Coopers Pale Ale 24 x 375mL', now: 5500, was: 6500, promo: 'Save $10', cat: 'Liquor', to: '2026-11-17', by: 'b' },
+  { id: 's3', s: 'coles', n: 'Bread loaf 650g', now: 200, was: 400, cat: 'Bakery', to: '2026-11-17' },
+  { id: 's4', s: 'Coles', n: 'Kensington Pride Mangoes Each', now: 100, was: 200, cat: 'Fruit & Veg', to: '2026-11-10' },
+  { n: '', now: 100, to: '2026-11-17' }, { n: 'No price', now: 0, to: '2026-11-17' }, { n: 'No last day', now: 300 }, null];
+await t('specials from our screenshots join the lists', () => {
+  const f = withSnaps(week(), SNAPS), mine = f.specials.filter((x) => x.src === 'snap');
+  assert.deepStrictEqual(mine.map((x) => [x.s, x.n]), [['Coles', 'Coles Australian Pork Loin Chops 1kg'], ['Liquorland', 'Coopers Pale Ale 24 x 375mL'], ['Coles', 'Kensington Pride Mangoes Each']],
+    "the bread the half-price list already has is left out, and so is anything without a name, price or last day");
+  assert.strictEqual(week().specials.length + 3, f.specials.length, 'the lists themselves are untouched');
+  assert.strictEqual(withSnaps(week(), []).specials.length, week().specials.length);
+  assert.strictEqual(withSnaps(undefined, undefined), undefined, 'no screenshots, nothing changes');
+  assert.deepStrictEqual(weekHits(f, ['pork loin', 'coopers', 'mangoes'], '2026-11-13').map((h) => [h.n, h.s]), [['Coles Australian Pork Loin Chops 1kg', 'Coles'], ['Coopers Pale Ale 24 x 375mL', 'Liquorland']],
+    'they count for the watch list till their last day (the mangoes ended on Tuesday)');
+  assert.deepStrictEqual(weekHits(f, ['pork loin'], '2026-11-18'), [], 'and not after');
+  assert.ok(topPicks(f, [], '2026-11-11', 5).some((x) => x.n === 'Coles Australian Pork Loin Chops 1kg'), "and they're in the running for the week's top picks");
+  const p = plan({ push: onePhone(), deals: { sales: [], watch: ['pork loin'], snaps: SNAPS }, feed: week(), now: WED_AM });
+  assert.strictEqual(p.out[0].body.split('\n')[0], 'Coles Australian Pork Loin · $11.00 at Coles', "Wednesday's pop-up leads with the watch list's match from a screenshot");
+  const sentAlready = Object.assign(onePhone(), { sent: { 'top:2026-11-11': WED_AM.getTime(), 'sp:2026-11-11': [] } });
+  const q = plan({ push: sentAlready, deals: { sales: [], watch: ['coopers'], snaps: SNAPS }, feed: week(), now: new Date('2026-11-12T22:00:00Z') });
+  assert.deepStrictEqual(q.out.map((n) => [n.title, n.body]), [['🏷️ More top specials this week', 'Coopers Pale Ale 24 · $55.00 at Liquorland']],
+    'after the week\'s pop-up, a watch-list match added from a screenshot pops up on the next run');
 });
 
 await t("the top specials wait for the week's lists, and stop after Friday", () => {
