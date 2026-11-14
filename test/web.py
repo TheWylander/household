@@ -166,14 +166,24 @@ try:
         last = json.loads(a.evaluate("localStorage.getItem('hh.webLast')") or '{}')
         check(last.get('to') == str(WEEK_END) and last.get('n') == 55, "this browser notes it, so Thursday's catch-up run can skip")
         act(a, 'dlgclose')
-        check('Coles fresh food and Liquorland from Coles\' website, read in the browser on Robin\'s laptop' in a.locator('.sp-src').inner_text(),
-              'the sources note says where they came from')
+        check("Coles fresh food and Liquorland from Coles' website (Liquorland's 20% off or more, plus anything on our watch list), read in the browser on Robin's laptop" in a.locator('.sp-src').inner_text(),
+              'the sources note says where they came from, and which Liquorland ones show')
 
         # ---------- how they show ----------
         a.select_option('#spShop', 'Liquorland'); a.wait_for_timeout(250)
         lst = a.locator('#spList').inner_text()
-        check('Jameson Irish Whiskey 700ml' in lst and '19% off' in lst and 'Buy 2 for $118' in lst and 'Liquorland · Spirits' in lst and 'Carlton Dry Bottle 330ml 24 Pack' in lst,
-              'Liquorland shows each with its saving or deal and its own aisle')
+        check('Jameson Irish Whiskey 700ml' in lst and '19% off' in lst and 'Liquorland · Spirits' in lst and 'Heaps Normal Quiet XPA 4x375ml 1.5L' in lst and '20% off' in lst
+              and 'Carlton' not in lst and a.input_value('#spShop') == 'Liquorland' and 'Liquorland · 2' in a.locator('#spShop').evaluate('e => e.parentElement.innerText'),
+              "Liquorland shows what's 20% off or more, and Jameson at 19% because it's on our watch list, but not the Carlton deal with no saving shown")
+        a.fill('#spQ', 'carlton'); a.dispatch_event('#spQ', 'input'); a.wait_for_timeout(400)
+        lst = a.locator('#spList').inner_text()
+        check('Carlton Dry Bottle 330ml 24 Pack' in lst and 'Buy 2 for $118' in lst, 'a search still finds the ones left out of the list')
+        a.fill('#spQ', ''); a.dispatch_event('#spQ', 'input'); a.wait_for_timeout(300)
+        import re
+        ph = a.get_attribute('#spQ', 'placeholder') or ''
+        hd = a.locator('#spCard .card-head .k').inner_text()
+        nums = [int(re.sub(r'\D', '', x)) for x in (re.findall(r'[\d,]+', ph)[:1] + re.findall(r'[\d,]+', hd)[:1])]
+        check(len(nums) == 2 and nums[0] == nums[1] + 1, 'the search box counts everything it looks through, one more than the list shows (the Carlton): ' + ph + ' / ' + hd)
         a.select_option('#spShop', 'Coles'); a.wait_for_timeout(250)
         a.select_option('#spCat', 'fresh'); a.wait_for_timeout(250)
         lst = a.locator('#spList').inner_text()

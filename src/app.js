@@ -98,7 +98,7 @@
       ['bell', 'Phone notifications.', "Turn them on in Settings, under Phone notifications, and your phone pops up when the other of us adds a spend, the evening before a sale day we're keen on, with the top specials each Wednesday morning, and when something on the watch list is on special."],
       ['check', 'Not in the budget.', "When you add a spend, untick Counts towards our monthly budget for one-offs. It still splits, but leaves the month's budget alone."],
       ['duo', 'Loading screen.', 'While the app opens, it shows the other one of us rotating, cut out from their photo.'],
-      ['tag', 'Coles fresh food and Liquorland.', "Every Wednesday morning, Coles' fruit and veg, meat and seafood, and Liquorland specials come into Deals by themselves, straight from Coles' website, and the watch list sees them. Meat and seafood has its own aisle now too."],
+      ['tag', 'Coles fresh food and Liquorland.', "Every Wednesday morning, Coles' fruit and veg, meat and seafood, and Liquorland specials come into Deals by themselves, straight from Coles' website. Liquorland shows what's 20% off or more, plus anything on our watch list, and a search finds the rest. Meat and seafood has its own aisle now too."],
       ['image', 'Specials from screenshots.', 'For a shop the lists miss, like ALDI or IGA: screenshot its specials, then in Deals tap Add specials from screenshots. Gemini reads in each product and price for both of us.'],
       ['cal', 'Receipt items in the calendar.', "A receipt's items now always show under the spend, even when they don't add up to the total to the cent: anything they don't cover, like a surcharge or bags, gets its own line, and savings at the end come off them."]
     ] }
@@ -2427,10 +2427,22 @@
     for (let i = 0; i < AISLES.length; i++) if (AISLES[i][2] && AISLES[i][2].test(x.cat || '')) return AISLES[i][0];
     return 'other';
   }
+  /* Liquorland has a thousand or so things on special on Coles' website most weeks, mostly small cuts and "any 2 for"
+     wine deals, so the list shows its ones 20% off or more, plus anything on our watch list. The rest still count for
+     the watch list (a word added mid-week finds them) and a search still finds them. */
+  const LIQ_MIN_OFF = 20;
+  let shownMemo = { list: null, watch: '', out: [] };
+  function specialsShown() {
+    const all = specialsNow(), watch = dealsCfg().watch;
+    if (shownMemo.list === all && shownMemo.watch === watch.join('|')) return shownMemo.out;
+    const out = all.filter((x) => !(x.src === 'web' && x.s === 'Liquorland' && (x.off || 0) < LIQ_MIN_OFF && !L.watchHits(x.n, watch).length));
+    shownMemo = { list: all, watch: watch.join('|'), out };
+    return out;
+  }
   /* Specials after the shop, watch-list and search filters, before the aisle one. */
   function spBase() {
     const D = dealsCfg(), q = String(S.spQuery || '').trim().toLowerCase();
-    let list = specialsNow();
+    let list = q ? specialsNow() : specialsShown();
     if (S.spStore !== 'all') list = list.filter((x) => x.s === S.spStore);
     if (S.spWatch) list = list.filter((x) => L.watchHits(x.n, D.watch).length);
     if (q) list = list.filter((x) => (x.n + ' ' + x.cat).toLowerCase().indexOf(q) >= 0);
@@ -2747,7 +2759,7 @@
     if (d.err) return head + '<p class="err-text" role="alert" id="webDone" data-ok="0">' + esc(d.err) + '</p><div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">OK</button></div>';
     const parts = Object.keys(d.per).map((k) => d.per[k] + ' ' + (WEB_NAMES[k] || 'other Coles'));
     return head + '<p id="webDone" data-ok="1" data-n="' + d.n + '" role="status">Saved ' + d.n + ' specials for both phones: ' + esc(listNames(parts)) + '. On special till ' + esc(L.fmtDay(d.to)) + '.</p>' +
-      '<p class="hint">Read from Coles\' website. Anything on our watch list pops up as usual.</p>' +
+      '<p class="hint">Read from Coles\' website. Deals shows Liquorland\'s ' + LIQ_MIN_OFF + '% off or more, plus anything on our watch list, which pops up as usual. A search finds the rest.</p>' +
       '<div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">See them</button></div>';
   }
   function snapAdd() {
@@ -2794,7 +2806,7 @@
   }
   /* Everything on special this week, with shop and aisle filters and a search. */
   function everythingCard() {
-    const F = S.feed, all = specialsNow();
+    const F = S.feed, every = specialsNow(), all = specialsShown(), q0 = String(S.spQuery || '').trim();
     const head = (n) => '<div class="card-head"><h2>Everything on special</h2>' + (n ? '<span class="k">' + n + ' this week</span>' : '') + '</div>';
     if (!F && !all.length) {
       return '<section class="card bold specials" id="spCard">' + head(0) + '<p class="muted">' + esc(feedWhy()) + '</p>' +
@@ -2803,13 +2815,13 @@
     const fetching = S.dealsFetch && S.dealsFetch.length ? '<p class="hint sp-fetch" role="status">Getting the new lists from ' + esc(listNames(S.dealsFetch.map((k) => DUE_NAMES[k]))) + '. They\'ll show here in a minute or two.</p>' : '';
     if (!all.length) return '<section class="card bold specials" id="spCard">' + head(0) + (fetching || '<p class="muted">This week\'s specials haven\'t come through yet. The new ones come in on Wednesday mornings.</p>') + snapAdd() + '</section>';
     const counts = {};
-    all.forEach((x) => { counts[x.s] = (counts[x.s] || 0) + 1; });
+    (q0 ? every : all).forEach((x) => { counts[x.s] = (counts[x.s] || 0) + 1; });
     const visits = shopVisits(), stores = Object.keys(counts).sort((a, b) => (visits[b] || 0) - (visits[a] || 0) || counts[b] - counts[a]);
     if (S.spStore !== 'all' && !counts[S.spStore]) S.spStore = 'all';
     /* Search, then two drop-downs, the shop and the category (with our watch list as one of them), and the sort button.
        Unfiltered, each shows its name, which fits beside the sort button on a phone. */
     const D = dealsCfg(), q = String(S.spQuery || '').trim().toLowerCase();
-    const pre = all.filter((x) => (S.spStore === 'all' || x.s === S.spStore) && (!q || (x.n + ' ' + x.cat).toLowerCase().indexOf(q) >= 0)), ac = {};
+    const pre = (q ? every : all).filter((x) => (S.spStore === 'all' || x.s === S.spStore) && (!q || (x.n + ' ' + x.cat).toLowerCase().indexOf(q) >= 0)), ac = {};
     pre.forEach((x) => { const a = aisleOf(x); ac[a] = (ac[a] || 0) + 1; });
     const wn = D.watch.length ? pre.filter((x) => L.watchHits(x.n, D.watch).length).length : 0;
     if (S.spAisle !== 'all' && !ac[S.spAisle]) S.spAisle = 'all';
@@ -2821,7 +2833,7 @@
       '<select id="' + id + '" data-change="' + act + '" aria-label="' + esc(name) + '">' + options + '</select></label>';
     const cat = S.spWatch ? 'watch' : S.spAisle;
     return '<section class="card bold specials" id="spCard">' + head(all.length) + fetching +
-      '<label class="sr" for="spQ">Search specials</label><input class="input sp-search" id="spQ" type="search" placeholder="Search ' + all.length + (all.length === 1 ? ' special' : ' specials') + '" autocomplete="off" enterkeyhint="search" data-bind="spQuery" data-input="spsearch" value="' + esc(S.spQuery) + '">' +
+      '<label class="sr" for="spQ">Search specials</label><input class="input sp-search" id="spQ" type="search" placeholder="Search ' + every.length + (every.length === 1 ? ' special' : ' specials') + '" autocomplete="off" enterkeyhint="search" data-bind="spQuery" data-input="spsearch" value="' + esc(S.spQuery) + '">' +
       '<div class="sp-filters">' +
       pick('spShop', 'spshopsel', 'Shop', S.spStore === 'all' ? 'Shops' : shopLabel(S.spStore) + ' · ' + counts[S.spStore],
         opt('all', 'All shops', null, S.spStore === 'all') + stores.map((x) => opt(x, shopLabel(x), counts[x], S.spStore === x)).join('')) +
@@ -2889,7 +2901,8 @@
     if (F.sources.umall.ok || F.sources.umall.stale) srcs.push('Umall, Sydney\'s online Asian supermarket, from its half-price and weekly specials (delivery only)');
     if (F.sources.meat.ok || F.sources.meat.stale) srcs.push('Meat Emporium, Sydney\'s big meat market, from what its online shop has marked down');
     const W = webInfo();
-    if (W) srcs.push('Coles fresh food and Liquorland from Coles\' website, read in the browser on ' + esc(poss(nm(W.by))) + ' laptop ' + esc(agoLabel(W.at)));
+    if (W) srcs.push('Coles fresh food and Liquorland from Coles\' website (Liquorland\'s ' + LIQ_MIN_OFF + '% off or more, plus anything on our watch list), read in the browser on ' +
+      esc(poss(nm(W.by))) + ' laptop ' + esc(agoLabel(W.at)));
     return srcs.length ? '<p class="hint sp-src">' + srcs.join('. ') + '. Updated ' + esc(agoLabel(F.updated)) + '. Prices can differ by store.</p>' : '';
   }
   /* OzBargain deals at our shops or on the watch list, most votes first. */
