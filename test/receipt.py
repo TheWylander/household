@@ -167,6 +167,32 @@ try:
         a.locator('.dialog [data-act="dlgclose"]').first.click(); a.wait_for_timeout(200)
         check(len(entries(a)) == 2, 'and nothing is saved until you say so')
 
+        # ---------- items that don't add up to the total still go with the spend ----------
+        act(a, 'go', 'settings'); act(a, 'go', 'upload')
+        snap(a, reply={'shop': 'Coles Macquarie Park', 'date': str(TODAY), 'total': 30.95, 'category': 'Other', 'items': [
+            {'name': 'Bread 650g', 'price': 4}, {'name': 'Eggs 12 Pack', 'price': 7.5}, {'name': 'Chicken Breast 1kg', 'price': 12}, {'name': 'Apples 1kg', 'price': 5.9}]})
+        gap = a.locator('#rcpSum').inner_text()
+        check('add up to $29.40' in gap and 'other $1.55' in gap and 'one more line' in gap, 'it says when the items come to less than the total, and where the rest goes: ' + gap.replace('\n', ' | '))
+        act(a, 'rcpsave'); a.wait_for_timeout(500)
+        c = [e for e in entries(a) if e['title'] == 'Coles Macquarie Park']
+        check(len(c) == 1 and c[0]['amount'] == 3095 and c[0]['items'] == [400, 750, 1200, 590, 155]
+              and c[0]['notes'] == ['Bread 650g', 'Eggs 12 Pack', 'Chicken Breast 1kg', 'Apples 1kg', 'Other on the receipt'],
+              "the items go with the spend, plus one line for what they didn't cover: " + json.dumps(c[0] if c else None)[:200])
+        snap(a, reply={'shop': 'Woolworths Ryde', 'date': str(TODAY), 'total': 20, 'category': 'Other', 'items': [
+            {'name': 'Tim Tam 200g', 'price': 6}, {'name': 'Coffee 200g', 'price': 12}, {'name': 'Milk 2L', 'price': 4}]})
+        gap = a.locator('#rcpSum').inner_text()
+        check('add up to $22.00' in gap and '$2.00 saved comes off them' in gap, 'and when savings printed at the end make them come to more')
+        act(a, 'rcpsave'); a.wait_for_timeout(500)
+        w = [e for e in entries(a) if e['title'] == 'Woolworths Ryde']
+        check(len(w) == 1 and w[0]['amount'] == 2000 and w[0]['items'] == [546, 1091, 363] and w[0]['notes'] == ['Tim Tam 200g', 'Coffee 200g', 'Milk 2L'],
+              'the saving comes off each item in proportion, so they still add up to what was paid: ' + json.dumps(w[0]['items'] if w else None))
+        act(a, 'go', 'cal'); act(a, 'selday', str(TODAY)); a.wait_for_timeout(300)
+        day = a.locator('#dayCard').inner_text() if a.locator('#dayCard').count() else ''
+        check('Chicken Breast 1kg' in day and 'Other on the receipt' in day and 'Tim Tam 200g' in day and '$10.91' in day,
+              'the calendar shows what was bought on the day: ' + day.replace('\n', ' | ')[:160])
+        a.locator('#dayCard').screenshot(path=str(SHOTS / 'p44-receipt-day.png'))
+        act(a, 'go', 'home')
+
         # ---------- with App Check's key in the config ----------
         b = ctx.new_page()
         b.on('pageerror', lambda e: problems.append(f'pageerror {e}'))
