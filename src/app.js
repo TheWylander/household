@@ -2353,15 +2353,15 @@
     return list;
   }
   /* The same thing named two ways, like the half-price list's "Chicken Garlic Kyiv – From the Deli" and Woolworths'
-     own "Woolworths Chicken Garlic Kyiv From The Deli each": at the same shop and price, most of the shorter name's words. */
+     own "Woolworths Chicken Garlic Kyiv From The Deli each": at the same shop and price, every word of the shorter name
+     is in the longer one. Two flavours at one price ("Shiraz", "Merlot") stay two things. */
   const NAME_SKIP = /^(woolworths|coles|each|from|the|and|or|of|with|per)$/;
   const nameWords = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ').filter((w) => w.length > 1 && !NAME_SKIP.test(w));
   function sameThing(a, b) {
-    const A = new Set(nameWords(a)), B = new Set(nameWords(b));
-    if (!A.size || !B.size) return false;
-    let hit = 0;
-    B.forEach((w) => { if (A.has(w)) hit++; });
-    return hit / Math.min(A.size, B.size) >= 0.75;
+    const A = new Set(nameWords(a)), B = new Set(nameWords(b)), small = A.size <= B.size ? A : B, big = small === A ? B : A;
+    if (small.size < 2) return false;
+    for (const w of small) if (!big.has(w)) return false;
+    return true;
   }
   /* Specials whose week hasn't ended, then ours from screenshots and from the shops' websites, leaving out any already there.
      Worked out once for each change to the lists, so the many places that ask stay quick with a thousand or more. */
@@ -2377,13 +2377,15 @@
       const priceKey = (x) => x.s + '|' + x.now + '|' + (x.was || 0);
       const note = (x) => { const k = priceKey(x); (byPrice[k] = byPrice[k] || []).push(x.n); };
       list.forEach(note);
-      const fresh = (x) => {
+      /* A website's own lines are each a different product, so they're only checked against the lists and screenshots. */
+      const fresh = (mark) => (x) => {
         const k = x.s + '|' + flat(x.n);
         if (have.has(k) || (byPrice[priceKey(x)] || []).some((n) => sameThing(n, x.n))) return false;
-        have.add(k); note(x);
+        have.add(k);
+        if (mark) note(x);
         return true;
       };
-      list = list.concat(snaps.filter(fresh), web.filter(fresh));
+      list = list.concat(snaps.filter(fresh(true)), web.filter(fresh(false)));
     }
     spMemo = { feed: F, doc: S.dealsDoc, day: t, list };
     return list;

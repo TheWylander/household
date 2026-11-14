@@ -214,8 +214,9 @@ await t("Woolies fresh food from Woolworths' website joins too, each shop with i
   assert.deepStrictEqual(withWeb(week(), noWoolies).specials.filter((x) => x.src === 'web').map((x) => x.s), ['Coles', 'Coles'], 'a shop without a week of its own is left out');
   assert.deepStrictEqual(withWeb(week(), Object.assign({}, WEB, { items: WEB.items.concat([['Woolworths', 'Hass Avocado', 290, 0, '', 'Fruit & Veg', '', ''].join('\t')]) }))
     .specials.filter((x) => x.src === 'web').map((x) => x.s), ['Coles', 'Coles', 'Liquorland'], "before Woolies, the one week covered Coles and Liquorland only");
-  assert.ok(sameThing('Just Caught Raw Prawns Medium or Large 500g – From the Seafood Freezer', 'Just Caught Raw Prawns Large 500g') && !sameThing('Woolworths Beef Mince 500g', 'Woolworths Lamb Mince 500g'),
-    'the same thing named two ways, but not two different things');
+  assert.ok(sameThing('Just Caught Raw Prawns Medium or Large 500g – From the Seafood Freezer', 'Just Caught Raw Prawns Large 500g') && !sameThing('Woolworths Beef Mince 500g', 'Woolworths Lamb Mince 500g')
+    && !sameThing("Jacob's Creek Shiraz 750ml", "Jacob's Creek Merlot 750ml") && !sameThing('Coles Chicken Breast Fillets 500g', 'Coles Chicken Thigh Fillets 500g') && !sameThing('Hass Avocado', 'Avocado'),
+    'the same thing named two ways, but not two flavours or cuts at one price, nor a one-word name');
 });
 
 await t("the top specials wait for the week's lists, and stop after Friday", () => {

@@ -74,15 +74,15 @@ export function withWeb(feed, web) {
   return list.length ? Object.assign({}, f, { specials: old.concat(list) }) : feed;
 }
 /* The same thing named two ways at the same shop and price, like the half-price list's "Chicken Garlic Kyiv – From the
-   Deli" and Woolworths' "Woolworths Chicken Garlic Kyiv From The Deli each": most of the shorter name's words (as in the app). */
+   Deli" and Woolworths' "Woolworths Chicken Garlic Kyiv From The Deli each": every word of the shorter name is in the
+   longer one (as in the app). Two flavours at one price stay two things. */
 const NAME_SKIP = /^(woolworths|coles|each|from|the|and|or|of|with|per)$/;
 const nameWords = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ').filter((w) => w.length > 1 && !NAME_SKIP.test(w));
 export function sameThing(a, b) {
-  const A = new Set(nameWords(a)), B = new Set(nameWords(b));
-  if (!A.size || !B.size) return false;
-  let hit = 0;
-  B.forEach((w) => { if (A.has(w)) hit++; });
-  return hit / Math.min(A.size, B.size) >= 0.75;
+  const A = new Set(nameWords(a)), B = new Set(nameWords(b)), small = A.size <= B.size ? A : B, big = small === A ? B : A;
+  if (small.size < 2) return false;
+  for (const w of small) if (!big.has(w)) return false;
+  return true;
 }
 /* This week's specials and OzBargain deals that match the watch list. A deal matches on its shop too. */
 export function weekHits(feed, watch, day) {

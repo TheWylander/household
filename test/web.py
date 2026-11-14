@@ -80,7 +80,9 @@ WW_MEAT = [[ww_product(769243, 'Woolworths Chicken Garlic Kyiv From The Deli', '
             ww_product(700001, 'Woolworths Lamb Leg Roast', '750g - 1.7kg', 25.5, 30.6, cup=15, cupm='1KG', minw=11.25, maxw=25.5, cats=('Lamb',)),
             ww_product(700002, 'Woolworths Vittoria Espresso Coffee Beans', '1kg', 20, 40, cats=('Coffee',))],
            [ww_product(700001, 'Woolworths Lamb Leg Roast', '750g - 1.7kg', 25.5, 30.6, cup=15, cupm='1KG', minw=11.25, maxw=25.5, cats=('Lamb',)),
-            ww_product(700003, 'Woolworths BBQ Beef Steaks With Black Pepper', '300g', 8, multi=(2, 15), cats=('Beef & Veal',))]]
+            ww_product(700003, 'Woolworths BBQ Beef Steaks With Black Pepper', '300g', 8, multi=(2, 15), cats=('Beef & Veal',)),
+            ww_product(700004, 'Woolworths Chicken Breast Fillets', '500g', 8, 10, cats=('Chicken',)),
+            ww_product(700005, 'Woolworths Chicken Thigh Fillets', '500g', 8, 10, cats=('Chicken',))]]
 
 
 def ww_site(route):
@@ -273,7 +275,7 @@ try:
         t0 = time.time()
         r = a.evaluate(WREADER)
         took = time.time() - t0
-        check(r.get('ok') and r.get('counts') == {'Fruit & Veg': 2, 'Meat & Seafood': 4} and r.get('store') == 1101,
+        check(r.get('ok') and r.get('counts') == {'Fruit & Veg': 2, 'Meat & Seafood': 6} and r.get('store') == 1101,
               'it reads fruit and veg and both pages of meat, skipping one with no deal and one it already has: ' + json.dumps(r.get('counts')))
         check([x[:2] for x in state['ww']] == [('1-E5BEE36E_SPECIALS', 1), ('1_D5A2236_SPECIALS', 1), ('1_D5A2236_SPECIALS', 2)]
               and state['ww'][2][2] == '/shop/browse/poultry-meat-seafood/poultry-meat-seafood-specials?pageNumber=2' and took >= 0.8,
@@ -286,16 +288,16 @@ try:
               'name, price, usual price, deal, aisle and link; a multi-buy as its deal, loose mushrooms at their price per kilo: ' + json.dumps(sample)[:300])
         a.wait_for_url(BASE + '*', timeout=8000); a.wait_for_timeout(1500)
         dlg = a.locator('.dialog').inner_text() if a.locator('.dialog').count() else ''
-        check('Saved 6 specials for both phones: 2 Woolies fruit and veg and 4 Woolies meat and seafood' in dlg and "Read from Woolworths' website. Coles' specials stay as they were" in dlg,
+        check('Saved 8 specials for both phones: 2 Woolies fruit and veg and 6 Woolies meat and seafood' in dlg and "Read from Woolworths' website. Coles' specials stay as they were" in dlg,
               'the app saves them and says Coles\' stay: ' + dlg.replace('\n', ' | ')[:220])
         web = (a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals']").get('web') or {})
         lines, shops = web.get('items') or [], web.get('shops') or {}
-        check(len(lines) == 9 and sum(x.startswith('Coles\t') for x in lines) == 2 and sum(x.startswith('Liquorland\t') for x in lines) == 1
-              and sorted(shops) == ['Coles', 'Liquorland', 'Woolworths'] and shops['Woolworths'].get('n') == 6 and shops['Woolworths'].get('to') == str(WEEK_END)
+        check(len(lines) == 11 and sum(x.startswith('Coles\t') for x in lines) == 2 and sum(x.startswith('Liquorland\t') for x in lines) == 1
+              and sorted(shops) == ['Coles', 'Liquorland', 'Woolworths'] and shops['Woolworths'].get('n') == 8 and shops['Woolworths'].get('to') == str(WEEK_END)
               and shops['Coles'].get('to') == str(WEEK_END) and web.get('to') == str(WEEK_END),
               "Coles' and Liquorland's stay as they were, and each shop keeps its own week: " + json.dumps(shops)[:260])
         last = json.loads(a.evaluate("localStorage.getItem('hh.webLast')") or '{}')
-        check(sorted((last.get('shops') or {}).keys()) == ['Coles', 'Liquorland', 'Woolworths'] and last['shops']['Woolworths'].get('n') == 6 and last['shops']['Coles'].get('to') == str(WEEK_END),
+        check(sorted((last.get('shops') or {}).keys()) == ['Coles', 'Liquorland', 'Woolworths'] and last['shops']['Woolworths'].get('n') == 8 and last['shops']['Coles'].get('to') == str(WEEK_END),
               "this browser notes each shop's last read, so Thursday's catch-up skips just the ones that went in")
         act(a, 'dlgclose')
         src = a.locator('.sp-src').inner_text()
@@ -305,7 +307,8 @@ try:
         a.select_option('#spCat', 'meat'); a.wait_for_timeout(250)
         lst = a.locator('#spList').inner_text()
         check('Woolworths Lamb Leg Roast per kg' in lst and '$15.00' in lst and '17% off' in lst and 'Woolworths Chicken Garlic Kyiv From The Deli' in lst and '2 for $15' in lst
-              and 'Woolies · Lamb' in lst, 'Woolies meat shows under Meat and seafood, a roast at its price per kilo: ' + lst.replace('\n', ' | ')[:240])
+              and 'Woolies · Lamb' in lst and 'Woolworths Chicken Breast Fillets 500g' in lst and 'Woolworths Chicken Thigh Fillets 500g' in lst,
+              'Woolies meat shows under Meat and seafood, a roast at its price per kilo, and two cuts at one price are two things: ' + lst.replace('\n', ' | ')[:240])
         act(a, 'spitem', 'web|Woolworths|Woolworths Lamb Leg Roast per kg')
         href = a.locator('.dialog a.link').first.get_attribute('href') if a.locator('.dialog a.link').count() else ''
         check(href == 'https://www.woolworths.com.au/shop/productdetails/700001/woolworths-lamb-leg-roast', "tapping one links to it on Woolworths' website: " + str(href))
@@ -324,7 +327,7 @@ try:
         r = a.evaluate(READER)
         a.wait_for_url(BASE + '*', timeout=8000); a.wait_for_timeout(1500)
         lines = (a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/deals']").get('web') or {}).get('items') or []
-        check(r.get('ok') and len(lines) == 9 and sum(x.startswith('Woolworths\t') for x in lines) == 6 and 'Saved 3 specials' in a.locator('.dialog').inner_text(),
+        check(r.get('ok') and len(lines) == 11 and sum(x.startswith('Woolworths\t') for x in lines) == 8 and 'Saved 3 specials' in a.locator('.dialog').inner_text(),
               "a Coles read replaces Coles' and Liquorland's and leaves Woolies' as they are")
         act(a, 'dlgclose')
 
