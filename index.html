@@ -1524,7 +1524,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       ['check', 'Not in the budget.', "When you add a spend, untick Counts towards our monthly budget for one-offs. It still splits, but leaves the month's budget alone."],
       ['duo', 'Loading screen.', 'While the app opens, it shows the other one of us rotating, cut out from their photo.'],
       ['tag', 'Coles fresh food and Liquorland.', "Every Wednesday morning, Coles' fruit and veg, meat and seafood, and Liquorland specials come into Deals by themselves, straight from Coles' website, and the watch list sees them. Meat and seafood has its own aisle now too."],
-      ['image', 'Specials from screenshots.', 'For a shop the lists miss, like ALDI or IGA: screenshot its specials, then in Deals tap Add specials from screenshots. Gemini reads in each product and price for both of us.']
+      ['image', 'Specials from screenshots.', 'For a shop the lists miss, like ALDI or IGA: screenshot its specials, then in Deals tap Add specials from screenshots. Gemini reads in each product and price for both of us.'],
+      ['cal', 'Receipt items in the calendar.', "A receipt's items now always show under the spend, even when they don't add up to the total to the cent: anything they don't cover, like a surcharge or bags, gets its own line, and savings at the end come off them."]
     ] }
   ];
 
@@ -2895,6 +2896,28 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       render();
     });
   }
+  /* A receipt's lines go with the spend, so the day in the calendar shows what was bought. A spend's lines have to add
+     up to it (editing it adds them up again), but a receipt's rarely do to the cent: a card surcharge, bags or rounding
+     the items don't cover become one more line, and savings printed at the end (a multi-buy, a voucher) come off the
+     items in proportion. More than 50 lines and the last ones share a line. One line on its own isn't kept as a list. */
+  const RCP_REST = 'Other on the receipt';
+  function receiptLines(list, amount) {
+    let lines = list.filter((x) => x.c > 0).map((x) => ({ c: x.c, name: x.name }));
+    const sum = lines.reduce((a, x) => a + x.c, 0);
+    if (!lines.length || amount <= 0) return null;
+    if (sum < amount) lines.push({ c: amount - sum, name: RCP_REST });
+    else if (sum > amount) {
+      lines = lines.map((x) => ({ c: Math.floor(x.c * amount / sum), name: x.name }));
+      const order = lines.map((x, i) => i).sort((i, j) => lines[j].c - lines[i].c);
+      for (let left = amount - lines.reduce((a, x) => a + x.c, 0), k = 0; left > 0; left--, k = (k + 1) % order.length) lines[order[k]].c++;
+      lines = lines.filter((x) => x.c > 0);
+    }
+    if (lines.length > 50) {
+      const rest = lines.slice(49);
+      lines = lines.slice(0, 49).concat([{ c: rest.reduce((a, x) => a + x.c, 0), name: rest.length + ' more items' }]);
+    }
+    return lines.length > 1 && lines.reduce((a, x) => a + x.c, 0) === amount ? lines : null;
+  }
   function receiptSums(f) {
     const total = Math.round(parseFloat(String(f.total || '').replace(/[^0-9.]/g, '')) * 100) || 0, payer = f.payer, other = payer === 'a' ? 'b' : 'a';
     const sum = (who) => f.items.filter((x) => x.who === who).reduce((a, x) => a + x.c, 0);
@@ -2910,7 +2933,12 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     if (s.theirs) parts.push('Just ' + nm(s.other) + ' ' + L.fmt(s.theirs));
     if (s.mine) parts.push('Just ' + nm(s.payer) + ' ' + L.fmt(s.mine) + ', left out');
     const owes = (s.shared ? L.splitOwed(s.shared, C.splitA, 'r')[s.other] : 0) + s.theirs;
-    return '<p class="rcp-sum-t">' + esc(parts.join(' · ')) + '</p>' + (owes ? '<p class="muted">So ' + esc(nm(s.other)) + ' owes ' + esc(nm(s.payer)) + ' ' + L.fmt(owes) + ' for this one</p>' : '');
+    /* Saying up front what happens when the items and the total don't match, so the list on the day isn't a surprise. */
+    const items = f.items.reduce((a, x) => a + x.c, 0), gap = s.total - items;
+    const note = !f.items.length || !gap ? '' : gap > 0 ? 'The items add up to ' + L.fmt(items) + ', so the other ' + L.fmt(gap) + ' (a surcharge, bags or rounding) goes on as one more line.'
+      : 'The items add up to ' + L.fmt(items) + ', so the ' + L.fmt(-gap) + ' saved comes off them in proportion.';
+    return '<p class="rcp-sum-t">' + esc(parts.join(' · ')) + '</p>' + (owes ? '<p class="muted">So ' + esc(nm(s.other)) + ' owes ' + esc(nm(s.payer)) + ' ' + L.fmt(owes) + ' for this one</p>' : '') +
+      (note ? '<p class="hint rcp-gap">' + esc(note) + '</p>' : '');
   }
   const RECEIPT_SLIP = '<svg class="rcp-slip" viewBox="0 0 62 84" aria-hidden="true"><path d="M4 2h54v76l-6.75-4-6.75 4-6.75-4-6.75 4-6.75-4-6.75 4-6.75-4L4 78z" fill="#fff" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>' +
     '<path d="M12 14h30M12 24h38M12 32h24M12 40h34M12 48h20M12 60h38" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity=".35"/></svg>';
@@ -2954,9 +2982,9 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     if (s.shared < 0) return stop('The things marked as one person\'s add up to more than the total.');
     if (s.shared <= 0 && s.theirs <= 0) return stop('Everything here is just ' + poss(nm(s.payer)) + ', so there\'s nothing to share.');
     const made = [], mk = (amount, list, title, splitA) => {
-      const fits = list.length > 1 && list.reduce((a, x) => a + x.c, 0) === amount;
-      made.push(makeEntry({ id: uid('m'), kind: 'expense', source: 'manual', status: 'shared', date: f.date, title, amount, items: fits ? list.map((x) => x.c) : null,
-        notes: fits ? list.map((x) => x.name) : null, payer: s.payer, onCard: !!f.onCard, offBudget: f.budget === false, splitA, category: f.category || 'Other' }));
+      const lines = receiptLines(list, amount);
+      made.push(makeEntry({ id: uid('m'), kind: 'expense', source: 'manual', status: 'shared', date: f.date, title, amount, items: lines ? lines.map((x) => x.c) : null,
+        notes: lines ? lines.map((x) => x.name) : null, payer: s.payer, onCard: !!f.onCard, offBudget: f.budget === false, splitA, category: f.category || 'Other' }));
     };
     if (s.shared > 0) mk(s.shared, f.items.filter((x) => x.who === 'shared'), shop, C.splitA);
     if (s.theirs > 0) mk(s.theirs, f.items.filter((x) => x.who === s.other), (shop + ', just ' + nm(s.other)).slice(0, 80), s.other === 'a' ? 100 : 0);
