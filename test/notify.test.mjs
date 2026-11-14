@@ -1,6 +1,6 @@
 /* What the notification job sends, and to whom, without Firebase or a push service. node test/notify.test.mjs */
 import assert from 'node:assert';
-import { APP, payloadOf, plan, run, sydneyNow, awake, weekKey, weekHits, wordHits, specialsPop, weeklyPop, topPicks, withSnaps, withWeb, spendsPop, oldKeys, webConfig, fromFs, toFs, fieldPath, toUpdate, job, runSummary } from '../src/github/notify.mjs';
+import { APP, payloadOf, plan, run, sydneyNow, awake, weekKey, weekHits, wordHits, specialsPop, weeklyPop, topPicks, withSnaps, withWeb, sameThing, spendsPop, oldKeys, webConfig, fromFs, toFs, fieldPath, toUpdate, job, runSummary } from '../src/github/notify.mjs';
 
 let passed = 0;
 async function t(name, fn) {
@@ -193,6 +193,29 @@ await t("specials from Coles' website join the lists", () => {
     'a watch-list match read from the website pops up on the next run');
   const both = withWeb(withSnaps(week(), [{ s: 'Liquorland', n: 'Jameson Irish Whiskey 700ml', now: 5000, to: '2026-11-17' }]), WEB);
   assert.strictEqual(both.specials.filter((x) => /Jameson/.test(x.n)).length, 1, 'one we added from a screenshot is not doubled up by the website');
+});
+
+await t("Woolies fresh food from Woolworths' website joins too, each shop with its own week", () => {
+  const feed = week();
+  feed.specials.push({ s: 'Woolworths', n: 'Chicken Garlic Kyiv – From the Deli', now: 150, was: 300, off: 50, src: 'hp', cat: 'Poultry, Meat & Seafood', last: '' });
+  const web = { at: '2026-11-14T07:30:00Z', by: 'a', to: '2026-11-17', items: WEB.items.slice(0, 3).concat([
+    ['Woolworths', 'Woolworths Chicken Garlic Kyiv From The Deli each', 150, 300, '', 'Meat & Seafood', 'Chicken', '/shop/productdetails/769243/woolworths-chicken-garlic-kyiv-from-the-deli'].join('\t'),
+    ['Woolworths', 'Hans Middle Bacon Rashers From the Deli per kg', 1300, 1900, '', 'Meat & Seafood', 'Deli Meats', ''].join('\t'),
+    ['Woolworths', 'Hass Avocado', 290, 0, '2 for $5', 'Fruit & Veg', 'Fruit', ''].join('\t')]),
+  shops: { Coles: { at: '2026-11-11T22:47:00Z', by: 'a', to: '2026-11-17', n: 2 }, Liquorland: { at: '2026-11-11T22:47:00Z', by: 'a', to: '2026-11-17', n: 1 },
+    Woolworths: { at: '2026-11-14T07:30:00Z', by: 'a', to: '2026-11-24', n: 3 } } };
+  const mine = withWeb(feed, web).specials.filter((x) => x.src === 'web');
+  assert.deepStrictEqual(mine.map((x) => [x.s, x.n, x.to]), [['Coles', 'Coles Australian Pork Loin Chops 1kg', '2026-11-17'], ['Coles', 'Coles Medium Calypso Mangoes', '2026-11-17'],
+    ['Liquorland', 'Jameson Irish Whiskey 700ml', '2026-11-17'], ['Woolworths', 'Hans Middle Bacon Rashers From the Deli per kg', '2026-11-24'], ['Woolworths', 'Hass Avocado', '2026-11-24']],
+    "each shop's own last day, and the Kyiv already on the half-price list (named differently, same price) is left out");
+  assert.deepStrictEqual(weekHits(withWeb(feed, web), ['bacon', 'avocado'], '2026-11-20').map((h) => h.n), ['Hans Middle Bacon Rashers From the Deli per kg', 'Hass Avocado'],
+    "Woolies' run on after Coles' week ends");
+  const noWoolies = Object.assign({}, web, { shops: { Coles: web.shops.Coles } });
+  assert.deepStrictEqual(withWeb(week(), noWoolies).specials.filter((x) => x.src === 'web').map((x) => x.s), ['Coles', 'Coles'], 'a shop without a week of its own is left out');
+  assert.deepStrictEqual(withWeb(week(), Object.assign({}, WEB, { items: WEB.items.concat([['Woolworths', 'Hass Avocado', 290, 0, '', 'Fruit & Veg', '', ''].join('\t')]) }))
+    .specials.filter((x) => x.src === 'web').map((x) => x.s), ['Coles', 'Coles', 'Liquorland'], "before Woolies, the one week covered Coles and Liquorland only");
+  assert.ok(sameThing('Just Caught Raw Prawns Medium or Large 500g – From the Seafood Freezer', 'Just Caught Raw Prawns Large 500g') && !sameThing('Woolworths Beef Mince 500g', 'Woolworths Lamb Mince 500g'),
+    'the same thing named two ways, but not two different things');
 });
 
 await t("the top specials wait for the week's lists, and stop after Friday", () => {
