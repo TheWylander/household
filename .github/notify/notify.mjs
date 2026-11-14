@@ -55,17 +55,34 @@ export function withSnaps(feed, snaps) {
     .filter((x) => !have.has(x.s + '|' + flat(x.n)));
   return list.length ? Object.assign({}, f, { specials: (Array.isArray(f.specials) ? f.specials : []).concat(list) }) : feed;
 }
-/* Coles fresh food and Liquorland, read each week from Coles' website in the browser on the laptop, kept in hh/deals as
-   one tab-separated line each: shop, name, price and usual price in cents, deal words, aisle, finer aisle, link. */
+/* Coles fresh food and Liquorland from Coles' website, and Woolies fresh food from Woolworths', read each week in the
+   browser on the laptop, kept in hh/deals as one tab-separated line each: shop, name, price and usual price in cents,
+   deal words, aisle, finer aisle, link. Each shop has its own last day in web.shops; before Woolies, web.to covered the lot. */
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
 export function withWeb(feed, web) {
-  const w = web && typeof web === 'object' ? web : null, to = w && /^\d{4}-\d{2}-\d{2}$/.test(w.to || '') ? w.to : '';
-  if (!to || !Array.isArray(w.items) || !w.items.length) return feed;
-  const f = feed || {}, have = new Set((Array.isArray(f.specials) ? f.specials : []).map((x) => x && L.storeName(x.s) + '|' + flat(x.n)));
+  const w = web && typeof web === 'object' ? web : null;
+  if (!w || !Array.isArray(w.items) || !w.items.length) return feed;
+  const sh = w.shops && typeof w.shops === 'object' ? w.shops : null;
+  const toOf = (s) => { const x = sh ? sh[s] : (s === 'Woolworths' ? null : w); return x && ISO.test(x.to || '') ? x.to : ''; };
+  const f = feed || {}, old = (Array.isArray(f.specials) ? f.specials : []).filter(Boolean);
+  const have = new Set(old.map((x) => L.storeName(x.s) + '|' + flat(x.n))), byPrice = {};
+  old.forEach((x) => { const k = L.storeName(x.s) + '|' + x.now + '|' + (x.was || 0); (byPrice[k] = byPrice[k] || []).push(x.n); });
   const list = w.items.filter((l) => typeof l === 'string').map((l) => {
-    const x = l.split('\t'), now = Number(x[2]) || 0, was = Number(x[3]) || 0;
-    return { s: L.storeName(x[0]), n: String(x[1] || '').trim(), now, was: was > now ? was : 0, off: offOf(now, was), cat: String(x[5] || ''), src: 'web', to };
-  }).filter((x) => x.n && x.now > 0 && !have.has(x.s + '|' + flat(x.n)));
-  return list.length ? Object.assign({}, f, { specials: (Array.isArray(f.specials) ? f.specials : []).concat(list) }) : feed;
+    const x = l.split('\t'), s = L.storeName(x[0]), now = Number(x[2]) || 0, was = Number(x[3]) || 0;
+    return { s, n: String(x[1] || '').trim(), now, was: was > now ? was : 0, off: offOf(now, was), cat: String(x[5] || ''), src: 'web', to: toOf(s) };
+  }).filter((x) => x.n && x.now > 0 && x.to && !have.has(x.s + '|' + flat(x.n)) && !(byPrice[x.s + '|' + x.now + '|' + x.was] || []).some((n) => sameThing(n, x.n)));
+  return list.length ? Object.assign({}, f, { specials: old.concat(list) }) : feed;
+}
+/* The same thing named two ways at the same shop and price, like the half-price list's "Chicken Garlic Kyiv – From the
+   Deli" and Woolworths' "Woolworths Chicken Garlic Kyiv From The Deli each": most of the shorter name's words (as in the app). */
+const NAME_SKIP = /^(woolworths|coles|each|from|the|and|or|of|with|per)$/;
+const nameWords = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ').filter((w) => w.length > 1 && !NAME_SKIP.test(w));
+export function sameThing(a, b) {
+  const A = new Set(nameWords(a)), B = new Set(nameWords(b));
+  if (!A.size || !B.size) return false;
+  let hit = 0;
+  B.forEach((w) => { if (A.has(w)) hit++; });
+  return hit / Math.min(A.size, B.size) >= 0.75;
 }
 /* This week's specials and OzBargain deals that match the watch list. A deal matches on its shop too. */
 export function weekHits(feed, watch, day) {

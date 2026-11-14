@@ -1524,6 +1524,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       ['check', 'Not in the budget.', "When you add a spend, untick Counts towards our monthly budget for one-offs. It still splits, but leaves the month's budget alone."],
       ['duo', 'Loading screen.', 'While the app opens, it shows the other one of us rotating, cut out from their photo.'],
       ['tag', 'Coles fresh food and Liquorland.', "Every Wednesday morning, Coles' fruit and veg, meat and seafood, and Liquorland specials come into Deals by themselves, straight from Coles' website. Liquorland shows what's 20% off or more, plus anything on our watch list, and a search finds the rest. Meat and seafood has its own aisle now too."],
+      ['tag', 'Woolies fresh food too.', "Woolies' fruit and veg, meat and seafood specials come in the same way, straight from Woolworths' website, so Deals shows both supermarkets' fresh food side by side."],
       ['image', 'Specials from screenshots.', 'For a shop the lists miss, like ALDI or IGA: screenshot its specials, then in Deals tap Add specials from screenshots. Gemini reads in each product and price for both of us.'],
       ['cal', 'Receipt items in the calendar.', "A receipt's items now always show under the spend, even when they don't add up to the total to the cent: anything they don't cover, like a surcharge or bags, gets its own line, and savings at the end come off them."]
     ] }
@@ -3667,9 +3668,13 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     'Household', 'Health & Beauty', 'Baby', 'Pet', 'Other'];
   const SNAP_MAX = 400, SNAP_FILES = 12;
   const flat = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
-  /* Specials read from Coles' own website in the browser on our laptop each week (src/agent/coles-specials.js):
-     Coles fresh food and Liquorland. Kept in hh/deals as one line each, so the pop-up job can read them too. */
-  const WEB_SHOPS = ['Coles', 'Liquorland'], WEB_MAX = 2500, WEB_PATH = /^\/product\/[a-z0-9.\-]+-\d+$/;
+  /* Specials read from the shops' own websites in the browser on our laptop each week: Coles fresh food and Liquorland
+     from Coles' (src/agent/coles-specials.js), Woolies fresh food from Woolworths' (src/agent/woolies-specials.js).
+     Kept in hh/deals as one line each, so the pop-up job can read them too, with each shop's own week. */
+  const WEB_SHOPS = ['Coles', 'Liquorland', 'Woolworths'], WEB_MAX = 2500;
+  const WEB_PATHS = { Woolworths: /^\/shop\/productdetails\/\d+\/[a-z0-9-]+$/, other: /^\/product\/[a-z0-9.\-]+-\d+$/ };
+  const webPath = (s, p) => ((WEB_PATHS[s] || WEB_PATHS.other).test(String(p || '')) ? String(p) : '');
+  const webSite = (s) => (s === 'Woolworths' ? 'https://www.woolworths.com.au' : 'https://www.coles.com.au');
   const shopLabel = (s) => (s === 'Woolworths' ? 'Woolies' : s);
   function saleRule(r) {
     if (!r || typeof r !== 'object') return null;
@@ -3772,7 +3777,18 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     snapMemo = { doc: S.dealsDoc, day: t, list };
     return list;
   }
-  /* Specials whose week hasn't ended, then ours from screenshots and from Coles' website, leaving out any already there.
+  /* The same thing named two ways, like the half-price list's "Chicken Garlic Kyiv – From the Deli" and Woolworths'
+     own "Woolworths Chicken Garlic Kyiv From The Deli each": at the same shop and price, most of the shorter name's words. */
+  const NAME_SKIP = /^(woolworths|coles|each|from|the|and|or|of|with|per)$/;
+  const nameWords = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ').filter((w) => w.length > 1 && !NAME_SKIP.test(w));
+  function sameThing(a, b) {
+    const A = new Set(nameWords(a)), B = new Set(nameWords(b));
+    if (!A.size || !B.size) return false;
+    let hit = 0;
+    B.forEach((w) => { if (A.has(w)) hit++; });
+    return hit / Math.min(A.size, B.size) >= 0.75;
+  }
+  /* Specials whose week hasn't ended, then ours from screenshots and from the shops' websites, leaving out any already there.
      Worked out once for each change to the lists, so the many places that ask stay quick with a thousand or more. */
   let spMemo = { feed: undefined, doc: undefined, day: '', list: [] };
   function specialsNow() {
@@ -3782,8 +3798,16 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     let list = F ? F.specials.filter((x) => (x.src === 'um' ? !!x.to && x.to >= t : live(feedKey(x)))) : [];
     const snaps = snapSpecials(), web = webSpecials();
     if (snaps.length || web.length) {
-      const have = new Set(list.map((x) => x.s + '|' + flat(x.n)));
-      const fresh = (x) => { const k = x.s + '|' + flat(x.n); if (have.has(k)) return false; have.add(k); return true; };
+      const have = new Set(list.map((x) => x.s + '|' + flat(x.n))), byPrice = {};
+      const priceKey = (x) => x.s + '|' + x.now + '|' + (x.was || 0);
+      const note = (x) => { const k = priceKey(x); (byPrice[k] = byPrice[k] || []).push(x.n); };
+      list.forEach(note);
+      const fresh = (x) => {
+        const k = x.s + '|' + flat(x.n);
+        if (have.has(k) || (byPrice[priceKey(x)] || []).some((n) => sameThing(n, x.n))) return false;
+        have.add(k); note(x);
+        return true;
+      };
       list = list.concat(snaps.filter(fresh), web.filter(fresh));
     }
     spMemo = { feed: F, doc: S.dealsDoc, day: t, list };
@@ -4093,11 +4117,12 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     toast('Added ' + add.length + (add.length === 1 ? ' special' : ' specials') + ' from ' + shopLabel(shop));
     render();
   }
-  /* ---------- specials from Coles' website ---------- */
-  /* Once a week, the browser on our laptop reads Coles' fresh food and Liquorland specials from Coles' own pages
-     and opens the app with them packed into the link after the # (src/agent/coles-specials.js). They wait on this
-     device until we're signed in and the household has loaded, then go into hh/deals for both phones, replacing last
-     week's. */
+  /* ---------- specials from the shops' websites ---------- */
+  /* Once a week, the browser on our laptop reads Coles' fresh food and Liquorland specials from Coles' own pages, then
+     Woolies' fresh food from Woolworths', and each time opens the app with them packed into the link after the #
+     (src/agent/coles-specials.js and woolies-specials.js). They wait on this device until we're signed in and the
+     household has loaded, then go into hh/deals for both phones, replacing those shops' last week's and leaving the
+     others' as they are. */
   function webHash() {
     const m = /^#web=([A-Za-z0-9_-]{20,})$/.exec(location.hash || '');
     if (!m) return false;
@@ -4114,7 +4139,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
     }).then((t) => { if (t.length > 3e6) throw new Error('too big'); return JSON.parse(t); });
   }
-  /* Only what the app expects: Coles or Liquorland, plain text without tabs, whole cents, a known aisle, a Coles product link. */
+  /* Only what the app expects: Coles, Liquorland or Woolies, plain text without tabs, whole cents, a known aisle, a product
+     link on that shop's own website. */
   function webLines(j) {
     const clean = (v, max) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max);
     const seen = new Set(), out = [];
@@ -4123,8 +4149,20 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       const s = L.storeName(clean(x[0], 40)), n = clean(x[1], 120), now = centsOk(x[2]), was = centsOk(x[3]), k = s + '|' + flat(n);
       if (WEB_SHOPS.indexOf(s) < 0 || !flat(n) || !now || seen.has(k)) return;
       seen.add(k);
-      out.push([s, n, now, was > now ? was : 0, clean(x[4], 40), SNAP_CATS.indexOf(x[5]) >= 0 ? x[5] : 'Other', clean(x[6], 30),
-        WEB_PATH.test(String(x[7] || '')) ? x[7] : ''].join('\t'));
+      out.push([s, n, now, was > now ? was : 0, clean(x[4], 40), SNAP_CATS.indexOf(x[5]) >= 0 ? x[5] : 'Other', clean(x[6], 30), webPath(s, x[7])].join('\t'));
+    });
+    return out;
+  }
+  const lineShop = (l) => l.slice(0, l.indexOf('\t'));
+  /* Each shop's last read: when, on whose laptop and till when it's on special. Before Woolies joined there was one of
+     each for the lot, and the lot was Coles and Liquorland. */
+  function webShops(w) {
+    const out = {};
+    if (!w || typeof w !== 'object') return out;
+    const sh = w.shops && typeof w.shops === 'object' ? w.shops : null;
+    WEB_SHOPS.forEach((s) => {
+      const x = sh ? sh[s] : (s === 'Woolworths' ? null : w);
+      if (x && typeof x === 'object' && ISO_DAY.test(x.to || '')) out[s] = { at: typeof x.at === 'string' ? x.at : '', by: x.by === 'b' ? 'b' : 'a', to: x.to, n: Number(x.n) || 0 };
     });
     return out;
   }
@@ -4140,12 +4178,24 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     unpackWeb(st.d).then((j) => {
       const lines = webLines(j);
       if (!lines.length) throw new Error('There were no specials in it.');
-      const to = L.specialsWeek(today()).to, per = {};
-      lines.forEach((l) => { const f = l.split('\t'), k = f[0] === 'Coles' ? f[5] : f[0]; per[k] = (per[k] || 0) + 1; });
-      const save = saveDeals({ web: { at: new Date().toISOString(), by: S.me, to, items: lines } });
-      /* Noted on this browser too, so the weekly run's Thursday catch-up can see Wednesday's went in. */
-      lsSet('hh.webLast', JSON.stringify({ at: new Date().toISOString(), to, n: lines.length }));
-      S.dialog = { type: 'webdone', n: lines.length, per, to };
+      /* The shops this read covered, even one with nothing on special this week; an older reader just sends its lines. */
+      const read = (Array.isArray(j.shops) ? j.shops : []).map((s) => L.storeName(String(s))).filter((s) => WEB_SHOPS.indexOf(s) >= 0);
+      lines.forEach((l) => { if (read.indexOf(lineShop(l)) < 0) read.push(lineShop(l)); });
+      const t = today(), to = L.specialsWeek(t).to, at = new Date().toISOString(), prev = S.dealsDoc && S.dealsDoc.web, before = webShops(prev), shops = {}, per = {};
+      /* Each shop's specials replace only its own last ones: a Woolies read leaves Coles' as they are, and the other way round. */
+      Object.keys(before).forEach((s) => { if (read.indexOf(s) < 0 && before[s].to >= t) shops[s] = before[s]; });
+      read.forEach((s) => { shops[s] = { at, by: S.me, to, n: lines.filter((l) => lineShop(l) === s).length }; });
+      const kept = (prev && Array.isArray(prev.items) ? prev.items : []).filter((l) => typeof l === 'string' && read.indexOf(lineShop(l)) < 0 && !!shops[lineShop(l)]);
+      lines.forEach((l) => { const f = l.split('\t'), k = f[0] === 'Liquorland' ? f[0] : f[0] + '|' + f[5]; per[k] = (per[k] || 0) + 1; });
+      const save = saveDeals({ web: { at, by: S.me, to: Object.keys(shops).map((s) => shops[s].to).sort().pop() || to, items: lines.concat(kept).slice(0, WEB_MAX), shops } });
+      /* Noted on this browser too, for each shop, so the weekly run's Thursday catch-up can see Wednesday's went in. */
+      let last = null;
+      try { last = JSON.parse(lsGet('hh.webLast') || 'null'); } catch (e) { last = null; }
+      const lastShops = last && last.shops && typeof last.shops === 'object' ? last.shops
+        : last && ISO_DAY.test(last.to || '') ? { Coles: { at: last.at, to: last.to, n: 0 }, Liquorland: { at: last.at, to: last.to, n: 0 } } : {};
+      read.forEach((s) => { lastShops[s] = { at, to, n: shops[s].n }; });
+      lsSet('hh.webLast', JSON.stringify({ at, to, n: lines.length, shops: lastShops }));
+      S.dialog = { type: 'webdone', n: lines.length, per, to, shops: read };
       S.spStore = 'all'; S.spAisle = 'all'; S.spWatch = false; S.spQuery = ''; S.spAll = false;
       /* The deals refresh runs the pop-ups after it, so a watch-list match from Coles pops up now, not tomorrow morning. */
       const tok = ghToken();
@@ -4158,33 +4208,38 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   function webSpecials() {
     const t = today();
     if (webMemo.doc === S.dealsDoc && webMemo.day === t) return webMemo.list;
-    const w = S.dealsDoc && S.dealsDoc.web, to = w && ISO_DAY.test(w.to || '') ? w.to : '', list = [];
-    if (to && to >= t && Array.isArray(w.items)) {
+    const w = S.dealsDoc && S.dealsDoc.web, sh = webShops(w), list = [];
+    if (w && Array.isArray(w.items)) {
       w.items.slice(0, WEB_MAX).forEach((line) => {
         if (typeof line !== 'string') return;
-        const f = line.split('\t'), s = L.storeName(f[0]), now = centsOk(Number(f[2])), was = centsOk(Number(f[3])), path = WEB_PATH.test(f[7] || '') ? f[7] : '';
-        if (WEB_SHOPS.indexOf(s) < 0 || !f[1] || !now) return;
+        const f = line.split('\t'), s = L.storeName(f[0]), info = sh[s], now = centsOk(Number(f[2])), was = centsOk(Number(f[3])), path = webPath(s, f[7]);
+        if (WEB_SHOPS.indexOf(s) < 0 || !info || info.to < t || !f[1] || !now) return;
         list.push({ s, n: f[1].slice(0, 120), was: was > now ? was : 0, now, off: was > now ? L.clamp(Math.round((1 - now / was) * 100), 0, 99) : 0,
-          cat: SNAP_CATS.indexOf(f[5]) >= 0 ? f[5] : 'Other', sub: String(f[6] || '').slice(0, 30), last: '', link: path ? linkOk('https://www.coles.com.au' + path) : '',
-          img: '', src: 'web', to, promo: String(f[4] || '').slice(0, 40) });
+          cat: SNAP_CATS.indexOf(f[5]) >= 0 ? f[5] : 'Other', sub: String(f[6] || '').slice(0, 30), last: '', link: path ? linkOk(webSite(s) + path) : '',
+          img: '', src: 'web', to: info.to, promo: String(f[4] || '').slice(0, 40) });
       });
     }
     webMemo = { doc: S.dealsDoc, day: t, list };
     return list;
   }
-  /* When the website specials were last read, and on whose laptop, while they're still running. */
+  /* When each website's specials were last read, and on whose laptop, while they're still running. */
   function webInfo() {
-    const w = S.dealsDoc && S.dealsDoc.web;
-    return w && typeof w.at === 'string' && webSpecials().length ? { at: w.at, by: w.by === 'b' ? 'b' : 'a' } : null;
+    const sh = webShops(S.dealsDoc && S.dealsDoc.web), live = {};
+    webSpecials().forEach((x) => { live[x.s] = true; });
+    const one = (s) => (live[s] && sh[s] && sh[s].at ? { at: sh[s].at, by: sh[s].by } : null);
+    return { coles: one('Coles') || one('Liquorland'), ww: one('Woolworths') };
   }
-  const WEB_NAMES = { 'Fruit & Veg': 'Coles fruit and veg', 'Meat & Seafood': 'Coles meat and seafood', Liquorland: 'Liquorland' };
+  const WEB_NAMES = { 'Coles|Fruit & Veg': 'Coles fruit and veg', 'Coles|Meat & Seafood': 'Coles meat and seafood', Liquorland: 'Liquorland',
+    'Woolworths|Fruit & Veg': 'Woolies fruit and veg', 'Woolworths|Meat & Seafood': 'Woolies meat and seafood' };
   function webDoneDialog(d) {
     const head = '<div class="dlg-head"><h2 id="dlgT">' + (d.err ? 'Those specials didn\'t come through' : 'This week\'s specials are in') + '</h2>' +
       '<button class="icon-btn" data-act="dlgclose" aria-label="Close">' + icon('close') + '</button></div>';
     if (d.err) return head + '<p class="err-text" role="alert" id="webDone" data-ok="0">' + esc(d.err) + '</p><div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">OK</button></div>';
-    const parts = Object.keys(d.per).map((k) => d.per[k] + ' ' + (WEB_NAMES[k] || 'other Coles'));
+    const parts = Object.keys(d.per).map((k) => d.per[k] + ' ' + (WEB_NAMES[k] || 'other ' + shopLabel(k.split('|')[0])));
+    const wwOnly = (d.shops || []).length > 0 && (d.shops || []).every((s) => s === 'Woolworths');
     return head + '<p id="webDone" data-ok="1" data-n="' + d.n + '" role="status">Saved ' + d.n + ' specials for both phones: ' + esc(listNames(parts)) + '. On special till ' + esc(L.fmtDay(d.to)) + '.</p>' +
-      '<p class="hint">Read from Coles\' website. Deals shows Liquorland\'s ' + LIQ_MIN_OFF + '% off or more, plus anything on our watch list, which pops up as usual. A search finds the rest.</p>' +
+      '<p class="hint">' + (wwOnly ? 'Read from Woolworths\' website. Coles\' specials stay as they were, and watch-list matches pop up as usual.'
+        : 'Read from Coles\' website. Deals shows Liquorland\'s ' + LIQ_MIN_OFF + '% off or more, plus anything on our watch list, which pops up as usual. A search finds the rest.') + '</p>' +
       '<div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">See them</button></div>';
   }
   function snapAdd() {
@@ -4325,9 +4380,9 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     if (hf.ok || hf.stale) srcs.push('Harris Farm from its online specials');
     if (F.sources.umall.ok || F.sources.umall.stale) srcs.push('Umall, Sydney\'s online Asian supermarket, from its half-price and weekly specials (delivery only)');
     if (F.sources.meat.ok || F.sources.meat.stale) srcs.push('Meat Emporium, Sydney\'s big meat market, from what its online shop has marked down');
-    const W = webInfo();
-    if (W) srcs.push('Coles fresh food and Liquorland from Coles\' website (Liquorland\'s ' + LIQ_MIN_OFF + '% off or more, plus anything on our watch list), read in the browser on ' +
-      esc(poss(nm(W.by))) + ' laptop ' + esc(agoLabel(W.at)));
+    const W = webInfo(), onLaptop = (x) => 'read in the browser on ' + esc(poss(nm(x.by))) + ' laptop ' + esc(agoLabel(x.at));
+    if (W.coles) srcs.push('Coles fresh food and Liquorland from Coles\' website (Liquorland\'s ' + LIQ_MIN_OFF + '% off or more, plus anything on our watch list), ' + onLaptop(W.coles));
+    if (W.ww) srcs.push('Woolies fresh food from Woolworths\' website, ' + onLaptop(W.ww));
     return srcs.length ? '<p class="hint sp-src">' + srcs.join('. ') + '. Updated ' + esc(agoLabel(F.updated)) + '. Prices can differ by store.</p>' : '';
   }
   /* OzBargain deals at our shops or on the watch list, most votes first. */
