@@ -667,6 +667,24 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
 .tcn-none { margin: 10px 0; }
 .tcn-more { margin-top: 2px; }
 @media (prefers-reduced-motion: reduce) { .tcn-head .ic { transition: none; } }
+.tcn-open { margin-top: 4px; }
+.tcn-inputs { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 8px; }
+.tcn-inputs .field { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.tcn-paywith { margin: 12px 0 6px; }
+.tcn-for { margin: 14px 0 6px; }
+.tcn-calc { margin: 0 0 12px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.tcn-opt { padding: 12px 14px; border: 2px solid var(--line); border-radius: 16px; background: #fff; }
+.tcn-opt.best { border-color: var(--ink); background: var(--marigold-soft); }
+.tcn-opt-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tcn-opt-top .tag.hit { margin-top: 0; }
+.tcn-opt-n { font-size: 17px; font-weight: 800; }
+.tcn-opt > .k { margin: 2px 0 8px; font-size: 13px; }
+.tcn-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.tcn-nums div { min-width: 0; }
+.tcn-nums dt { font-size: 12px; font-weight: 700; color: var(--ink2); }
+.tcn-nums dd { margin: 2px 0 0; font-weight: 800; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tcn-nums dd span { display: block; font-size: 12px; font-weight: 700; color: var(--ink2); }
+
 .dlg-extra { margin: 12px 0 0; text-align: center; }
 @media (max-width: 360px) { .sale-row { grid-template-columns: 64px minmax(0, 1fr) auto; } .sale-row .soon-when { font-size: 13px; } .keen-btn { padding: 0 10px; } }
 
@@ -1533,7 +1551,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   const RELEASES = [
     { id: '2026-11-22', date: '2026-11-22', title: 'TCN gift cards in Deals', items: [
       ['tag', 'TCN gift card deals.', "Deals shows The Card Network's gift card deals while they run, like 15% off at Coles, and the popular shops each one covers."],
-      ['cart', 'Where can I use it?', 'Every TCN card and the shops that take it. Type a shop, like Uber Eats, to see which cards take it.'],
+      ['cart', 'A page for TCN.', 'Every TCN card and the shops that take it. Type a shop, like Uber Eats, to see which cards take it.'],
+      ['star', 'Best way to pay.', "Type what you'll spend to compare paying as usual on the Amex or the Qantas card, TCN cards on special, and Qantas Points, with the points each earns."],
       ['bell', 'A pop-up when one starts.', 'Your phones pop up once when a TCN deal of 10% or more starts.']
     ] },
     { id: '2026-11-09', date: '2026-11-09', title: 'Insights, profiles, bills coming up and more', items: [
@@ -1577,7 +1596,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     photos: null, photoBusy: null, photoErr: null, newsShown: false, newsDoc: null, newsEdit: null, newsId: null, factN: 0,
     enterKey: null, enterAt: 0, enterDir: 0, enterDirNow: 0, countsShown: {},
     pushDoc: null, pushBusy: false, pushNote: null,
-    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, dealsFetch: null, spStore: 'all', spAisle: 'all', spSort: 'best', spWatch: false, spQuery: '', spAll: false, ozbAll: false, tcnQuery: '', tcnOpen: '', tcnAll: false, watchNew: '', listNew: '', aiDoc: null, aiTokNew: '', ghTokNew: '',
+    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, dealsFetch: null, spStore: 'all', spAisle: 'all', spSort: 'best', spWatch: false, spQuery: '', spAll: false, ozbAll: false, tcnQuery: '', tcnOpen: '', tcnAll: false, tcnAmt: '', tcnOff: '', tcnPay: 'amex', watchNew: '', listNew: '', aiDoc: null, aiTokNew: '', ghTokNew: '',
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -1891,8 +1910,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     try { S.feed = cleanFeed(JSON.parse(lsGet('hh.deals') || 'null')); } catch (e) { S.feed = null; }
     /* A tapped notification opens Deals, or a sale day's pop-up the Calendar on that day. */
     const calHash = /^#cal=(\d{4}-\d{2}-\d{2})$/.exec(location.hash || '');
-    if (location.hash === '#deals' || calHash) {
-      S.view = calHash ? 'cal' : 'deals';
+    if (location.hash === '#deals' || location.hash === '#tcn' || calHash) {
+      S.view = calHash ? 'cal' : location.hash === '#tcn' ? 'tcn' : 'deals';
       if (calHash) initCal(calHash[1]);
       try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* fine either way */ }
     }
@@ -2055,7 +2074,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       const due = newsDue();
       if (due) { S.newsShown = true; S.dialog = { type: 'news', id: due.id }; }
     }
-    const nav = ['home', 'cal', 'deals', 'insights', 'settings', 'upload', 'custom', 'profile', 'newsedit', 'recap', 'tab'].indexOf(S.view) >= 0;
+    const nav = ['home', 'cal', 'deals', 'tcn', 'insights', 'settings', 'upload', 'custom', 'profile', 'newsedit', 'recap', 'tab'].indexOf(S.view) >= 0;
     const sw = S.view === 'insights' || S.view === 'recap' ? (S.insMode === 'year' ? 'insyear' : 'recapmove') : S.view === 'cal' ? 'calmove' : '';
     return bn + '<main class="main' + (nav ? '' : ' no-nav') + '" style="' + meVars() + '"' + (sw ? ' data-swipe="' + sw + '"' : '') + '>' + viewFor(S.view) + '</main>' +
       (nav ? '<div data-live="nav">' + navBar() + '</div>' : '') + dialogHtml();
@@ -2170,6 +2189,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     switch (v) {
       case 'cal': return viewCal();
       case 'deals': return dealsView();
+      case 'tcn': return viewTcn();
       case 'add': return S.add ? viewAdd() : viewHome();
       case 'tab': return viewTab();
       case 'upload': return viewUpload();
@@ -2236,7 +2256,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     return '<button type="button" data-act="' + act + '" data-arg="' + esc(val) + '" aria-pressed="' + (pressed ? 'true' : 'false') + '"' + style + '>' + esc(label) + '</button>';
   }
   function navBar() {
-    const item = (v, ic, label, extra) => '<button class="nav-i' + (S.view === v ? ' on' : '') + '" data-act="go" data-arg="' + v + '"' + (S.view === v ? ' aria-current="page"' : '') + '>' + icon(ic) + '<span>' + label + '</span>' + (extra || '') + '</button>';
+    const on = (v) => S.view === v || (v === 'deals' && S.view === 'tcn');
+    const item = (v, ic, label, extra) => '<button class="nav-i' + (on(v) ? ' on' : '') + '" data-act="go" data-arg="' + v + '"' + (on(v) ? ' aria-current="page"' : '') + '>' + icon(ic) + '<span>' + label + '</span>' + (extra || '') + '</button>';
     const fresh = notices().some((x) => x.kind === 'sp');
     return '<nav class="nav" aria-label="Main">' + item('home', 'home', 'Home') + item('cal', 'cal', 'Calendar') +
       (S.readOnly ? '' : snapReady() ? '<button class="nav-add" data-act="addpick" aria-label="Add a spend or capture a receipt">' + icon('plus') + '</button>'
@@ -4504,17 +4525,75 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     return '<ul class="tcn-list">' + shown.map(row).join('') + (S.tcnAll ? allKinds.map((k) => '<li class="tcn-row kind"><span class="tcn-head"><span class="tcn-n">' + esc(k[0]) + '</span><span class="k">' + esc(k[1]) + '</span></span></li>').join('') : '') + '</ul>' +
       (list.length > 5 || allKinds.length ? '<button class="link sm tcn-more" data-act="tcnall">' + (S.tcnAll ? 'Fewer cards' : 'See all ' + (list.length + allKinds.length) + ' cards') + '</button>' : '');
   }
+  function tcnSorted() {
+    const t = today();
+    return tcnLive().sort((a, b) => (a.from > t ? 1 : 0) - (b.from > t ? 1 : 0) || (b.off || b.back) - (a.off || a.back));
+  }
+  function tcnDealsHtml() {
+    const t = today(), live = tcnSorted();
+    return live.length ? '<ul class="tcn-deals">' + live.map((d) => tcnDealHtml(d, t)).join('') + '</ul>'
+      : '<p class="muted">No TCN deals on right now. Your phones pop up when one of 10% or more starts.</p>';
+  }
+  /* Deals: TCN's deals while they run, and the way into its page. */
   function tcnCard() {
     const F = S.feed, T = F && F.tcn;
     if (!T || (!T.cards.length && !T.deals.length)) return '';
-    const t = today(), live = tcnLive().sort((a, b) => (a.from > t ? 1 : 0) - (b.from > t ? 1 : 0) || (b.off || b.back) - (a.off || a.back));
+    const live = tcnSorted();
     return '<section class="card specials tcn" id="tcnCard"><div class="card-head"><h2>TCN gift cards</h2>' + (live.length ? '<span class="pill">' + live.length + (live.length === 1 ? ' deal' : ' deals') + '</span>' : '') + '</div>' +
-      (live.length ? '<ul class="tcn-deals">' + live.map((d) => tcnDealHtml(d, t)).join('') + '</ul>'
-        : '<p class="muted">No TCN deals on right now. Your phones pop up when one of 10% or more starts.</p>') +
-      (T.cards.length ? '<label class="sr" for="tcnQ">Which cards does a shop take?</label><input class="input sp-search" id="tcnQ" type="search" placeholder="Where can I use it? Try Uber Eats" autocomplete="off" enterkeyhint="search" data-bind="tcnQuery" data-input="tcnsearch" value="' + esc(S.tcnQuery) + '">' +
+      tcnDealsHtml() + '<button class="btn btn-secondary btn-block tcn-open" data-act="go" data-arg="tcn">' + icon('tag') + 'Where to use them, and the best way to pay</button></section>';
+  }
+  /* ---------- the TCN page ---------- */
+  /* What we earn and what it's worth, to weigh paying as usual against TCN cards bought on special at Coles or
+     Woolworths, and against paying with Qantas Points. Amex Platinum earns 2.25 points a dollar and moves to Qantas at
+     2 to 1; the shared card earns at its own rates (Altitude Qantas Black: 0.8 at supermarkets, 0.4 elsewhere). A
+     Qantas Point is valued at 1.3c, a fair flight value; points spent on gift cards get about 0.5c (Qantas sells a $50
+     TCN card for 10,030 points). */
+  const TCN_PTS = { amexRate: 2.25, amexToQantas: 2, qantasC: 1.3, qantasPerDollar: 10030 / 50 };
+  function tcnRates() {
+    const c = cfg().card, pr = L.CARD_PRESETS.qantas, r = c.earns === 'qantas' && c.rates && c.rates.everyday != null ? c.rates : pr.rates;
+    return { everyday: Number(r.everyday) || pr.rates.everyday, other: Number(r.other) || pr.rates.other };
+  }
+  function tcnCalc(amount, off, pay) {
+    const A = Math.max(0, amount), paid = A * (1 - off / 100), R = tcnRates(), amex = pay === 'amex';
+    const value = amex ? TCN_PTS.qantasC / TCN_PTS.amexToQantas : TCN_PTS.qantasC, unit = amex ? 'Amex points' : 'Qantas Points';
+    const row = (key, label, spend, rate, note) => { const pts = Math.round(spend * rate), worth = pts * value / 100; return { key, label, pay: spend, pts, unit, worth, net: spend - worth, note }; };
+    const qp = Math.round(A * TCN_PTS.qantasPerDollar);
+    return [
+      row('usual', 'Pay as usual', A, amex ? TCN_PTS.amexRate : R.other, 'At the shop, on ' + (amex ? 'the Amex' : 'the shared card')),
+      row('tcn', 'TCN cards at ' + off + '% off', paid, amex ? TCN_PTS.amexRate : R.everyday, 'Bought at the supermarket on ' + (amex ? 'the Amex' : 'the shared card') + ', then used at the shop'),
+      { key: 'points', label: 'Pay with Qantas Points', pay: 0, pts: qp, unit: 'Qantas Points', spent: true, worth: qp * TCN_PTS.qantasC / 100, net: qp * TCN_PTS.qantasC / 100, note: 'A TCN card from Qantas Marketplace. Those points would be worth more on flights' }
+    ];
+  }
+  function tcnCalcHtml() {
+    const live = tcnSorted().filter((d) => d.off > 0 && (!d.from || d.from <= today())), deal = live[0];
+    const amt = parseFloat(String(S.tcnAmt || '').replace(/[$,\s]/g, '')), A = amt > 0 ? Math.min(amt, 100000) : 100;
+    const offIn = parseFloat(S.tcnOff), off = offIn > 0 && offIn < 60 ? Math.round(offIn) : deal ? deal.off : 15;
+    const rows = tcnCalc(A, off, S.tcnPay === 'card' ? 'card' : 'amex'), best = rows.reduce((b, r) => (r.net < b.net ? r : b), rows[0]), usual = rows[0];
+    const money = (x) => '$' + x.toFixed(2).replace(/\.00$/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return '<p class="k tcn-for">' + (amt > 0 ? '' : 'For example, ') + 'spending ' + money(A) + ' at a shop a TCN card covers' + (deal && !(offIn > 0) ? ', with ' + deal.off + '% off on now' : '') + ':</p>' +
+      '<ul class="tcn-calc">' + rows.map((r) => '<li class="tcn-opt' + (r === best ? ' best' : '') + '"><div class="tcn-opt-top"><span class="tcn-opt-n">' + esc(r.label) + '</span>' + (r === best ? '<span class="tag hit">Best</span>' : '') + '</div>' +
+        '<p class="k">' + esc(r.note) + '</p>' +
+        '<dl class="tcn-nums"><div><dt>You pay</dt><dd>' + money(r.pay) + '</dd></div>' +
+        '<div><dt>' + (r.spent ? 'Points used' : 'Points back') + '</dt><dd>' + r.pts.toLocaleString('en-AU') + ' <span>' + esc(r.unit) + ', about ' + money(r.worth) + '</span></dd></div>' +
+        '<div><dt>' + (r.spent ? 'Real cost' : 'Cost after points') + '</dt><dd>' + money(r.net) + (r.key !== 'usual' ? ' <span>' + (r.net < usual.net ? money(usual.net - r.net) + ' less' : money(r.net - usual.net) + ' more') + '</span>' : '') + '</dd></div></dl></li>').join('') + '</ul>';
+  }
+  function viewTcn() {
+    const F = S.feed, T = F && F.tcn, back = '<button class="back-link" data-act="go" data-arg="deals">' + icon('left') + 'Deals</button>';
+    const head = '<header class="top"><div>' + back + '<p class="eyebrow">The Card Network</p><h1 class="title">TCN gift cards</h1></div></header>';
+    if (!T || (!T.cards.length && !T.deals.length)) return head + '<section class="card"><p class="muted">TCN’s deals and cards haven’t come through yet. They come in with the rest of the deals.</p></section>';
+    const live = tcnSorted(), c = cfg().card;
+    return head +
+      '<section class="card specials tcn" id="tcnDeals"><div class="card-head"><h2>On special</h2>' + (live.length ? '<span class="pill">' + live.length + (live.length === 1 ? ' deal' : ' deals') + '</span>' : '') + '</div>' + tcnDealsHtml() + '</section>' +
+      '<section class="card tcn" id="tcnPay"><div class="card-head"><h2>Best way to pay</h2></div>' +
+        '<div class="tcn-inputs"><label class="field"><span class="k">How much will you spend?</span><input class="input" id="tcnAmt" inputmode="decimal" placeholder="$100" autocomplete="off" data-bind="tcnAmt" data-input="tcncalc" value="' + esc(S.tcnAmt) + '"></label>' +
+        '<label class="field"><span class="k">Discount</span><input class="input" id="tcnOff" inputmode="numeric" placeholder="' + ((live.filter((d) => d.off > 0)[0] || {}).off || 15) + '%" autocomplete="off" data-bind="tcnOff" data-input="tcncalc" value="' + esc(S.tcnOff) + '"></label></div>' +
+        '<p class="k tcn-paywith">Pay with</p><div class="seg">' + segBtn('tcnpay', 'amex', S.tcnPay !== 'card', 'Amex Platinum') + segBtn('tcnpay', 'card', S.tcnPay === 'card', c.name || 'Qantas card') + '</div>' +
+        '<div id="tcnCalcOut">' + tcnCalcHtml() + '</div>' +
+        '<p class="hint">Amex Platinum earns 2.25 points a dollar; at 2 to 1 into Qantas that’s about 0.65c a point. The shared card earns ' + tcnRates().everyday + ' Qantas Points a dollar at supermarkets and ' + tcnRates().other + ' elsewhere (less past $10,000 in a statement). Qantas Points are counted at 1.3c, a fair flight value; spent on gift cards they get about 0.5c. TCN cards bought at Coles or Woolworths usually earn as a supermarket buy, but that isn’t guaranteed.</p></section>' +
+      (T.cards.length ? '<section class="card tcn" id="tcnShops"><div class="card-head"><h2>Where can I use it?</h2><span class="k">' + T.cards.filter((x) => x.shops.length).length + ' cards</span></div>' +
+        '<label class="sr" for="tcnQ">Which cards does a shop take?</label><input class="input sp-search" id="tcnQ" type="search" placeholder="Type a shop, like Uber Eats" autocomplete="off" enterkeyhint="search" data-bind="tcnQuery" data-input="tcnsearch" value="' + esc(S.tcnQuery) + '">' +
         '<div id="tcnList">' + tcnListHtml() + '</div>' +
-        '<p class="hint">Which shops take each card is from OzBargain’s gift card wiki' + (T.asAt ? ', correct as at ' + esc(L.fmtDay(T.asAt)) : '') + '. TCN changes its lists every few weeks, so check its own list before you buy. Shops in bold are the popular ones.</p>' : '') +
-      '</section>';
+        '<p class="hint">Which shops take each card is from OzBargain’s gift card wiki' + (T.asAt ? ', correct as at ' + esc(L.fmtDay(T.asAt)) : '') + '. TCN changes its lists every few weeks, so check its own list before you buy. Shops in bold are the popular ones.</p></section>' : '');
   }
   function saleRow(o, t) {
     const s = o.sale, past = o.date < t, what = [s.offer, L.saleRuleLabel(s.rule)].filter(Boolean).join(' · ');
@@ -5542,7 +5621,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     if (v === 'custom' || v === 'profile') { S.draft = makeDraft(); S.draftSaved = false; S.photoErr = null; }
     if (v === 'newsedit') { S.newsEdit = null; S.newsId = null; }
     if (v === 'cal' || v === 'deals') { if (!S.cal) initCal(); else if (v !== S.view) S.cal.picked = false; }
-    if (v === 'deals') loadFeed();
+    if (v === 'deals' || v === 'tcn') loadFeed();
     if (v === 'recap') { S.recapOffset = S.view === 'home' ? -1 : 0; S.insMode = 'month'; v = 'insights'; }
     else if (v === 'insights' && S.view !== 'insights') { S.recapOffset = 0; S.insYearOff = 0; S.insSel = null; S.insDay = null; }
     if (v !== 'add') S.add = null;
@@ -5766,6 +5845,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     ozball: () => { S.ozbAll = !S.ozbAll; render(); },
     tcnopen: (arg) => { S.tcnOpen = S.tcnOpen === arg ? '' : String(arg || '').slice(0, 40); render(); },
     tcnall: () => { S.tcnAll = !S.tcnAll; render(); },
+    tcnpay: (arg) => { S.tcnPay = arg === 'card' ? 'card' : 'amex'; render(); },
     watchadd: () => {
       const w = String(S.watchNew || '').trim().replace(/\s+/g, ' ').slice(0, 30), D = dealsCfg();
       const el = () => document.getElementById('watchIn');
@@ -5973,6 +6053,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     swtrimrefresh: () => swTrimRefresh(),
     spsearch: () => { S.spAll = false; const el = document.getElementById('spList'); if (el) el.innerHTML = spListHtml(); },
     tcnsearch: () => { const el = document.getElementById('tcnList'); if (el) el.innerHTML = tcnListHtml(); },
+    tcncalc: () => { const el = document.getElementById('tcnCalcOut'); if (el) el.innerHTML = tcnCalcHtml(); },
     rcpsum: () => { const el = document.getElementById('rcpSum'); if (el && S.dialog && S.dialog.form) el.innerHTML = receiptSumHtml(S.dialog.form); }
   };
 
@@ -6242,7 +6323,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       const m = ev.data || {};
       if (m.hh !== 'open' || !S.settings || !S.me) return;
       const cal = /^#cal=(\d{4}-\d{2}-\d{2})$/.exec(m.hash || '');
-      if (m.hash === '#deals') ACT.godeals(); else if (cal) ACT.salecal(cal[1]); else go('home');
+      if (m.hash === '#deals') ACT.godeals(); else if (m.hash === '#tcn') go('tcn'); else if (cal) ACT.salecal(cal[1]); else go('home');
     });
   }
 
