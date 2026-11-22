@@ -131,7 +131,7 @@ export function toDeals(items, today) {
 export const TCN_FEEDS = [OZB + '/brand/the-card-network/feed', OZB + '/cat/gift-cards/feed'];
 export const TCN_WIKI = [OZB + '/wiki/_export/xhtml/gift_card_deals_retailer_faq', OZB + '/wiki/gift_card_deals_retailer_faq'];
 const TCN_RE = /\bTCN\b|\bthe card network\b/i;
-const CARD_LINK_OK = /^https:\/\/([a-z0-9-]+\.)?(thecardnetwork\.com\.au|card\.gift|choicecard\.gift)\/[^\s"'<>]*$/i;
+const CARD_LINK_OK = /^https:\/\/([a-z0-9-]+\.)?(thecardnetwork\.com\.au|card\.gift|choicecard\.gift)(\/[^\s"'<>]*)?$/i;
 /* Cards taken at a kind of place rather than a list of shops, so the wiki's table doesn't have them. */
 export const TCN_EXTRA = ['Good Food', 'Cinema', 'Pamper', 'Pub & Bar', 'Restaurant', 'Holiday & Hotel'];
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -150,6 +150,14 @@ export function tcnCards(html) {
     inner.replace(/<t([dh])\b[^>]*>([\s\S]*?)<\/t\1>/gi, (c, k, body) => { cells.push(body); return c; });
     const n = cells.length >= 2 ? clip(text(cells[0]), 40) : '';
     if (!/^TCN\s+\S/i.test(n) || seen[n.toLowerCase()]) return row;
+    const href = decode((/<a\b[^>]*href="([^"]+)"/i.exec(cells[0]) || [])[1] || ''), link = CARD_LINK_OK.test(href) ? clip(href, 200) : '';
+    /* A card taken at a kind of place is described by its merchant category, not a list of shops. */
+    const plain = text(cells[1]);
+    if (/\bMCC\b|categori[sz]ed as/i.test(plain)) {
+      seen[n.toLowerCase()] = true;
+      cards.push({ n, link, shops: [], top: [], note: clip(plain, 300) });
+      return row;
+    }
     /* Shops in bold are the ones the page picks out as popular for gift card deals. */
     const marked = cells[1].replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, (b, tag, x) => '\u0001' + x + '\u0002');
     const shops = [], popular = [], have = {};
@@ -162,11 +170,10 @@ export function tcnCards(html) {
     });
     if (shops.length < 3) return row;
     seen[n.toLowerCase()] = true;
-    const href = decode((/<a\b[^>]*href="([^"]+)"/i.exec(cells[0]) || [])[1] || '');
-    cards.push({ n, link: CARD_LINK_OK.test(href) ? clip(href, 200) : '', shops: shops.slice(0, 200), top: popular.slice(0, 20) });
+    cards.push({ n, link, shops: shops.slice(0, 200), top: popular.slice(0, 20) });
     return row;
   });
-  return cards.length >= 5 ? { asAt, cards: cards.slice(0, 40) } : null;
+  return cards.filter((c) => c.shops.length).length >= 5 ? { asAt, cards: cards.slice(0, 40) } : null;
 }
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /* TCN's deals: how much off (or roughly how much back in points: 20x Everyday Rewards or Flybuys points is about 10%),

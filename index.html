@@ -3788,13 +3788,14 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     };
   }
   /* The Card Network's gift cards: which shops each card is taken at, and its deals. */
-  const CARD_LINK_OK = /^https:\/\/([a-z0-9-]+\.)?(thecardnetwork\.com\.au|card\.gift|choicecard\.gift)\/[^\s"'<>]*$/i;
+  const CARD_LINK_OK = /^https:\/\/([a-z0-9-]+\.)?(thecardnetwork\.com\.au|card\.gift|choicecard\.gift)(\/[^\s"'<>]*)?$/i;
   function cleanTcn(x, str, int, day) {
     const o = x && typeof x === 'object' ? x : {}, names = (a, n, len) => (Array.isArray(a) ? a : []).filter((s) => typeof s === 'string' && s.trim()).slice(0, n).map((s) => s.trim().slice(0, len));
     const cards = (Array.isArray(o.cards) ? o.cards : []).slice(0, 40).filter((c) => c && typeof c.n === 'string' && c.n.trim()).map((c) => {
       const shops = names(c.shops, 200, 60);
-      return { n: str(c.n.trim(), 40), link: CARD_LINK_OK.test(String(c.link || '')) ? String(c.link).slice(0, 200) : '', shops, top: names(c.top, 20, 60).filter((s) => shops.indexOf(s) >= 0) };
-    }).filter((c) => c.shops.length);
+      return { n: str(c.n.trim(), 40), link: CARD_LINK_OK.test(String(c.link || '')) ? String(c.link).slice(0, 200) : '', shops, top: names(c.top, 20, 60).filter((s) => shops.indexOf(s) >= 0),
+        note: shops.length ? '' : str(c.note, 300).trim() };
+    }).filter((c) => c.shops.length || c.note);
     const deals = (Array.isArray(o.deals) ? o.deals : []).slice(0, 20).filter((d) => d && typeof d.t === 'string' && d.t.trim()).map((d) => ({
       id: str(d.id, 12), t: str(d.t, 160), s: str(d.s, 40), link: linkOk(d.link), from: day(d.from), to: day(d.to), votes: int(d.votes),
       off: L.clamp(int(d.off), 0, 90), back: L.clamp(int(d.back), 0, 90), cards: names(d.cards, 20, 30)
@@ -4453,7 +4454,13 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   /* The Card Network's gift cards: its deals while they run, a search for which cards a shop takes, and every card's
      shops, from OzBargain's gift card wiki. The cards taken at a kind of place, not a list of shops, are described. */
   const TCN_KINDS = [['TCN Good Food', 'Restaurants, cafes and bars, but not fast food'], ['TCN Cinema', 'Cinemas that take eftpos'],
-    ['TCN Pamper', 'Hair and beauty salons, day spas and beauty clinics that take eftpos']];
+    ['TCN Pamper', 'Hair and beauty salons, day spas, and hotels and resorts']];
+  /* The cards taken at a kind of place: ours described simply, then any other the wiki describes by merchant category. */
+  function tcnKinds(T) {
+    const out = TCN_KINDS.map((k) => { const w = T.cards.filter((c) => c.n === k[0] && c.note)[0]; return [k[0], k[1], w ? w.note : '']; });
+    T.cards.filter((c) => c.note && !TCN_KINDS.some((k) => k[0] === c.n)).forEach((c) => out.push([c.n, c.note, '']));
+    return out;
+  }
   const tcnShort = (n) => String(n || '').replace(/^TCN\s+/i, '');
   function tcnLive() {
     const F = S.feed, t = today();
@@ -4473,10 +4480,10 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   function tcnListHtml() {
     const F = S.feed, T = F && F.tcn;
     if (!T) return '';
-    const q = String(S.tcnQuery || '').trim().toLowerCase();
+    const q = String(S.tcnQuery || '').trim().toLowerCase(), cards = T.cards.filter((c) => c.shops.length), allKinds = tcnKinds(T);
     if (q) {
-      const hits = T.cards.map((c) => ({ c, m: c.shops.filter((s) => s.toLowerCase().indexOf(q) >= 0) })).filter((x) => x.m.length);
-      const kinds = TCN_KINDS.filter((k) => (k[0] + ' ' + k[1]).toLowerCase().indexOf(q) >= 0);
+      const hits = cards.map((c) => ({ c, m: c.shops.filter((s) => s.toLowerCase().indexOf(q) >= 0) })).filter((x) => x.m.length);
+      const kinds = allKinds.filter((k) => k.join(' ').toLowerCase().indexOf(q) >= 0);
       if (!hits.length && !kinds.length) return '<p class="muted tcn-none">No TCN card lists “' + esc(S.tcnQuery.trim()) + '”.</p>';
       return '<p class="k tcn-count">' + (hits.length + kinds.length) + (hits.length + kinds.length === 1 ? ' card takes it' : ' cards take it') + '</p><ul class="tcn-list">' +
         hits.map((x) => '<li class="tcn-row hit"><span class="tcn-n">' + esc(x.c.n) + '</span><span class="k">' + esc(listNames(x.m.slice(0, 6))) + (x.m.length > 6 ? ' and ' + (x.m.length - 6) + ' more' : '') + '</span></li>').join('') +
@@ -4484,7 +4491,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     }
     const live = {}, t = today();
     tcnLive().filter((d) => !d.from || d.from <= t).forEach((d) => d.cards.forEach((n) => { live[n.toLowerCase()] = true; }));
-    const list = T.cards.slice().sort((a, b) => (live[tcnShort(b.n).toLowerCase()] ? 1 : 0) - (live[tcnShort(a.n).toLowerCase()] ? 1 : 0) || b.top.length - a.top.length || b.shops.length - a.shops.length);
+    const list = cards.slice().sort((a, b) => (live[tcnShort(b.n).toLowerCase()] ? 1 : 0) - (live[tcnShort(a.n).toLowerCase()] ? 1 : 0) || b.top.length - a.top.length || b.shops.length - a.shops.length);
     const shown = S.tcnAll ? list : list.slice(0, 5);
     const row = (c) => {
       const open = S.tcnOpen === c.n, on = live[tcnShort(c.n).toLowerCase()];
@@ -4493,8 +4500,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
         (open ? '<div class="tcn-shops"><p>' + c.shops.map((s) => (c.top.indexOf(s) >= 0 ? '<strong>' + esc(s) + '</strong>' : esc(s))).join(', ') + '</p>' +
           (c.link ? '<a class="link sm" href="' + esc(c.link) + '" target="_blank" rel="noopener">TCN’s own list for ' + esc(c.n) + '</a>' : '') + '</div>' : '') + '</li>';
     };
-    return '<ul class="tcn-list">' + shown.map(row).join('') + (S.tcnAll ? TCN_KINDS.map((k) => '<li class="tcn-row kind"><span class="tcn-head"><span class="tcn-n">' + esc(k[0]) + '</span><span class="k">' + esc(k[1]) + '</span></span></li>').join('') : '') + '</ul>' +
-      (list.length > 5 ? '<button class="link sm tcn-more" data-act="tcnall">' + (S.tcnAll ? 'Fewer cards' : 'See all ' + (list.length + TCN_KINDS.length) + ' cards') + '</button>' : '');
+    return '<ul class="tcn-list">' + shown.map(row).join('') + (S.tcnAll ? allKinds.map((k) => '<li class="tcn-row kind"><span class="tcn-head"><span class="tcn-n">' + esc(k[0]) + '</span><span class="k">' + esc(k[1]) + '</span></span></li>').join('') : '') + '</ul>' +
+      (list.length > 5 || allKinds.length ? '<button class="link sm tcn-more" data-act="tcnall">' + (S.tcnAll ? 'Fewer cards' : 'See all ' + (list.length + allKinds.length) + ' cards') + '</button>' : '');
   }
   function tcnCard() {
     const F = S.feed, T = F && F.tcn;
