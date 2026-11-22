@@ -195,6 +195,28 @@ await t("specials from Coles' website join the lists", () => {
   assert.strictEqual(both.specials.filter((x) => /Jameson/.test(x.n)).length, 1, 'one we added from a screenshot is not doubled up by the website');
 });
 
+await t('a TCN gift card deal pops up once, when it starts, if it is worth having', () => {
+  const f = JSON.parse(JSON.stringify(feed));
+  f.tcn = { asAt: '2026-10-16', cards: [{ n: 'TCN Shop', shops: ['Adairs', 'Uber', 'Uber Eats', 'rebel'], top: ['Uber', 'Uber Eats', 'rebel'] }, { n: 'TCN Active', shops: ['rebel', 'BCF', 'adidas'], top: ['rebel', 'BCF'] }],
+    deals: [
+      { id: '984101', t: '15% off TCN Good Food, Shop and Active Gift Cards', s: 'Coles (In-Store Only)', from: '2026-11-11', to: '2026-11-17', off: 15, back: 0, cards: ['Good Food', 'Shop', 'Active'] },
+      { id: '984102', t: '20x EDR Pts on TCN Kids Gift Cards', s: 'Woolworths', from: '2026-11-18', to: '2026-11-24', off: 0, back: 10, cards: ['Kids'] },
+      { id: '984120', t: '5% back on TCN gift cards', s: 'EatClub', from: '2026-11-06', to: '', off: 5, back: 0, cards: [] }] };
+  const p = push();
+  p.subs.p1.welcomed = true;
+  const got = plan({ push: p, deals: deals(), feed: f, now: FRI_EVENING }).out.filter((n) => /^tcn:/.test(n.key));
+  assert.deepStrictEqual(got.map((n) => [n.key, n.to, n.title, n.body, n.url]), [['tcn:984101|2026-11-17', ['p1'], '🎁 TCN gift cards: 15% off at Coles',
+    'Good Food, Shop and Active, till Tue 17 Nov\nCovers Uber, Uber Eats, rebel and BCF', './#deals']], "one that's on now and 10% or more; next week's and a 5% one don't");
+  p.sent['tcn:984101|2026-11-17'] = 1;
+  assert.ok(!plan({ push: p, deals: deals(), feed: f, now: FRI_EVENING }).out.some((n) => /^tcn:/.test(n.key)), 'once only');
+  const later = plan({ push: p, deals: deals(), feed: f, now: new Date('2026-11-17T20:37:00Z') }).out.filter((n) => /^tcn:/.test(n.key));
+  assert.deepStrictEqual(later.map((n) => [n.title, n.body]), [['🎁 TCN gift cards: about 10% back in points at Woolworths', 'Kids, till Tue 24 Nov']], 'the points one, on the day it starts');
+  const quiet = push();
+  quiet.subs.p1.welcomed = true;
+  quiet.prefs.a = { specials: false };
+  assert.ok(!plan({ push: quiet, deals: deals(), feed: f, now: FRI_EVENING }).out.some((n) => /^tcn:/.test(n.key)), 'not for anyone who turned specials pop-ups off');
+});
+
 await t("Woolies fresh food from Woolworths' website joins too, each shop with its own week", () => {
   const feed = week();
   feed.specials.push({ s: 'Woolworths', n: 'Chicken Garlic Kyiv – From the Deli', now: 150, was: 300, off: 50, src: 'hp', cat: 'Poultry, Meat & Seafood', last: '' });

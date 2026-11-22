@@ -623,6 +623,32 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
 .ozb-row { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-top: 1px dashed var(--line); }
 .ozb-row:first-child { border-top: 0; }
 .ozb-t { font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+/* TCN gift cards: deals while they run, then each card's shops */
+.tcn-deals, .tcn-list { margin: 6px 0 10px; padding: 0; list-style: none; }
+.tcn-deal + .tcn-deal { margin-top: 8px; }
+.tcn-deal-main { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 2px solid var(--ink); border-radius: 16px; background: var(--marigold-soft); color: var(--ink); text-decoration: none; }
+.tcn-deal.soon .tcn-deal-main { background: #fff; border-style: dashed; }
+.tcn-off { font-size: 18px; font-weight: 800; }
+.tcn-cards { font-weight: 700; overflow-wrap: anywhere; }
+.tcn-deal-main .k { overflow-wrap: anywhere; }
+.tcn-row { border-top: 1px dashed var(--line); }
+.tcn-row:first-child { border-top: 0; }
+.tcn-head { display: grid; grid-template-columns: minmax(0, 1fr) 20px; grid-template-areas: "n ic" "k ic"; align-items: center; column-gap: 10px; width: 100%; min-height: 56px; padding: 8px 0; border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer; }
+.tcn-head .tcn-n { grid-area: n; }
+.tcn-head .k { grid-area: k; overflow-wrap: anywhere; }
+.tcn-head .ic { grid-area: ic; width: 18px; height: 18px; transition: transform .15s; }
+.tcn-row.open .tcn-head .ic { transform: rotate(90deg); }
+.tcn-row.kind .tcn-head, .tcn-row.hit { cursor: default; }
+.tcn-row.hit { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; }
+.tcn-n { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 800; }
+.tcn-n .tag.hit { margin-top: 0; }
+.tcn-shops { padding: 0 0 12px; }
+.tcn-shops p { margin: 0 0 6px; font-size: 15px; line-height: 1.5; color: var(--ink2); overflow-wrap: anywhere; }
+.tcn-shops strong { color: var(--ink); }
+.tcn-count { margin: 10px 0 0; }
+.tcn-none { margin: 10px 0; }
+.tcn-more { margin-top: 2px; }
+@media (prefers-reduced-motion: reduce) { .tcn-head .ic { transition: none; } }
 .dlg-extra { margin: 12px 0 0; text-align: center; }
 @media (max-width: 360px) { .sale-row { grid-template-columns: 64px minmax(0, 1fr) auto; } .sale-row .soon-when { font-size: 13px; } .keen-btn { padding: 0 10px; } }
 

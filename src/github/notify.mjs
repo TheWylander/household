@@ -130,6 +130,20 @@ export function weeklyPop(groups, picks) {
   return { title: '🏷️ Check out the top weekly specials', body: groups.map((g) => itemLine(g.hits[0])).concat(picks.map(itemLine)).slice(0, 3).join('\n') };
 }
 
+/* A TCN gift card deal: how much off and where, then its cards, the day it ends and the popular shops they cover. */
+export function tcnPop(d, cards) {
+  const byName = {}, popular = [];
+  (Array.isArray(cards) ? cards : []).forEach((c) => { if (c && c.n) byName[String(c.n).replace(/^TCN\s+/i, '').toLowerCase()] = c; });
+  (d.cards || []).forEach((n) => { const c = byName[String(n).toLowerCase()]; (c && Array.isArray(c.top) ? c.top : []).forEach((s) => { if (popular.indexOf(s) < 0) popular.push(s); }); });
+  const deal = d.off ? d.off + '% off' : d.back ? 'about ' + d.back + '% back in points' : 'a deal';
+  const shop = String(d.s || '').replace(/\s*\(.*$/, '').trim();
+  return {
+    title: '🎁 TCN gift cards: ' + deal + (shop ? ' at ' + shop : ''),
+    body: [(d.cards && d.cards.length ? andList(d.cards.slice(0, 6)) : String(d.t || '')) + (d.to ? ', till ' + L.fmtDay(d.to) : ''),
+      popular.length ? 'Covers ' + andList(popular.slice(0, 5)) : ''].filter(Boolean).join('\n')
+  };
+}
+
 /* Several new spends from one person in a single pop-up: the total, what they were on one line, and your share. */
 export function spendsPop(list) {
   if (list.length === 1) return { title: list[0].t, body: list[0].b || '' };
@@ -215,6 +229,12 @@ export function plan({ push, deals, feed, now, mode = 'all' }) {
       if (groups.length) out.push(Object.assign({ key: wk, names: hits.map((h) => h.n).slice(0, 60), to: toSp, url: './#deals', tag: 'specials' }, specialsPop(groups, prev.length > 0 || !!sent[top])));
     }
   }
+
+  /* The Card Network's gift card deals: one pop-up when one worth having (10% or more) starts, at most two a run. */
+  const tcn = feed && feed.tcn && typeof feed.tcn === 'object' ? feed.tcn : {}, toTcn = subs.filter((x) => wants(x.who, 'specials')).map((x) => x.id);
+  (Array.isArray(tcn.deals) ? tcn.deals : []).filter((d) => d && d.id && (d.off >= 10 || d.back >= 10) && (!d.from || d.from <= day) && (!d.to || d.to >= day))
+    .map((d) => ({ d, key: 'tcn:' + d.id + (d.to ? '|' + d.to : '') })).filter((x) => !sent[x.key]).slice(0, 2)
+    .forEach((x) => { if (toTcn.length) out.push(Object.assign({ key: x.key, to: toTcn, url: './#deals', tag: 'tcn-' + x.d.id }, tcnPop(x.d, tcn.cards))); });
   return { day, hour, subs, out };
 }
 

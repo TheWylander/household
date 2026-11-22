@@ -2,7 +2,7 @@
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { build, parseRss, parseReport, splitTitle, hfItems, hfCat, FEEDS, HF_LISTS, UM_LISTS, umWindow, umItems, umCat, meItems, meCat, sydneyDay, specialsWeek, fingerprint } from '../src/github/deals.mjs';
+import { build, parseRss, parseReport, splitTitle, hfItems, hfCat, FEEDS, HF_LISTS, UM_LISTS, umWindow, umItems, umCat, meItems, meCat, sydneyDay, specialsWeek, fingerprint, tcnCards, tcnDeals, TCN_FEEDS, TCN_WIKI } from '../src/github/deals.mjs';
 
 const dir = fileURLToPath(new URL('./fixtures/', import.meta.url));
 const read = (f) => readFileSync(dir + f, 'utf8');
@@ -216,6 +216,66 @@ await t('a run with nothing new is spotted, so it is not published', async () =>
   fewer.deals.pop();
   assert.notStrictEqual(fingerprint(fewer), fingerprint(first), 'a deal ending is');
   assert.notStrictEqual(fingerprint(first), fingerprint({}), 'the first run always publishes');
+});
+
+await t("TCN: each card's shops from the gift card wiki", () => {
+  const got = tcnCards(read('wiki-giftcards.html'));
+  assert.strictEqual(got.asAt, '2026-10-16');
+  assert.deepStrictEqual(got.cards.map((c) => c.n), ['TCN Active', 'TCN Baby', 'TCN Choice', 'TCN Home', 'TCN Shop', 'TCN Teen', 'TCN Kids'],
+    'only the TCN section, not a heading row, an imposter elsewhere or a card with under 3 shops');
+  const shop = got.cards[4];
+  assert.deepStrictEqual(shop.shops, ['Adairs', 'adidas', 'Adore Beauty', 'ASOS', 'BCF', 'H&M - Instore', 'rebel', 'Uber', 'Uber Eats'], 'in order, once each, entities decoded');
+  assert.deepStrictEqual(shop.top, ['BCF', 'rebel', 'Uber', 'Uber Eats'], 'the ones in bold are the popular ones');
+  assert.strictEqual(shop.link, 'https://thecardnetwork.com.au/pages/the-shop-card');
+  assert.strictEqual(got.cards[2].link, 'https://choicecard.gift/');
+  assert.strictEqual(got.cards[5].link, '', 'a link anywhere else is dropped');
+  assert.strictEqual(got.cards[6].link, '');
+  assert.strictEqual(tcnCards('<h2>TCN Gift Cards</h2><table><tr><td>TCN Shop</td><td>A, B, C</td></tr></table>'), null, 'too few cards to trust');
+  assert.strictEqual(tcnCards('<p>nothing</p>'), null);
+});
+
+await t('TCN: its deals, how much off, where and which cards', () => {
+  const items = parseRss(read('ozb-tcn.xml')).map((it) => Object.assign(it, { tcn: true })).concat(parseRss(read('ozb-giftcards.xml')));
+  const names = ['Active', 'Baby', 'Choice', 'Home', 'Shop', 'Teen', 'Kids', 'Her', 'Him', 'Party', 'Gift'];
+  const got = tcnDeals(items, '2026-11-12', names);
+  assert.deepStrictEqual(got.map((d) => d.id), ['984101', '984102'], "the Apple one, a VIC-only one and one that ended are left out, and one in two feeds shows once");
+  assert.deepStrictEqual(got[0], { id: '984101', t: '15% off TCN Good Food, Pamper, Active, Shop, Cinema and Choice Gift Cards (Excl. Variable Load)', s: 'Coles (In-Store Only)',
+    link: 'https://www.ozbargain.com.au/node/984101', from: '2026-11-11', to: '2026-11-17', votes: 118, off: 15, back: 0, cards: ['Good Food', 'Pamper', 'Active', 'Shop', 'Cinema', 'Choice'] });
+  assert.strictEqual(got[1].off, 0);
+  assert.strictEqual(got[1].back, 10, '20x points is about 10% back');
+  assert.deepStrictEqual(got[1].cards, ['Kids', 'Him', 'Her', 'Party', 'Shop', 'Pamper', 'Active', 'Cinema'], '"Gift Cards" is not the Gift card');
+  assert.deepStrictEqual(tcnDeals(items, '2026-09-30', names).map((d) => d.id), ['984101', '984102', '984103'], "Card.gift is TCN's own shop");
+});
+
+await t('TCN: the job reads both, adds its deals to ours and keeps the card list a week', async () => {
+  const over = { [TCN_FEEDS[0]]: { status: 200, text: read('ozb-tcn.xml') }, [TCN_FEEDS[1]]: { status: 200, text: read('ozb-giftcards.xml') },
+    [TCN_WIKI[0]]: { status: 503, text: '' }, [TCN_WIKI[1]]: { status: 200, text: read('wiki-giftcards.html') } };
+  const s = site(over), now = new Date('2026-11-11T23:00:00Z');
+  const run = await build({ prev: {}, now, fetchText: s.fetchText, wait: 0 });
+  assert.deepStrictEqual(run.tcn.cards.map((c) => c.n).length, 7);
+  assert.strictEqual(run.tcn.asAt, '2026-10-16');
+  assert.deepStrictEqual(run.tcn.deals.map((d) => d.id), ['984101', '984102']);
+  assert.deepStrictEqual(run.tcn.deals[1].cards, ['Kids', 'Shop', 'Pamper', 'Active', 'Cinema'], "cards are spotted by the wiki's names, plus the ones taken at a kind of place");
+  const mine = run.deals.filter((d) => d.tcn).map((d) => d.id);
+  assert.deepStrictEqual(mine, ['984101', '984102'], 'they join the OzBargain deals');
+  assert.ok(run.deals.every((d) => d.id !== '984110'), 'other gift card deals from that feed do not');
+  assert.deepStrictEqual(run.sources.tcn, { ok: true, cards: 7, deals: 2, asAt: '2026-10-16', cardsAt: now.toISOString(), at: now.toISOString() });
+  const calls = s.calls.filter((u) => /wiki/.test(u));
+  assert.deepStrictEqual(calls, TCN_WIKI, 'the export first, then the page itself');
+  const s2 = site(over), next = await build({ prev: run, now: new Date('2026-11-12T23:00:00Z'), fetchText: s2.fetchText, wait: 0 });
+  assert.ok(!s2.calls.some((u) => /wiki/.test(u)), 'not read again within the week');
+  assert.strictEqual(next.tcn.cards.length, 7);
+  assert.strictEqual(next.sources.tcn.cardsAt, now.toISOString());
+  const s3 = site({}), week = await build({ prev: run, now: new Date('2026-11-18T23:00:00Z'), fetchText: s3.fetchText, wait: 0 });
+  assert.deepStrictEqual(s3.calls.filter((u) => /wiki/.test(u)), TCN_WIKI, 'a week on, it tries again');
+  assert.strictEqual(week.tcn.cards.length, 7, "and if it can't, last week's list stays");
+  assert.strictEqual(week.tcn.deals.length, 0, 'deals that ended go');
+  const none = await build({ prev: {}, now, fetchText: site({}).fetchText, wait: 0 });
+  assert.deepStrictEqual(none.tcn, { asAt: '', cards: [], deals: [] });
+  assert.strictEqual(none.sources.tcn.ok, false);
+  const changed = JSON.parse(JSON.stringify(run));
+  changed.tcn.cards[4].shops.push('Kmart');
+  assert.notStrictEqual(fingerprint(changed), fingerprint(run), 'a shop added to a card is news');
 });
 
 console.log(passed + ' groups passed');

@@ -249,7 +249,7 @@ try:
 
         # Robin shows Claude's draft note to Jules
         act(a, 'go', 'home'); act(a, 'go', 'newsedit'); act(a, 'newspublish'); a.wait_for_timeout(300)
-        check(a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/news'].notes['2026-11-09'].status") == 'published', 'the update note is saved to Firestore')
+        check(a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/news'].notes['2026-11-22'].status") == 'published', 'the update note is saved to Firestore')
         act(a, 'go', 'home')
 
         # ---------- Jules's phone ----------
