@@ -135,6 +135,8 @@ const CARD_LINK_OK = /^https:\/\/([a-z0-9-]+\.)?(thecardnetwork\.com\.au|card\.g
 /* Cards taken at a kind of place rather than a list of shops, so the wiki's table doesn't have them. */
 export const TCN_EXTRA = ['Good Food', 'Cinema', 'Pamper', 'Pub & Bar', 'Restaurant', 'Holiday & Hotel'];
 const pad2 = (n) => String(n).padStart(2, '0');
+/* Bumped when the way the card list is read changes, so the next run reads it afresh. */
+const TCN_V = 2;
 export function tcnCards(html) {
   const h = String(html || ''), heads = [], re = /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi;
   let m;
@@ -368,7 +370,7 @@ export async function build({ prev, now = new Date(), fetchText, wait = 400, log
   }
   const PT = P.tcn && typeof P.tcn === 'object' ? P.tcn : {}, prevCards = Array.isArray(PT.cards) ? PT.cards : [];
   let cards = null, cardsAt = (PS.tcn && PS.tcn.cardsAt) || '';
-  if (!prevCards.length || !cardsAt || now.getTime() - Date.parse(cardsAt) > 6 * 864e5) {
+  if (!prevCards.length || !cardsAt || PT.v !== TCN_V || now.getTime() - Date.parse(cardsAt) > 6 * 864e5) {
     for (const u of TCN_WIKI) {
       const r = await fetchText(u), got = r && r.status === 200 ? tcnCards(r.text) : null;
       await pause(wait);
@@ -378,7 +380,7 @@ export async function build({ prev, now = new Date(), fetchText, wait = 400, log
   }
   if (!cards && prevCards.length) cards = { asAt: PT.asAt || '', cards: prevCards };
   const tDeals = tcnDeals(items.concat(tItems), today, (cards ? cards.cards : []).map((c) => c.n.replace(/^TCN\s+/i, '')));
-  out.tcn = { asAt: cards ? cards.asAt : '', cards: cards ? cards.cards : [], deals: tDeals };
+  out.tcn = { v: TCN_V, asAt: cards ? cards.asAt : '', cards: cards ? cards.cards : [], deals: tDeals };
   const haveDeal = {};
   out.deals.forEach((d) => { haveDeal[d.id] = true; });
   tDeals.forEach((d) => { if (!haveDeal[d.id]) out.deals.push({ id: d.id, t: d.t, s: d.s, st: [], link: d.link, from: d.from, to: d.to, votes: d.votes, tcn: true }); });
