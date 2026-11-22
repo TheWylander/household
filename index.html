@@ -4458,7 +4458,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   /* The cards taken at a kind of place: ours described simply, then any other the wiki describes by merchant category. */
   function tcnKinds(T) {
     const out = TCN_KINDS.map((k) => { const w = T.cards.filter((c) => c.n === k[0] && c.note)[0]; return [k[0], k[1], w ? w.note : '']; });
-    T.cards.filter((c) => c.note && !TCN_KINDS.some((k) => k[0] === c.n)).forEach((c) => out.push([c.n, c.note, '']));
+    const plain = (s) => s.replace(/^merchants around australia categori[sz]ed as\s*/i, '').replace(/\s*\(MCC \d+\)/g, '').replace(/\.\s*Gift card subject to[\s\S]*$/i, '').replace(/\.$/, '');
+    T.cards.filter((c) => c.note && !TCN_KINDS.some((k) => k[0] === c.n)).forEach((c) => { const s = plain(c.note); out.push([c.n, s.charAt(0).toUpperCase() + s.slice(1), c.note]); });
     return out;
   }
   const tcnShort = (n) => String(n || '').replace(/^TCN\s+/i, '');
