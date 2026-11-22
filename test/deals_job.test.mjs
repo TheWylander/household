@@ -221,13 +221,15 @@ await t('a run with nothing new is spotted, so it is not published', async () =>
 await t("TCN: each card's shops from the gift card wiki", () => {
   const got = tcnCards(read('wiki-giftcards.html'));
   assert.strictEqual(got.asAt, '2026-10-16');
-  assert.deepStrictEqual(got.cards.map((c) => c.n), ['TCN Active', 'TCN Baby', 'TCN Choice', 'TCN Home', 'TCN Shop', 'TCN Teen', 'TCN Kids'],
+  assert.deepStrictEqual(got.cards.map((c) => c.n), ['TCN Active', 'TCN Baby', 'TCN Choice', 'TCN Home', 'TCN Shop', 'TCN Teen', 'TCN Kids', 'TCN Pamper'],
     'only the TCN section, not a heading row, an imposter elsewhere or a card with under 3 shops');
   const shop = got.cards[4];
   assert.deepStrictEqual(shop.shops, ['Adairs', 'adidas', 'Adore Beauty', 'ASOS', 'BCF', 'H&M - Instore', 'rebel', 'Uber', 'Uber Eats'], 'in order, once each, entities decoded');
   assert.deepStrictEqual(shop.top, ['BCF', 'rebel', 'Uber', 'Uber Eats'], 'the ones in bold are the popular ones');
   assert.strictEqual(shop.link, 'https://thecardnetwork.com.au/pages/the-shop-card');
-  assert.strictEqual(got.cards[2].link, 'https://choicecard.gift/');
+  assert.strictEqual(got.cards[2].link, 'https://choicecard.gift');
+  assert.deepStrictEqual(got.cards[7], { n: 'TCN Pamper', link: '', shops: [], top: [], note: 'Merchants around Australia categorised as Barber and Beauty Shops (MCC 7230), Health and Beauty Spas (MCC 7298) or Hotels, Motels and Resorts (MCC 7011). Gift card subject to individual merchant acceptance.' },
+    'a card taken at a kind of place keeps its description, not a list of shops');
   assert.strictEqual(got.cards[5].link, '', 'a link anywhere else is dropped');
   assert.strictEqual(got.cards[6].link, '');
   assert.strictEqual(tcnCards('<h2>TCN Gift Cards</h2><table><tr><td>TCN Shop</td><td>A, B, C</td></tr></table>'), null, 'too few cards to trust');
@@ -252,23 +254,23 @@ await t('TCN: the job reads both, adds its deals to ours and keeps the card list
     [TCN_WIKI[0]]: { status: 503, text: '' }, [TCN_WIKI[1]]: { status: 200, text: read('wiki-giftcards.html') } };
   const s = site(over), now = new Date('2026-11-11T23:00:00Z');
   const run = await build({ prev: {}, now, fetchText: s.fetchText, wait: 0 });
-  assert.deepStrictEqual(run.tcn.cards.map((c) => c.n).length, 7);
+  assert.deepStrictEqual(run.tcn.cards.map((c) => c.n).length, 8);
   assert.strictEqual(run.tcn.asAt, '2026-10-16');
   assert.deepStrictEqual(run.tcn.deals.map((d) => d.id), ['984101', '984102']);
   assert.deepStrictEqual(run.tcn.deals[1].cards, ['Kids', 'Shop', 'Pamper', 'Active', 'Cinema'], "cards are spotted by the wiki's names, plus the ones taken at a kind of place");
   const mine = run.deals.filter((d) => d.tcn).map((d) => d.id);
   assert.deepStrictEqual(mine, ['984101', '984102'], 'they join the OzBargain deals');
   assert.ok(run.deals.every((d) => d.id !== '984110'), 'other gift card deals from that feed do not');
-  assert.deepStrictEqual(run.sources.tcn, { ok: true, cards: 7, deals: 2, asAt: '2026-10-16', cardsAt: now.toISOString(), at: now.toISOString() });
+  assert.deepStrictEqual(run.sources.tcn, { ok: true, cards: 8, deals: 2, asAt: '2026-10-16', cardsAt: now.toISOString(), at: now.toISOString() });
   const calls = s.calls.filter((u) => /wiki/.test(u));
   assert.deepStrictEqual(calls, TCN_WIKI, 'the export first, then the page itself');
   const s2 = site(over), next = await build({ prev: run, now: new Date('2026-11-12T23:00:00Z'), fetchText: s2.fetchText, wait: 0 });
   assert.ok(!s2.calls.some((u) => /wiki/.test(u)), 'not read again within the week');
-  assert.strictEqual(next.tcn.cards.length, 7);
+  assert.strictEqual(next.tcn.cards.length, 8);
   assert.strictEqual(next.sources.tcn.cardsAt, now.toISOString());
   const s3 = site({}), week = await build({ prev: run, now: new Date('2026-11-18T23:00:00Z'), fetchText: s3.fetchText, wait: 0 });
   assert.deepStrictEqual(s3.calls.filter((u) => /wiki/.test(u)), TCN_WIKI, 'a week on, it tries again');
-  assert.strictEqual(week.tcn.cards.length, 7, "and if it can't, last week's list stays");
+  assert.strictEqual(week.tcn.cards.length, 8, "and if it can't, last week's list stays");
   assert.strictEqual(week.tcn.deals.length, 0, 'deals that ended go');
   const none = await build({ prev: {}, now, fetchText: site({}).fetchText, wait: 0 });
   assert.deepStrictEqual(none.tcn, { asAt: '', cards: [], deals: [] });
