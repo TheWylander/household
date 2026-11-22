@@ -109,6 +109,24 @@ service cloud.firestore {
       allow delete: if isMember(resource.data.hid);
     }
 
+    // Feedback from Settings: either of a household can send a note about it; only the owner reads them and marks
+    // them read.
+    match /feedback/{id} {
+      allow create: if id.matches('^[a-z0-9]{16}$')
+        && request.resource.data.keys().hasOnly(['hid', 'by', 'label', 'email', 'text', 'at'])
+        && request.resource.data.by == me()
+        && request.resource.data.email == myEmail()
+        && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000
+        && request.resource.data.label is string && request.resource.data.label.size() <= 60
+        && request.resource.data.at is int
+        && request.resource.data.at > request.time.toMillis() - 600000
+        && request.resource.data.at < request.time.toMillis() + 600000
+        && isMember(request.resource.data.hid);
+      allow read: if isAdmin();
+      allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isAdmin();
+    }
+
     // The shop specials read on the owner's laptop each week, shared with every signed-in household.
     match /shared/{doc} {
       allow get: if signedIn() || isBot();

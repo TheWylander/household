@@ -227,8 +227,22 @@ try:
         check(RH.get('members') == ['uid-robin'] and 'pilot' not in RH and 'legacy' not in RH, 'just Robin, no pilot features yet')
         r.fill('#sna', 'Robin'); r.fill('#snb', 'Jules'); act(r, 'sme', 'a'); act(r, 'snext')
         check(r.locator('#sbudget').count() == 0 and 'How you share' in text(r), 'no budget step while Insights and budgets is a pilot')
-        act(r, 'snext'); act(r, 'sfinish', wait=700)
+        act(r, 'snext')
+        check(r.locator('[data-act="sholder"][data-arg="none"][aria-pressed="true"]').count() == 1 and r.locator('#sbank').count() == 0,
+              'a new couple starts with no shared card, so no bank or points questions')
+        act(r, 'sholder', 'b')
+        check(r.locator('#sbank').count() == 1, 'picking a card asks which bank')
+        r.select_option('#sbank', 'CommBank'); r.wait_for_timeout(200)
+        check(r.locator('[data-act="searns"][data-arg="other"]').count() == 1 and r.locator('[data-act="searns"][data-arg="qantas"]').count() == 0,
+              "any bank but Westpac asks whether it earns points, not Westpac's card types")
+        act(r, 'searns', 'other')
+        r.fill('#sprog', 'Qantas'); r.fill('#srate', '0.5')
+        act(r, 'sholder', 'none')
+        shot(r, 'hh02b-card-question')
+        act(r, 'sfinish', wait=700)
         t = text(r)
+        card = db(r)['households/%s/hh/settings' % rhid].get('card') or {}
+        check(card.get('none') is True and card.get('earns') is None, 'saved with no shared card: ' + json.dumps(card)[:160])
         check('Hi Robin' in t and 'Get set up' in t and 'Invite Jules' in t, 'home has the getting-started list')
         check('Set a monthly budget' not in t, 'no budget on Home')
         check(r.locator('.nav [data-arg="insights"]').count() == 0 and r.locator('.nav [data-arg="settings"]').count() == 1, 'Settings takes the place of Insights')
@@ -263,11 +277,46 @@ try:
         check('laptop' not in t and 'Ari' not in t, "without saying whose laptop: " + ([l for l in t.split('\n') if 'Coles fresh food' in l] or [''])[0][:160])
         act(r, 'go', 'home')
 
-        # Splitwise import is a pilot
-        act(r, 'go', 'settings'); act(r, 'go', 'upload')
-        check('Moving from Splitwise' not in text(r), 'no Splitwise import while it is a pilot')
+        # Splitwise import is for everyone; with no shared card, Upload asks whose statement it is
         act(r, 'go', 'settings')
-        check('Splitwise' not in text(r), 'and Settings leaves it out')
+        check('Card statements and Splitwise files' in text(r), 'Settings: card statements and Splitwise files, with no bank named')
+        act(r, 'go', 'upload')
+        t = text(r)
+        check('Moving from Splitwise' in t, 'Splitwise import is on for a new couple')
+        check('Whose statement is it?' in t and 'Westpac' not in t and r.locator('[data-act="impwho"][data-arg="a"][aria-pressed="true"]').count() == 1,
+              "Upload asks whose statement it is, starting with yours, and doesn't mention Westpac")
+        r.locator('.nav-add').first.click(); r.wait_for_timeout(200)
+        if r.locator('[data-act="pickadd"]').count():
+            act(r, 'pickadd')
+        check(r.locator('#addCard').count() == 0 and r.locator('[data-act="addpayer"][data-arg="a"][aria-pressed="true"]').count() == 1,
+              "adding a spend: no shared card box, and Robin paid unless Robin says otherwise")
+        act(r, 'closeadd')
+
+        # a card from any bank, in Customise
+        act(r, 'go', 'settings'); act(r, 'go', 'custom')
+        act(r, 'cholder', 'b')
+        r.select_option('#cbank', 'CommBank'); r.wait_for_timeout(200)
+        act(r, 'cearns', 'other')
+        r.fill('#cprog', 'Qantas'); r.fill('#crate', '0.5')
+        act(r, 'savecustom', wait=500)
+        card = db(r)['households/%s/hh/settings' % rhid].get('card') or {}
+        check(card.get('none') is False and card.get('holder') == 'b' and card.get('bank') == 'CommBank' and card.get('earns') == 'other' and card.get('rate') == 0.5 and card.get('program') == 'Qantas',
+              'Customise saves a CommBank card earning 0.5 Qantas Points a dollar: ' + json.dumps(card)[:200])
+        act(r, 'go', 'settings')
+        check("Jules's CommBank statement" in text(r), 'and Upload is now for that card')
+        act(r, 'go', 'custom'); act(r, 'cholder', 'none'); act(r, 'savecustom', wait=500)
+        check((db(r)['households/%s/hh/settings' % rhid].get('card') or {}).get('none') is True, 'and back to no shared card')
+
+        # feedback
+        act(r, 'go', 'settings'); act(r, 'go', 'feedback')
+        act(r, 'fbsend')
+        check('Write a few words first' in text(r), 'an empty note is caught')
+        r.fill('#fbText', 'Could the calendar start on Sunday?')
+        act(r, 'fbsend', wait=600)
+        notes = [v for k, v in db(r).items() if k.startswith('feedback/')]
+        check(len(notes) == 1 and notes[0].get('hid') == rhid and notes[0].get('label') == 'Robin & Jules' and notes[0].get('email') == 'robin@example.com',
+              'the note is saved with their household and email')
+        check(try_read(r, 'feedback', col=True) == 'permission-denied', "and Robin can't read anyone's notes")
 
         # the guide's steps
         act(r, 'go', 'home'); act(r, 'a2hs')
@@ -275,7 +324,7 @@ try:
         r.locator('.dialog [data-act="dlgclose"]').first.click(); r.wait_for_timeout(150)
         act(r, 'gohelp')
         t = text(r)
-        check('Using Two of Us' in t and 'Pilot features' in t and 'Splitwise import' in t and 'Your data' in t, 'Help covers each part, the pilot features and their data')
+        check('Using Two of Us' in t and 'Pilot features' in t and 'Insights and budgets' in t and 'Your data' in t and 'Send feedback' in t, 'Help covers each part, the pilot features, feedback and their data')
         shot(r, 'hh04-help', full=True)
         narrow(r, 'help')
         act(r, 'go', 'home')
@@ -323,6 +372,9 @@ try:
         act(a, 'go', 'home'); act(a, 'go', 'settings'); act(a, 'go', 'admin', wait=900)
         t = text(a)
         check('2 households' in t and 'Robin & Jules' in t and 'robin@example.com' in t and 'Ari & Noor' in t, "the owner's list shows both households: " + t[:200].replace('\n', ' | '))
+        check('Could the calendar start on Sunday?' in t and a.locator('#fbNotes li.new').count() == 1, "Robin's note is on the owner's page")
+        act(a, 'fbread', wait=500)
+        check(all(v.get('read') is True for k, v in db(a).items() if k.startswith('feedback/')), 'and can be marked as read')
         act(a, 'lockcheck', wait=600)
         check(a.locator('#lockResult[data-ok="1"]').count() == 1, 'the lock check passes: ' + (a.locator('#lockResult').inner_text() if a.locator('#lockResult').count() else 'none'))
         shot(a, 'hh06-admin', full=True)

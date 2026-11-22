@@ -115,6 +115,13 @@
       if (op === 'delete') return isMember(res && res.hid);
       return false;
     }
+    if (seg[0] === 'feedback' && seg.length === 2) {
+      if (op === 'create') return /^[a-z0-9]{16}$/.test(seg[1]) && only(Object.keys(req), ['hid', 'by', 'label', 'email', 'text', 'at']) && req.by === me && req.email === em &&
+        typeof req.text === 'string' && req.text.length > 0 && req.text.length <= 1000 && typeof req.label === 'string' && req.label.length <= 60 &&
+        Number.isInteger(req.at) && Math.abs(req.at - Date.now()) < 600000 && isMember(req.hid);
+      if (op === 'update') return isAdmin && only(changed(req, res), ['read']);
+      return isAdmin;
+    }
     if (seg[0] === 'shared' && seg.length === 2) return op === 'get' ? on : op !== 'list' && isAdmin && seg[1] === 'web';
     if (seg[0] === 'admin' && seg.length === 2) return op === 'get' && isAdmin;
     if (seg[0] === 'hh' && seg.length === 2) {

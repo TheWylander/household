@@ -858,3 +858,9 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
 .gift-tag { display: flex; align-items: center; gap: 6px; }
 .gift-tag .ic { width: 14px; height: 14px; flex: none; }
 .gift-big { font-family: var(--display, inherit); font-size: 28px; font-weight: 800; }
+
+/* Feedback notes on the owner's page. */
+.fb-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 12px; }
+.fb-list li { padding: 10px 12px; border: 2px solid var(--line); border-radius: var(--r-md); }
+.fb-list li.new { border-color: var(--ink); background: var(--marigold-soft); }
+.fb-text { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
