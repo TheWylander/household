@@ -273,7 +273,11 @@ await t('TCN: the job reads both, adds its deals to ours and keeps the card list
   assert.strictEqual(week.tcn.cards.length, 8, "and if it can't, last week's list stays");
   assert.strictEqual(week.tcn.deals.length, 0, 'deals that ended go');
   const none = await build({ prev: {}, now, fetchText: site({}).fetchText, wait: 0 });
-  assert.deepStrictEqual(none.tcn, { asAt: '', cards: [], deals: [] });
+  assert.deepStrictEqual(none.tcn, { v: 2, asAt: '', cards: [], deals: [] });
+  const s4 = site(over), older = JSON.parse(JSON.stringify(run));
+  delete older.tcn.v;
+  await build({ prev: older, now: new Date('2026-11-12T23:00:00Z'), fetchText: s4.fetchText, wait: 0 });
+  assert.ok(s4.calls.some((u) => /wiki/.test(u)), 'a list read the old way is read again straight away');
   assert.strictEqual(none.sources.tcn.ok, false);
   const changed = JSON.parse(JSON.stringify(run));
   changed.tcn.cards[4].shops.push('Kmart');
