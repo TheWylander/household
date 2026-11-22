@@ -641,6 +641,32 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
 .ozb-row { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-top: 1px dashed var(--line); }
 .ozb-row:first-child { border-top: 0; }
 .ozb-t { font-weight: 700; color: var(--ink); overflow-wrap: anywhere; }
+/* TCN gift cards: deals while they run, then each card's shops */
+.tcn-deals, .tcn-list { margin: 6px 0 10px; padding: 0; list-style: none; }
+.tcn-deal + .tcn-deal { margin-top: 8px; }
+.tcn-deal-main { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 2px solid var(--ink); border-radius: 16px; background: var(--marigold-soft); color: var(--ink); text-decoration: none; }
+.tcn-deal.soon .tcn-deal-main { background: #fff; border-style: dashed; }
+.tcn-off { font-size: 18px; font-weight: 800; }
+.tcn-cards { font-weight: 700; overflow-wrap: anywhere; }
+.tcn-deal-main .k { overflow-wrap: anywhere; }
+.tcn-row { border-top: 1px dashed var(--line); }
+.tcn-row:first-child { border-top: 0; }
+.tcn-head { display: grid; grid-template-columns: minmax(0, 1fr) 20px; grid-template-areas: "n ic" "k ic"; align-items: center; column-gap: 10px; width: 100%; min-height: 56px; padding: 8px 0; border: 0; background: none; color: var(--ink); text-align: left; cursor: pointer; }
+.tcn-head .tcn-n { grid-area: n; }
+.tcn-head .k { grid-area: k; overflow-wrap: anywhere; }
+.tcn-head .ic { grid-area: ic; width: 18px; height: 18px; transition: transform .15s; }
+.tcn-row.open .tcn-head .ic { transform: rotate(90deg); }
+.tcn-row.kind .tcn-head, .tcn-row.hit { cursor: default; }
+.tcn-row.hit { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; }
+.tcn-n { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 800; }
+.tcn-n .tag.hit { margin-top: 0; }
+.tcn-shops { padding: 0 0 12px; }
+.tcn-shops p { margin: 0 0 6px; font-size: 15px; line-height: 1.5; color: var(--ink2); overflow-wrap: anywhere; }
+.tcn-shops strong { color: var(--ink); }
+.tcn-count { margin: 10px 0 0; }
+.tcn-none { margin: 10px 0; }
+.tcn-more { margin-top: 2px; }
+@media (prefers-reduced-motion: reduce) { .tcn-head .ic { transition: none; } }
 .dlg-extra { margin: 12px 0 0; text-align: center; }
 @media (max-width: 360px) { .sale-row { grid-template-columns: 64px minmax(0, 1fr) auto; } .sale-row .soon-when { font-size: 13px; } .keen-btn { padding: 0 10px; } }
 
@@ -1505,6 +1531,11 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
      decides when the other person gets it; edits live in hh/news. The other person sees the newest shown note once,
      or as a few things to try straight after the welcome. */
   const RELEASES = [
+    { id: '2026-11-22', date: '2026-11-22', title: 'TCN gift cards in Deals', items: [
+      ['tag', 'TCN gift card deals.', "Deals shows The Card Network's gift card deals while they run, like 15% off at Coles, and the popular shops each one covers."],
+      ['cart', 'Where can I use it?', 'Every TCN card and the shops that take it. Type a shop, like Uber Eats, to see which cards take it.'],
+      ['bell', 'A pop-up when one starts.', 'Your phones pop up once when a TCN deal of 10% or more starts.']
+    ] },
     { id: '2026-11-09', date: '2026-11-09', title: 'Insights, profiles, bills coming up and more', items: [
       ['chart', 'Insights.', "How each month is tracking against the budget, where the money goes and your big day of the week. It's in the bottom bar."],
       ['duo', 'Profiles.', 'Add a photo for each of you: the gear on Home, then Profiles.'],
@@ -1546,7 +1577,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     photos: null, photoBusy: null, photoErr: null, newsShown: false, newsDoc: null, newsEdit: null, newsId: null, factN: 0,
     enterKey: null, enterAt: 0, enterDir: 0, enterDirNow: 0, countsShown: {},
     pushDoc: null, pushBusy: false, pushNote: null,
-    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, dealsFetch: null, spStore: 'all', spAisle: 'all', spSort: 'best', spWatch: false, spQuery: '', spAll: false, ozbAll: false, watchNew: '', listNew: '', aiDoc: null, aiTokNew: '', ghTokNew: '',
+    dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, dealsFetch: null, spStore: 'all', spAisle: 'all', spSort: 'best', spWatch: false, spQuery: '', spAll: false, ozbAll: false, tcnQuery: '', tcnOpen: '', tcnAll: false, watchNew: '', listNew: '', aiDoc: null, aiTokNew: '', ghTokNew: '',
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
     whoPick: false, welcomePreview: false, welcomeT: 0
@@ -3745,15 +3776,30 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     const so = j.sources && typeof j.sources === 'object' ? j.sources : {};
     return {
       updated: str(j.updated, 40),
-      sources: { ozb: src(so.ozb), report: src(so.report), harris: src(so.harris), umall: src(so.umall), meat: src(so.meat) },
+      sources: { ozb: src(so.ozb), report: src(so.report), harris: src(so.harris), umall: src(so.umall), meat: src(so.meat), tcn: src(so.tcn) },
       specials: (Array.isArray(j.specials) ? j.specials : []).slice(0, 1500).filter((x) => x && typeof x.n === 'string' && x.n.trim() && int(x.now) > 0).map((x) => ({
         s: L.storeName(str(x.s, 40)), n: str(x.n, 120), was: int(x.was), now: int(x.now), off: L.clamp(int(x.off), 0, 99), cat: str(x.cat, 40), last: str(x.last, 40),
         link: linkOk(x.link), img: imgOk(x.img), src: x.src === 'hf' || x.src === 'um' || x.src === 'me' ? x.src : 'hp', to: day(x.to)
       })),
       deals: (Array.isArray(j.deals) ? j.deals : []).slice(0, 150).filter((x) => x && typeof x.t === 'string' && x.t.trim()).map((x) => ({
-        id: str(x.id, 12), t: str(x.t, 160), s: str(x.s, 40), link: linkOk(x.link), from: day(x.from), to: day(x.to), votes: int(x.votes), hp: x.hp === true
-      }))
+        id: str(x.id, 12), t: str(x.t, 160), s: str(x.s, 40), link: linkOk(x.link), from: day(x.from), to: day(x.to), votes: int(x.votes), hp: x.hp === true, tcn: x.tcn === true
+      })),
+      tcn: cleanTcn(j.tcn, str, int, day)
     };
+  }
+  /* The Card Network's gift cards: which shops each card is taken at, and its deals. */
+  const CARD_LINK_OK = /^https:\/\/([a-z0-9-]+\.)?(thecardnetwork\.com\.au|card\.gift|choicecard\.gift)\/[^\s"'<>]*$/i;
+  function cleanTcn(x, str, int, day) {
+    const o = x && typeof x === 'object' ? x : {}, names = (a, n, len) => (Array.isArray(a) ? a : []).filter((s) => typeof s === 'string' && s.trim()).slice(0, n).map((s) => s.trim().slice(0, len));
+    const cards = (Array.isArray(o.cards) ? o.cards : []).slice(0, 40).filter((c) => c && typeof c.n === 'string' && c.n.trim()).map((c) => {
+      const shops = names(c.shops, 200, 60);
+      return { n: str(c.n.trim(), 40), link: CARD_LINK_OK.test(String(c.link || '')) ? String(c.link).slice(0, 200) : '', shops, top: names(c.top, 20, 60).filter((s) => shops.indexOf(s) >= 0) };
+    }).filter((c) => c.shops.length);
+    const deals = (Array.isArray(o.deals) ? o.deals : []).slice(0, 20).filter((d) => d && typeof d.t === 'string' && d.t.trim()).map((d) => ({
+      id: str(d.id, 12), t: str(d.t, 160), s: str(d.s, 40), link: linkOk(d.link), from: day(d.from), to: day(d.to), votes: int(d.votes),
+      off: L.clamp(int(d.off), 0, 90), back: L.clamp(int(d.back), 0, 90), cards: names(d.cards, 20, 30)
+    }));
+    return { asAt: day(o.asAt), cards, deals };
   }
   function loadFeed(force) {
     const url = dealsUrl();
@@ -4404,6 +4450,64 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
         : '<p class="muted" style="margin-top:8px">Nothing for our shops right now.</p>') +
       (list.length > shown.length || S.ozbAll ? '<button class="link sm" style="margin-top:8px" data-act="ozball">' + (S.ozbAll ? 'Just our shops' : 'See all ' + list.length + ' grocery deals') + '</button>' : '') + '</section>';
   }
+  /* The Card Network's gift cards: its deals while they run, a search for which cards a shop takes, and every card's
+     shops, from OzBargain's gift card wiki. The cards taken at a kind of place, not a list of shops, are described. */
+  const TCN_KINDS = [['TCN Good Food', 'Restaurants, cafes and bars, but not fast food'], ['TCN Cinema', 'Cinemas that take eftpos'],
+    ['TCN Pamper', 'Hair and beauty salons, day spas and beauty clinics that take eftpos']];
+  const tcnShort = (n) => String(n || '').replace(/^TCN\s+/i, '');
+  function tcnLive() {
+    const F = S.feed, t = today();
+    return F && F.tcn ? F.tcn.deals.filter((d) => !d.to || d.to >= t) : [];
+  }
+  function tcnDealHtml(d, t) {
+    const F = S.feed, byName = {}, popular = [];
+    F.tcn.cards.forEach((c) => { byName[tcnShort(c.n).toLowerCase()] = c; });
+    d.cards.forEach((n) => { const c = byName[n.toLowerCase()]; if (c) c.top.forEach((s) => { if (popular.indexOf(s) < 0) popular.push(s); }); });
+    const what = d.off ? d.off + '% off' : d.back ? 'About ' + d.back + '% back in points' : 'Deal', shop = String(d.s || '').replace(/\s*\(.*$/, '').trim();
+    const when = d.from && d.from > t ? 'From ' + L.fmtDay(d.from) + (d.to ? ' to ' + L.fmtDay(d.to) : '') : d.to ? 'Till ' + L.fmtDay(d.to) : '';
+    const inner = '<span class="tcn-off">' + esc(what + (shop ? ' at ' + shopLabel(L.storeName(shop)) : '')) + '</span>' +
+      '<span class="tcn-cards">' + esc(d.cards.length ? listNames(d.cards.map((n) => 'TCN ' + n)) : d.t) + '</span>' +
+      (popular.length ? '<span class="k">Covers ' + esc(listNames(popular.slice(0, 6))) + '</span>' : '') + (when ? '<span class="k">' + esc(when) + '</span>' : '');
+    return '<li class="tcn-deal' + (d.from && d.from > t ? ' soon' : '') + '">' + (d.link ? '<a class="tcn-deal-main" href="' + esc(d.link) + '" target="_blank" rel="noopener">' + inner + '</a>' : '<span class="tcn-deal-main">' + inner + '</span>') + '</li>';
+  }
+  function tcnListHtml() {
+    const F = S.feed, T = F && F.tcn;
+    if (!T) return '';
+    const q = String(S.tcnQuery || '').trim().toLowerCase();
+    if (q) {
+      const hits = T.cards.map((c) => ({ c, m: c.shops.filter((s) => s.toLowerCase().indexOf(q) >= 0) })).filter((x) => x.m.length);
+      const kinds = TCN_KINDS.filter((k) => (k[0] + ' ' + k[1]).toLowerCase().indexOf(q) >= 0);
+      if (!hits.length && !kinds.length) return '<p class="muted tcn-none">No TCN card lists “' + esc(S.tcnQuery.trim()) + '”.</p>';
+      return '<p class="k tcn-count">' + (hits.length + kinds.length) + (hits.length + kinds.length === 1 ? ' card takes it' : ' cards take it') + '</p><ul class="tcn-list">' +
+        hits.map((x) => '<li class="tcn-row hit"><span class="tcn-n">' + esc(x.c.n) + '</span><span class="k">' + esc(listNames(x.m.slice(0, 6))) + (x.m.length > 6 ? ' and ' + (x.m.length - 6) + ' more' : '') + '</span></li>').join('') +
+        kinds.map((k) => '<li class="tcn-row hit"><span class="tcn-n">' + esc(k[0]) + '</span><span class="k">' + esc(k[1]) + '</span></li>').join('') + '</ul>';
+    }
+    const live = {}, t = today();
+    tcnLive().filter((d) => !d.from || d.from <= t).forEach((d) => d.cards.forEach((n) => { live[n.toLowerCase()] = true; }));
+    const list = T.cards.slice().sort((a, b) => (live[tcnShort(b.n).toLowerCase()] ? 1 : 0) - (live[tcnShort(a.n).toLowerCase()] ? 1 : 0) || b.top.length - a.top.length || b.shops.length - a.shops.length);
+    const shown = S.tcnAll ? list : list.slice(0, 5);
+    const row = (c) => {
+      const open = S.tcnOpen === c.n, on = live[tcnShort(c.n).toLowerCase()];
+      return '<li class="tcn-row' + (open ? ' open' : '') + '"><button class="tcn-head" data-act="tcnopen" data-arg="' + esc(c.n) + '" aria-expanded="' + open + '">' +
+        '<span class="tcn-n">' + esc(c.n) + (on ? '<span class="tag hit">On special</span>' : '') + '</span><span class="k">' + c.shops.length + ' shops' + (c.top.length ? ', including ' + esc(listNames(c.top.slice(0, 3))) : '') + '</span>' + icon('arrow') + '</button>' +
+        (open ? '<div class="tcn-shops"><p>' + c.shops.map((s) => (c.top.indexOf(s) >= 0 ? '<strong>' + esc(s) + '</strong>' : esc(s))).join(', ') + '</p>' +
+          (c.link ? '<a class="link sm" href="' + esc(c.link) + '" target="_blank" rel="noopener">TCN’s own list for ' + esc(c.n) + '</a>' : '') + '</div>' : '') + '</li>';
+    };
+    return '<ul class="tcn-list">' + shown.map(row).join('') + (S.tcnAll ? TCN_KINDS.map((k) => '<li class="tcn-row kind"><span class="tcn-head"><span class="tcn-n">' + esc(k[0]) + '</span><span class="k">' + esc(k[1]) + '</span></span></li>').join('') : '') + '</ul>' +
+      (list.length > 5 ? '<button class="link sm tcn-more" data-act="tcnall">' + (S.tcnAll ? 'Fewer cards' : 'See all ' + (list.length + TCN_KINDS.length) + ' cards') + '</button>' : '');
+  }
+  function tcnCard() {
+    const F = S.feed, T = F && F.tcn;
+    if (!T || (!T.cards.length && !T.deals.length)) return '';
+    const t = today(), live = tcnLive().sort((a, b) => (a.from > t ? 1 : 0) - (b.from > t ? 1 : 0) || (b.off || b.back) - (a.off || a.back));
+    return '<section class="card specials tcn" id="tcnCard"><div class="card-head"><h2>TCN gift cards</h2>' + (live.length ? '<span class="pill">' + live.length + (live.length === 1 ? ' deal' : ' deals') + '</span>' : '') + '</div>' +
+      (live.length ? '<ul class="tcn-deals">' + live.map((d) => tcnDealHtml(d, t)).join('') + '</ul>'
+        : '<p class="muted">No TCN deals on right now. Your phones pop up when one of 10% or more starts.</p>') +
+      (T.cards.length ? '<label class="sr" for="tcnQ">Which cards does a shop take?</label><input class="input sp-search" id="tcnQ" type="search" placeholder="Where can I use it? Try Uber Eats" autocomplete="off" enterkeyhint="search" data-bind="tcnQuery" data-input="tcnsearch" value="' + esc(S.tcnQuery) + '">' +
+        '<div id="tcnList">' + tcnListHtml() + '</div>' +
+        '<p class="hint">Which shops take each card is from OzBargain’s gift card wiki' + (T.asAt ? ', correct as at ' + esc(L.fmtDay(T.asAt)) : '') + '. TCN changes its lists every few weeks, so check its own list before you buy. Shops in bold are the popular ones.</p>' : '') +
+      '</section>';
+  }
   function saleRow(o, t) {
     const s = o.sale, past = o.date < t, what = [s.offer, L.saleRuleLabel(s.rule)].filter(Boolean).join(' · ');
     return '<li class="sale-row"><span class="soon-when">' + esc(whenLabel(o.date, t)) + '</span>' +
@@ -4433,7 +4537,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     const eyebrow = wk && wk.from && wk.to ? 'Specials ' + L.fmtDay(wk.from) + ' to ' + L.fmtDay(wk.to) : 'This week\'s specials';
     return '<header class="top"><div><p class="eyebrow">' + esc(eyebrow) + '</p><h1 class="title">Deals</h1></div>' +
       '<div class="top-right">' + listBtn() + '</div></header>' +
-      everythingCard() + matchesCard() + ozbCard() + dealsFoot();
+      everythingCard() + matchesCard() + (tcnLive().length ? tcnCard() + ozbCard() : ozbCard() + tcnCard()) + dealsFoot();
   }
   /* Home: the next sale day, keen ones first. */
   function nextSaleCard() {
@@ -5652,6 +5756,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     },
     spmore: () => { S.spAll = !S.spAll; render(); if (!S.spAll) { const el = document.getElementById('spList'); if (el) el.scrollIntoView({ block: 'nearest' }); } },
     ozball: () => { S.ozbAll = !S.ozbAll; render(); },
+    tcnopen: (arg) => { S.tcnOpen = S.tcnOpen === arg ? '' : String(arg || '').slice(0, 40); render(); },
+    tcnall: () => { S.tcnAll = !S.tcnAll; render(); },
     watchadd: () => {
       const w = String(S.watchNew || '').trim().replace(/\s+/g, ' ').slice(0, 30), D = dealsCfg();
       const el = () => document.getElementById('watchIn');
@@ -5858,6 +5964,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     },
     swtrimrefresh: () => swTrimRefresh(),
     spsearch: () => { S.spAll = false; const el = document.getElementById('spList'); if (el) el.innerHTML = spListHtml(); },
+    tcnsearch: () => { const el = document.getElementById('tcnList'); if (el) el.innerHTML = tcnListHtml(); },
     rcpsum: () => { const el = document.getElementById('rcpSum'); if (el && S.dialog && S.dialog.form) el.innerHTML = receiptSumHtml(S.dialog.form); }
   };
 

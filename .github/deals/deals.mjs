@@ -124,6 +124,81 @@ export function toDeals(items, today) {
   return out.sort((a, b) => (a.from < b.from ? 1 : a.from > b.from ? -1 : b.votes - a.votes));
 }
 
+/* ---------- The Card Network (TCN) gift cards ---------- */
+/* Its deals come from OzBargain: the brand's own feed and the gift card feed, plus any in the feeds above. Which shops
+   each card is taken at comes from OzBargain's gift card wiki, whose table of TCN's multi-choice cards the community
+   keeps up to date; it's read once a week. */
+export const TCN_FEEDS = [OZB + '/brand/the-card-network/feed', OZB + '/cat/gift-cards/feed'];
+export const TCN_WIKI = [OZB + '/wiki/_export/xhtml/gift_card_deals_retailer_faq', OZB + '/wiki/gift_card_deals_retailer_faq'];
+const TCN_RE = /\bTCN\b|\bthe card network\b/i;
+const CARD_LINK_OK = /^https:\/\/([a-z0-9-]+\.)?(thecardnetwork\.com\.au|card\.gift|choicecard\.gift)\/[^\s"'<>]*$/i;
+/* Cards taken at a kind of place rather than a list of shops, so the wiki's table doesn't have them. */
+export const TCN_EXTRA = ['Good Food', 'Cinema', 'Pamper', 'Pub & Bar', 'Restaurant', 'Holiday & Hotel'];
+const pad2 = (n) => String(n).padStart(2, '0');
+export function tcnCards(html) {
+  const h = String(html || ''), heads = [], re = /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi;
+  let m;
+  while ((m = re.exec(h))) heads.push({ at: m.index, end: re.lastIndex, lv: Number(m[1]), t: text(m[2]) });
+  const i = heads.findIndex((x) => /^TCN gift cards?$/i.test(x.t));
+  if (i < 0) return null;
+  const top = heads[i], next = heads.slice(i + 1).find((x) => x.lv <= top.lv), sec = h.slice(top.end, next ? next.at : h.length);
+  const as = /correct as at\s+(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s+(\d{4})/i.exec(text(sec)), mo = as ? monthIdx(as[2]) : -1;
+  const asAt = as && mo >= 0 ? as[3] + '-' + pad2(mo + 1) + '-' + pad2(as[1]) : '';
+  const cards = [], seen = {};
+  sec.replace(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi, (row, inner) => {
+    const cells = [];
+    inner.replace(/<t([dh])\b[^>]*>([\s\S]*?)<\/t\1>/gi, (c, k, body) => { cells.push(body); return c; });
+    const n = cells.length >= 2 ? clip(text(cells[0]), 40) : '';
+    if (!/^TCN\s+\S/i.test(n) || seen[n.toLowerCase()]) return row;
+    /* Shops in bold are the ones the page picks out as popular for gift card deals. */
+    const marked = cells[1].replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, (b, tag, x) => '\u0001' + x + '\u0002');
+    const shops = [], popular = [], have = {};
+    text(marked).split(/\s*,\s*/).forEach((s) => {
+      const name = clip(s.replace(/[\u0001\u0002]/g, '').replace(/\s+/g, ' ').trim(), 60), k = name.toLowerCase();
+      if (!name || have[k]) return;
+      have[k] = true;
+      shops.push(name);
+      if (s.indexOf('\u0001') >= 0) popular.push(name);
+    });
+    if (shops.length < 3) return row;
+    seen[n.toLowerCase()] = true;
+    const href = decode((/<a\b[^>]*href="([^"]+)"/i.exec(cells[0]) || [])[1] || '');
+    cards.push({ n, link: CARD_LINK_OK.test(href) ? clip(href, 200) : '', shops: shops.slice(0, 200), top: popular.slice(0, 20) });
+    return row;
+  });
+  return cards.length >= 5 ? { asAt, cards: cards.slice(0, 40) } : null;
+}
+const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/* TCN's deals: how much off (or roughly how much back in points: 20x Everyday Rewards or Flybuys points is about 10%),
+   where, and which of its cards. */
+export function tcnDeals(items, today, cardNames) {
+  const names = Array.from(new Set((cardNames || []).concat(TCN_EXTRA))).filter(Boolean).sort((a, b) => b.length - a.length);
+  const seen = {}, out = [];
+  items.forEach((it) => {
+    const id = nodeId(it.link), t = splitTitle(it.title);
+    if (!id || seen[id] || !(it.tcn || TCN_RE.test(it.title) || /^card\.gift$/i.test(t.store))) return;
+    seen[id] = true;
+    if (it.flag === 'expired' || it.flag === 'targeted') return;
+    if (t.states.length && t.states.indexOf('NSW') < 0) return;
+    const to = lastDay(it.meta.expiry), from = dayOf(it.meta.starting) || pubDay(it.pub);
+    if (to && to < today) return;
+    let rest = ' ' + t.what.replace(/\([^)]*\)/g, ' ').replace(/\b(e-?)?gift\s*cards?\b/gi, ' ') + ' ';
+    const found = [];
+    names.forEach((n) => {
+      const r = new RegExp('([^A-Za-z])' + escRe(n) + '(?![A-Za-z])', 'i'), mm = r.exec(rest);
+      if (!mm) return;
+      found.push({ n, at: mm.index });
+      rest = rest.slice(0, mm.index + 1) + ' '.repeat(n.length) + rest.slice(mm.index + 1 + n.length);
+    });
+    const pct = /(\d{1,2}(?:\.\d+)?)\s*%\s*off/i.exec(t.what), x = /(\d{1,2})x\s+(?:EDR|Everyday Rewards|Flybuys)/i.exec(t.what);
+    const off = pct ? Math.round(Number(pct[1])) : 0;
+    out.push({ id, t: clip(t.what, 160), s: clip(t.store, 40), link: OZB + '/node/' + id, from, to,
+      votes: (Number(it.meta['votes-pos']) || 0) - (Number(it.meta['votes-neg']) || 0), off, back: !off && x ? Math.round(Number(x[1]) / 2) : 0,
+      cards: found.sort((a, b) => a.at - b.at).map((f) => f.n).slice(0, 20) });
+  });
+  return out.sort((a, b) => (a.from < b.from ? 1 : a.from > b.from ? -1 : b.votes - a.votes)).slice(0, 20);
+}
+
 /* ---------- the weekly half-price report ---------- */
 function monthIdx(name) { const k = String(name || '').toLowerCase().slice(0, 3); return MONTHS.findIndex((m) => m.slice(0, 3) === k); }
 export function parseReport(html) {
@@ -275,6 +350,33 @@ export async function build({ prev, now = new Date(), fetchText, wait = 400, log
   out.deals = feeds ? toDeals(items, today).slice(0, 80) : (Array.isArray(P.deals) ? P.deals.filter((d) => !d.to || d.to >= today) : []);
   out.sources.ozb = { ok: feeds > 0, feeds, n: out.deals.length, at: feeds ? at : (PS.ozb && PS.ozb.at) || null };
 
+  /* The Card Network's gift cards: its deals, which also go in with the deals above, and which shops each card is
+     taken at (read again once a week, and kept from last time if the wiki can't be read). */
+  const tItems = [];
+  for (const u of TCN_FEEDS) {
+    const r = await fetchText(u);
+    if (r && r.status === 200 && /<rss\b|<channel\b/i.test(r.text)) parseRss(r.text).forEach((it) => { if (/\/brand\//.test(u)) it.tcn = true; tItems.push(it); });
+    else log('Feed not read: ' + u + ' (' + (r ? r.status : 'no answer') + ')');
+    await pause(wait);
+  }
+  const PT = P.tcn && typeof P.tcn === 'object' ? P.tcn : {}, prevCards = Array.isArray(PT.cards) ? PT.cards : [];
+  let cards = null, cardsAt = (PS.tcn && PS.tcn.cardsAt) || '';
+  if (!prevCards.length || !cardsAt || now.getTime() - Date.parse(cardsAt) > 6 * 864e5) {
+    for (const u of TCN_WIKI) {
+      const r = await fetchText(u), got = r && r.status === 200 ? tcnCards(r.text) : null;
+      await pause(wait);
+      if (got) { cards = got; cardsAt = at; break; }
+      log('TCN card list not read: ' + u + ' (' + (r ? r.status : 'no answer') + ')');
+    }
+  }
+  if (!cards && prevCards.length) cards = { asAt: PT.asAt || '', cards: prevCards };
+  const tDeals = tcnDeals(items.concat(tItems), today, (cards ? cards.cards : []).map((c) => c.n.replace(/^TCN\s+/i, '')));
+  out.tcn = { asAt: cards ? cards.asAt : '', cards: cards ? cards.cards : [], deals: tDeals };
+  const haveDeal = {};
+  out.deals.forEach((d) => { haveDeal[d.id] = true; });
+  tDeals.forEach((d) => { if (!haveDeal[d.id]) out.deals.push({ id: d.id, t: d.t, s: d.s, st: [], link: d.link, from: d.from, to: d.to, votes: d.votes, tcn: true }); });
+  out.sources.tcn = { ok: !!(cards && cards.cards.length), cards: cards ? cards.cards.length : 0, deals: tDeals.length, asAt: out.tcn.asAt, cardsAt, at };
+
   /* The half-price report: read again only when there's a new one. Next week's list is often posted days early;
      it waits while this week's is still running, so the weekend shop sees what's on now. */
   const reports = items.filter(isReport).map((it) => ({ id: nodeId(it.link), pub: new Date(it.pub).getTime() || 0, title: it.title })).filter((x) => x.id).sort((a, b) => b.pub - a.pub);
@@ -378,6 +480,7 @@ export function fingerprint(out) {
     harris: s.harris && s.harris.ok ? [s.harris.from, s.harris.to] : null,
     umall: s.umall && s.umall.ok ? [s.umall.from, s.umall.to] : null,
     meat: s.meat && s.meat.ok ? [s.meat.from, s.meat.to] : null,
+    tcn: o.tcn && Array.isArray(o.tcn.cards) ? [o.tcn.asAt, o.tcn.cards.map((c) => c.n + ':' + (c.shops || []).length).join(',')] : null,
     specials: (Array.isArray(o.specials) ? o.specials : []).map((x) => [x.s, x.n, x.now, x.was, x.img ? 1 : 0]),
     deals: (Array.isArray(o.deals) ? o.deals : []).map((d) => d.id + '|' + d.to).sort()
   });
@@ -409,7 +512,8 @@ async function main() {
   console.log((changed ? 'New deals. ' : 'Nothing new, so nothing published. ') + 'OzBargain deals: ' + out.deals.length + ' | half-price list: ' + (s.report.n || 0) + (s.report.stale ? ' (kept from last run)' : '') +
     ' | Harris Farm: ' + (s.harris.n || 0) + (s.harris.handle ? ' from /collections/' + s.harris.handle : '') + (s.harris.stale ? ' (kept from last run)' : '') +
     ' | Umall: ' + (s.umall.n || 0) + (s.umall.lists ? ' from ' + s.umall.lists : '') + (s.umall.stale ? ' (kept from last run)' : '') +
-    ' | Meat Emporium: ' + (s.meat.n || 0) + (s.meat.stale ? ' (kept from last run)' : ''));
+    ' | Meat Emporium: ' + (s.meat.n || 0) + (s.meat.stale ? ' (kept from last run)' : '') +
+    ' | TCN: ' + (s.tcn ? s.tcn.cards + ' cards' + (s.tcn.asAt ? ' (as at ' + s.tcn.asAt + ')' : '') + ', ' + s.tcn.deals + ' deals' : 'not read'));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
