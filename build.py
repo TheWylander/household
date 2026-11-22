@@ -163,6 +163,14 @@ rules = rules.replace('__EMAILS__', ', '.join("'%s'" % e for e in emails) if len
 # The notification job's own login: the first email with +bot before the @, unless pwa-config.json names one.
 bot = (cfg.get('botEmail') or (emails[0].replace('@', '+bot@', 1) if len(emails) == 2 else 'you+bot@example.com')).strip().lower()
 rules = rules.replace('__BOT_EMAIL__', "'%s'" % bot)
+# Whoever runs the app: the first email, unless pwa-config.json names another. Sees the household list, nothing inside.
+# The bot's own UID, from Firebase Authentication. Until it's filled in, the bot is refused, which only pauses pop-ups.
+bot_uid = str(cfg.get('botUid') or 'PASTE_BOT_UID').strip()
+assert re.fullmatch(r'[A-Za-z0-9_-]{6,128}', bot_uid), 'botUid in pwa-config.json looks wrong'
+rules = rules.replace('__BOT_UID__', "'%s'" % bot_uid)
+admin = (cfg.get('adminEmail') or (emails[0] if len(emails) == 2 else 'you@example.com')).strip().lower()
+rules = rules.replace('__ADMIN_EMAIL__', "'%s'" % admin)
+assert '__' not in rules.replace('__.*__', ''), 'a placeholder was left in firestore.rules'
 (pwa / 'firestore.rules').write_text(rules)
 shutil.copy(src / 'pwa' / 'README.md', pwa / 'README.md')
 

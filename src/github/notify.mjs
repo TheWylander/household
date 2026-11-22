@@ -4,6 +4,8 @@
    It signs in to Firebase as its own bot user, whose email and password are in two GitHub secrets, BOT_EMAIL and
    BOT_PASSWORD. The Firestore rules only let that user read the sale days, watch list, phones and new-spend notes in
    hh/deals and hh/push, and note what it sent. Without the secrets, it stops quietly. Each pop-up is encrypted for the phone it goes to.
+   Each household keeps its own in households/{id}/hh, and the website specials everyone shares are in shared/web. Until
+   the rules let the bot list the households, or before the first one is made, it uses the one household at the top.
    Run from the top of the repo: node .github/notify/notify.mjs deals.json */
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -170,16 +172,43 @@ export function spendEvents(P, sent, now) {
   return out.sort((x, y) => x.e.at - y.e.at);
 }
 
+/* Each household's phones are sent to at most 8 at a time, and a pop-up that hasn't gone in 10 seconds counts as not sent. */
+export const MAX_PHONES = 8, SEND_WAIT = 10e3;
+/* Pop-ups only go to the big push services (Apple, Google, Mozilla, Microsoft), so a phone's saved address can't
+   point the job at some other server, one that never answers, say. */
+const PUSH_HOSTS = ['fcm.googleapis.com', 'updates.push.services.mozilla.com'], PUSH_ENDS = ['.push.apple.com', '.notify.windows.com', '.push.services.mozilla.com'];
+export function knownPush(endpoint) {
+  let u;
+  try { u = new URL(String(endpoint || '')); } catch (e) { return false; }
+  const h = u.hostname;
+  return u.protocol === 'https:' && !u.username && !u.password && !u.port
+    && (PUSH_HOSTS.indexOf(h) >= 0 || PUSH_ENDS.some((end) => h.length > end.length && h.endsWith(end)));
+}
+/* A phone's name as the app saved it, made safe for the public log: letters, digits, spaces and a little
+   punctuation, 40 characters at most. A new line could otherwise start a GitHub command of its own. */
+export const deviceOf = (s) => String((s && s.device) || '').replace(/[^A-Za-z0-9 .,'()_-]+/g, '').replace(/ {2,}/g, ' ').trim().slice(0, 40).trim() || 'a phone';
+/* A send that hasn't answered in time counts as failed, so one slow phone can't hold up the rest. */
+function within(p, ms) {
+  let tm;
+  return Promise.race([p, new Promise((ok) => { tm = setTimeout(ok, ms, { ok: false, status: 0, late: true }); })]).finally(() => clearTimeout(tm));
+}
+
 /* Everything to send on this run, and which phones it goes to. The app starts a run in "spends" mode the moment a
    spend is added; that run leaves sale days and specials to the morning and evening runs. */
 export function plan({ push, deals, feed, now, mode = 'all' }) {
   const P = push || {}, D = deals || {}, sent = P.sent || {}, pub = P.vapid && P.vapid.pub, out = [];
   feed = withWeb(withSnaps(feed, D.snaps), D.web);
   const t = sydneyNow(now), { day, hour } = t;
-  const subs = Object.keys(P.subs || {}).map((id) => Object.assign({ id }, P.subs[id]))
+  let subs = Object.keys(P.subs || {}).map((id) => Object.assign({ id }, P.subs[id]))
     .filter((s) => s && s.endpoint && s.keys && s.keys.p256dh && s.keys.auth && s.vapid === pub && !s.stale);
+  /* At most 8 phones a household, the most recently turned on, so one household can't hold up the run. */
+  const capped = Math.max(0, subs.length - MAX_PHONES);
+  if (capped) {
+    const keep = new Set(subs.slice().sort((x, y) => (Number(y.at) || 0) - (Number(x.at) || 0)).slice(0, MAX_PHONES).map((s) => s.id));
+    subs = subs.filter((s) => keep.has(s.id));
+  }
   const wants = (who, k) => !(P.prefs && P.prefs[who] && P.prefs[who][k] === false);
-  if (mode !== 'spends' && !awake(t)) return { day, hour, subs, out, night: true };
+  if (mode !== 'spends' && !awake(t)) return { day, hour, subs, out, night: true, capped };
 
   subs.filter((s) => !s.welcomed).forEach((s) => out.push({
     key: 'welcome:' + s.id, to: [s.id], welcome: true, title: '🔔 Notifications are on',
@@ -198,7 +227,7 @@ export function plan({ push, deals, feed, now, mode = 'all' }) {
     const to = subs.filter((s) => s.who === x.by).map((s) => s.id);
     out.push({ key: x.key, keys: [x.key], to, test: true, quiet: !to.length, title: x.e.t, body: x.e.b || '', url: './' });
   });
-  if (mode === 'spends') return { day, hour, subs, out };
+  if (mode === 'spends') return { day, hour, subs, out, capped };
 
   /* Sale days: the evening before, and the morning of. */
   const evening = hour >= 12, date = evening ? L.addDays(day, 1) : day;
@@ -235,7 +264,7 @@ export function plan({ push, deals, feed, now, mode = 'all' }) {
   (Array.isArray(tcn.deals) ? tcn.deals : []).filter((d) => d && d.id && (d.off >= 10 || d.back >= 10) && (!d.from || d.from <= day) && (!d.to || d.to >= day))
     .map((d) => ({ d, key: 'tcn:' + d.id + (d.to ? '|' + d.to : '') })).filter((x) => !sent[x.key]).slice(0, 2)
     .forEach((x) => { if (toTcn.length) out.push(Object.assign({ key: x.key, to: toTcn, url: './#tcn', tag: 'tcn-' + x.d.id }, tcnPop(x.d, tcn.cards))); });
-  return { day, hour, subs, out };
+  return { day, hour, subs, out, capped };
 }
 
 /* Markers older than 60 days are cleared, so the record stays small; a spend's marker goes after a week. */
@@ -245,22 +274,27 @@ export function oldKeys(sent, day) {
 }
 
 /* Sends the plan and works out what to write back: what was sent, phones that welcomed, ones that are gone. */
-export async function run({ push, deals, feed, now = new Date(), mode = 'all', send, log = () => {} }) {
-  const p = plan({ push, deals, feed, now, mode }), subs = {}, sent = {};
+export async function run({ push, deals, feed, now = new Date(), mode = 'all', send, log = () => {}, wait = SEND_WAIT }) {
+  const p = plan({ push, deals, feed, now, mode }), subs = {}, sent = {}, skip = {};
   let ok = 0, failed = 0;
+  if (p.capped) log('Sent to ' + MAX_PHONES + ' phones only; ' + p.capped + ' more were left out.');
   for (const n of p.out) {
     if (n.quiet) { n.keys.forEach((k) => { sent[k] = Date.now(); }); continue; }
     let any = false;
     for (const id of n.to) {
       if (subs[id] === null) continue;
+      /* A phone that was skipped or too slow once this run isn't tried again. */
+      if (skip[id]) { failed++; continue; }
       const s = p.subs.find((x) => x.id === id);
-      const r = await send(s, payloadOf(n), push.vapid);
+      if (!knownPush(s.endpoint)) { skip[id] = true; failed++; log('Not sent to ' + deviceOf(s) + " (its address isn't a known push service)"); continue; }
+      const r = await within(send(s, payloadOf(n), push.vapid), wait);
       if (r && r.ok) { any = true; ok++; continue; }
       failed++;
+      if (r && r.late) { skip[id] = true; log('Not sent to ' + deviceOf(s) + ' (no answer in time)'); continue; }
       const st = r ? r.status : 0;
       if (st === 404 || st === 410) subs[id] = null;
       else if (st === 401 || st === 403) subs[id] = Object.assign(subs[id] || {}, { stale: true });
-      log('Not sent to ' + (s.device || 'a phone') + ' (' + st + (st === 404 || st === 410 ? ', it has unsubscribed' : st === 401 || st === 403 ? ', it needs to turn notifications on again' : '') + ')');
+      log('Not sent to ' + deviceOf(s) + ' (' + st + (st === 404 || st === 410 ? ', it has unsubscribed' : st === 401 || st === 403 ? ', it needs to turn notifications on again' : '') + ')');
     }
     if (!any) continue;
     if (n.welcome) { if (subs[n.to[0]] !== null) subs[n.to[0]] = Object.assign(subs[n.to[0]] || {}, { welcomed: true }); }
@@ -338,14 +372,23 @@ export function firebase({ apiKey, projectId, referer, fetch: f = globalThis.fet
   let token = '';
   async function call(step, url, init) {
     let r;
-    try { r = await f(url, init); } catch (e) { throw new Error(explain(step, 0, e && e.message)); }
+    try { r = await f(url, init); } catch (e) { throw Object.assign(new Error(explain(step, 0, e && e.message)), { firebase: true }); }
     const j = await r.json().catch(() => ({}));
     if (r.ok || (step === 'read' && r.status === 404)) return { status: r.status, body: j };
     const e = new Error(explain(step, r.status, j && j.error && j.error.message));
     e.status = r.status;
+    e.firebase = true;
     throw e;
   }
   const auth = () => ({ authorization: 'Bearer ' + token, 'content-type': 'application/json' });
+  /* A document path, checked and then encoded a piece at a time for the URL, so an odd id can't step out of its
+     place: fetch reads '..', and '%2e%2e' too, as "the folder above". */
+  const checked = (path) => {
+    const parts = String(path).split('/');
+    if (parts.some((s) => !s || s === '.' || s === '..')) throw Object.assign(new Error("The job was asked for a Firestore path it doesn't allow, so it left it alone."), { firebase: true });
+    return parts;
+  };
+  const at = (path) => checked(path).map(encodeURIComponent).join('/');
   return {
     async signIn(email, password) {
       const headers = { 'content-type': 'application/json' };
@@ -356,41 +399,122 @@ export function firebase({ apiKey, projectId, referer, fetch: f = globalThis.fet
       if (!token) throw new Error(explain('sign in', r.status, 'no token came back'));
     },
     async get(path) {
-      const r = await call('read', base + docs + '/' + path, { headers: auth() });
+      const r = await call('read', base + docs + '/' + at(path), { headers: auth() });
       return r.status === 404 ? null : fromFields(r.body.fields);
     },
+    /* A collection's documents, 100 a page, each as its id and only the fields asked for (mask.fieldPaths, once per
+       field, on every page, as a page token needs the same question each time). A document without any of them comes
+       back with no fields. The id is all of the name after the collection, so one with a / in it stays whole, for
+       job() to turn away. The page cap stops a fault at Google's end looping forever. */
+    async list(path, fields) {
+      const out = [], mask = (fields || []).map((k) => '&mask.fieldPaths=' + encodeURIComponent(fieldPath(k))).join('');
+      const from = docs + '/' + checked(path).join('/') + '/';
+      let page = '';
+      for (let i = 0; i < 100; i++) {
+        const r = await call('list', base + docs + '/' + at(path) + '?pageSize=100' + mask + (page ? '&pageToken=' + encodeURIComponent(page) : ''), { headers: auth() });
+        const b = r.body || {};
+        (Array.isArray(b.documents) ? b.documents : []).forEach((d) => {
+          const name = String((d && d.name) || '');
+          out.push({ id: name.indexOf(from) === 0 ? name.slice(from.length) : '', data: fromFields(d && d.fields) });
+        });
+        page = b.nextPageToken || '';
+        if (!page) break;
+      }
+      return out;
+    },
+    /* The document's name in the write is Firestore's own name for it, not a URL, so it isn't encoded; it's checked. */
     async update(path, write) {
-      const u = toUpdate(write);
+      const u = toUpdate(write), name = docs + '/' + checked(path).join('/');
       await call('update', base + docs + ':commit', {
         method: 'POST', headers: auth(),
-        body: JSON.stringify({ writes: [{ update: { name: docs + '/' + path, fields: u.fields }, updateMask: { fieldPaths: u.mask }, currentDocument: { exists: true } }] })
+        body: JSON.stringify({ writes: [{ update: { name, fields: u.fields }, updateMask: { fieldPaths: u.mask }, currentDocument: { exists: true } }] })
       });
     }
   };
 }
 
-/* One run: sign in, read the sale days, watch list and phones, send, and note what was sent. A run for new spends
-   doesn't need the sale days or watch list, so it reads only hh/push. */
-export async function job({ email, password, config, feed, now = new Date(), mode = 'all', fetch: f, send, referer, log = () => {} }) {
-  const fb = firebase({ apiKey: config.apiKey, projectId: config.projectId, referer, fetch: f });
-  await fb.signIn(email, password);
-  const [push, deals] = await Promise.all([fb.get('hh/push'), mode === 'spends' ? null : fb.get('hh/deals')]);
+/* One household: read its sale days, watch list and phones, send, and note what was sent in its own hh/push. A run for
+   new spends doesn't need the sale days or watch list, so it reads only hh/push. at is where its documents are: '' for
+   the one household at the top, from before there were several. web, if given, gets the website specials everyone
+   shares, which stand in for the household's own copy in hh/deals. */
+async function household(fb, at, { feed, now, mode, send, log, web, wait }) {
+  const [push, deals] = await Promise.all([fb.get(at + 'hh/push'), mode === 'spends' ? null : fb.get(at + 'hh/deals')]);
   if (!push || !push.vapid || !push.vapid.pub || !push.vapid.d) {
-    if (push) await fb.update('hh/push', { last: { at: now.toISOString(), sent: 0, failed: 0 } });
+    if (push) await fb.update(at + 'hh/push', { last: { at: now.toISOString(), sent: 0, failed: 0 } });
     return null;
   }
-  const r = await run({ push, deals: deals || {}, feed, now, mode, send, log });
-  await fb.update('hh/push', r.write);
+  const w = web && mode !== 'spends' ? await web() : null;
+  const r = await run({ push, deals: w ? Object.assign({}, deals, { web: w }) : deals || {}, feed, now, mode, send, log, wait });
+  /* If the note fails, the pop-ups have still gone, so the summary can count them. */
+  try { await fb.update(at + 'hh/push', r.write); } catch (e) { if (e && typeof e === 'object') e.run = r; throw e; }
   return r;
+}
+
+/* Why a household was skipped, for the public log. Firebase's own words are fine, with the household's id cut to its
+   first 6 characters; anything else only says what kind of error, as its words could quote what's in the documents. */
+function whyNot(e, hid) {
+  if (!e || !e.firebase) return 'the job hit an error (' + ((e && e.name) || 'Error') + ').';
+  const m = String(e.message || '');
+  return hid ? m.split(hid).join(hid.slice(0, 6)) : m;
+}
+
+/* The app's household ids: 16 lower-case letters and digits. Anything else is left alone, whatever the rules allow. */
+export const HID = /^[a-z0-9]{16}$/;
+
+/* One run: sign in, then each household in turn. While the rules don't let the bot list the households yet (403),
+   or there are none yet, it's the one household at the top, just as before. The one at the top also keeps going
+   alongside the others until the household its data moves into (marked legacy) is there, and from then on it's left
+   out, so the same phones never get a pop-up from both. Only that mark is read from each household. One household
+   going wrong is noted in the log and the rest carry on. */
+export async function job({ email, password, config, feed, now = new Date(), mode = 'all', fetch: f, send, referer, log = () => {}, wait }) {
+  const fb = firebase({ apiKey: config.apiKey, projectId: config.projectId, referer, fetch: f });
+  await fb.signIn(email, password);
+  let listed = [];
+  try { listed = await fb.list('households', ['legacy']); } catch (e) { if (e.status !== 403) throw e; }
+  const homes = listed.filter((h) => HID.test(h.id)), odd = listed.length - homes.length;
+  if (odd) log('Left out ' + odd + (odd === 1 ? ' household' : ' households') + " with an id the app doesn't make.");
+  if (!homes.length) return household(fb, '', { feed, now, mode, send, log, wait });
+  const todo = (homes.some((h) => h.data.legacy === true) ? [] : [{ id: 'top-level', at: '' }])
+    .concat(homes.map((h) => ({ id: h.id.slice(0, 6), hid: h.id, at: 'households/' + h.id + '/' })));
+
+  /* The shared website specials, read once, the first time a household needs them. If they're missing or can't be
+     read, each household's own copy in its hh/deals is used. */
+  let shared = null;
+  const web = () => (shared = shared || fb.get('shared/web').then((w) => (w && Array.isArray(w.items) ? w : null), (e) => {
+    log("Couldn't read the shared website specials, so each household's own copy is used. " + whyNot(e));
+    return null;
+  }));
+  /* The one at the top runs as it always has, with its own copy of the website specials. */
+  const done = [];
+  for (const h of todo) {
+    const say = (m) => log('Household ' + h.id + ': ' + m);
+    try {
+      done.push({ id: h.id, r: await household(fb, h.at, { feed, now, mode, send, log: say, web: h.hid ? web : null, wait }) });
+    } catch (e) {
+      log('Household ' + h.id + ' went wrong: ' + whyNot(e, h.hid));
+      done.push({ id: h.id, error: true, r: e && e.run });
+    }
+  }
+  /* All of it together, so runSummary works as before, with a count for each household. */
+  const ran = done.filter((h) => h.r), sum = (k) => ran.reduce((a, h) => a + h.r[k], 0);
+  if (!ran.length && !done.some((h) => h.error)) return null;
+  return {
+    plan: { night: ran.length > 0 && ran.every((h) => h.r.plan.night), out: ran.reduce((a, h) => a.concat(h.r.plan.out), []) },
+    ok: sum('ok'), failed: sum('failed'),
+    households: done.map((h) => ({ id: h.id, ok: h.r ? h.r.ok : 0, failed: h.r ? h.r.failed : 0, none: !h.r && !h.error, error: !!h.error }))
+  };
 }
 
 /* The run log on GitHub is public, so it says what kind of pop-ups went out, never what they said. */
 export function runSummary(r) {
   if (!r) return 'No phone has turned notifications on yet.';
-  if (r.plan.night) return 'Night time in Sydney, so nothing went out. Anything due goes on the first run after 6:30am.';
+  /* With several households, a few words on each, by the first 6 characters of its id. */
+  const each = Array.isArray(r.households) ? ' Households: ' + r.households.map((h) => h.id + ' ' + (h.error ? (h.ok ? 'sent ' + h.ok + ", but couldn't note what it sent" : "couldn't be done")
+    : h.none ? 'has no phone on yet' : 'sent ' + h.ok + (h.failed ? ', ' + h.failed + " couldn't be sent" : ''))).join('; ') + '.' : '';
+  if (r.plan.night) return 'Night time in Sydney, so nothing went out. Anything due goes on the first run after 6:30am.' + each;
   const kinds = r.plan.out.filter((n) => !n.quiet).map((n) => (n.welcome ? 'a welcome' : n.test ? 'a test' : n.spend ? (n.keys.length === 1 ? 'a new spend' : 'new spends') : /^sale:/.test(n.key) ? 'a sale day reminder' : n.top ? "the week's top specials" : 'watch-list specials'));
   const what = kinds.filter((k, i) => kinds.indexOf(k) === i);
-  return 'Sent ' + r.ok + (r.ok === 1 ? ' pop-up' : ' pop-ups') + (what.length ? ' (' + what.join(', ') + ')' : '') + (r.failed ? ', ' + r.failed + " couldn't be sent" : '') + '.';
+  return 'Sent ' + r.ok + (r.ok === 1 ? ' pop-up' : ' pop-ups') + (what.length ? ' (' + what.join(', ') + ')' : '') + (r.failed ? ', ' + r.failed + " couldn't be sent" : '') + '.' + each;
 }
 
 async function main() {
@@ -406,7 +530,7 @@ async function main() {
   const send = async (s, payload, vapid) => {
     try {
       await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, JSON.stringify(payload),
-        { vapidDetails: { subject: site || 'mailto:noreply@example.com', publicKey: vapid.pub, privateKey: vapid.d }, TTL: 12 * 3600, urgency: 'normal' });
+        { vapidDetails: { subject: site || 'mailto:noreply@example.com', publicKey: vapid.pub, privateKey: vapid.d }, TTL: 12 * 3600, urgency: 'normal', timeout: SEND_WAIT });
       return { ok: true };
     } catch (e) {
       return { ok: false, status: e && e.statusCode ? e.statusCode : 0 };
@@ -414,10 +538,13 @@ async function main() {
   };
   const mode = process.env.NOTIFY_MODE === 'spends' ? 'spends' : 'all';
   try {
-    const r = await job({ email, password, config, feed, now: new Date(), mode, send, referer: site, log: (m) => console.log('::warning::' + m) });
+    /* One line each, whatever is in it, so nothing in a message can start a GitHub command of its own. */
+    const r = await job({ email, password, config, feed, now: new Date(), mode, send, referer: site, log: (m) => console.log('::warning::' + String(m).replace(/[\r\n]+/g, ' ')) });
     console.log('::notice::' + runSummary(r));
+    /* A run where no household could be done fails, as one with the single household at the top does. */
+    if (r && Array.isArray(r.households) && r.households.every((h) => h.error)) process.exitCode = 1;
   } catch (e) {
-    console.log('::error::' + (e && e.message ? e.message : e));
+    console.log('::error::' + String(e && e.message ? e.message : e).replace(/[\r\n]+/g, ' '));
     process.exitCode = 1;
   }
 }

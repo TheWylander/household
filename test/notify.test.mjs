@@ -1,6 +1,6 @@
 /* What the notification job sends, and to whom, without Firebase or a push service. node test/notify.test.mjs */
 import assert from 'node:assert';
-import { APP, payloadOf, plan, run, sydneyNow, awake, weekKey, weekHits, wordHits, specialsPop, weeklyPop, topPicks, withSnaps, withWeb, sameThing, spendsPop, oldKeys, webConfig, fromFs, toFs, fieldPath, toUpdate, job, runSummary } from '../src/github/notify.mjs';
+import { APP, payloadOf, plan, run, sydneyNow, awake, weekKey, weekHits, wordHits, specialsPop, weeklyPop, topPicks, withSnaps, withWeb, sameThing, spendsPop, oldKeys, webConfig, fromFs, toFs, fieldPath, toUpdate, job, runSummary, firebase, knownPush, deviceOf, MAX_PHONES, HID } from '../src/github/notify.mjs';
 
 let passed = 0;
 async function t(name, fn) {
@@ -375,13 +375,20 @@ await t("the app's public Firebase settings", () => {
   assert.deepStrictEqual(webConfig(''), { apiKey: '', projectId: '' });
 });
 
-/* A pretend Firebase: email sign-in, and Firestore with the bot's rules. */
+/* A pretend Firebase: email sign-in, and Firestore with the bot's rules. multi is the new rules, for households and the
+   shared website specials; page is how many households come back a page; fail makes a 'read <path>' or an
+   'update <path>' fail with that status; names are odd document names added to the households list. Each URL is
+   read as fetch reads it, so '%2e%2e' steps up a level, just as it would for real. */
 const BOT = 'robin+bot@example.com';
-function fakeFirebase(docs, { rules = true } = {}) {
-  const seen = { referer: [], auth: [], commits: 0 };
+function fakeFirebase(docs, { rules = true, multi = false, page = 100, fail = {}, names = [] } = {}) {
+  const seen = { referer: [], auth: [], commits: 0, lists: [], listed: [], reads: [], writes: [], urls: [] };
   const parse = (p) => { const out = []; let i = 0; while (i < p.length) { let s = ''; if (p[i] === '`') { i++; while (p[i] !== '`') { if (p[i] === '\\') i++; s += p[i++]; } i++; } else { while (i < p.length && p[i] !== '.') s += p[i++]; } out.push(s); if (p[i] === '.') i++; } return out; };
   const json = (status, body) => ({ ok: status < 300, status, json: async () => body });
   const denied = () => json(403, { error: { code: 403, message: 'Missing or insufficient permissions.', status: 'PERMISSION_DENIED' } });
+  const canRead = (p) => ['hh/deals', 'hh/push'].indexOf(p) >= 0 || (multi && (/^households\/[^/]+(\/hh\/(deals|push))?$/.test(p) || p === 'shared/web'));
+  const canWrite = (p) => p === 'hh/push' || (multi && /^households\/[^/]+\/hh\/push$/.test(p));
+  const NAME = 'projects/demo-household/databases/(default)/documents/';
+  const broke = (k) => json(fail[k], { error: { code: fail[k], message: 'Something broke at ' + NAME + k.split(' ')[1], status: 'INTERNAL' } });
   const fetch = async (url, init = {}) => {
     const h = init.headers || {};
     if (url.startsWith('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=AIzaTEST')) {
@@ -390,14 +397,35 @@ function fakeFirebase(docs, { rules = true } = {}) {
       return b.email === BOT && b.password === 'long-pass' ? json(200, { idToken: 'bot-token', localId: 'u1' }) : json(400, { error: { code: 400, message: 'INVALID_LOGIN_CREDENTIALS' } });
     }
     const base = 'https://firestore.googleapis.com/v1/projects/demo-household/databases/(default)/documents';
+    url = new URL(url).href;
     if (!url.startsWith(base)) return json(404, {});
+    seen.urls.push(url);
     seen.auth.push(h.authorization);
     if (h.authorization !== 'Bearer bot-token') return json(401, { error: { status: 'UNAUTHENTICATED' } });
+    if (url.startsWith(base + '/households?')) {
+      seen.lists.push(url.slice(base.length));
+      if (!rules || !multi) return denied();
+      if (fail['list households']) return broke('list households');
+      const q = new URL(url).searchParams, size = Math.min(Number(q.get('pageSize')) || 0, page), from = Number(String(q.get('pageToken') || 'p/0=').slice(2, -1));
+      const ids = Object.keys(docs).filter((p) => /^households\/[^/]+$/.test(p)).sort(), part = ids.slice(from, from + size), body = {};
+      /* As Firestore does: with a mask, only those fields; a document with none of them comes back without fields. */
+      const mask = q.getAll('mask.fieldPaths'), pick = (f) => Object.fromEntries(Object.entries(f).filter(([k]) => !mask.length || mask.indexOf(k) >= 0));
+      if (part.length) body.documents = part.map((p) => {
+        const fields = pick(toFs(docs[p]).mapValue.fields), d = { name: NAME + p, createTime: '2026-11-01T00:00:00Z' };
+        seen.listed.push(...Object.keys(fields));
+        return Object.keys(fields).length ? Object.assign(d, { fields }) : d;
+      });
+      if (from + size < ids.length) body.nextPageToken = 'p/' + (from + size) + '=';
+      if (!from && names.length) body.documents = (body.documents || []).concat(names.map((n) => ({ name: n.indexOf('projects/') === 0 ? n : NAME + n })));
+      return json(200, body);
+    }
     if (url === base + ':commit') {
       seen.commits++;
       const w = JSON.parse(init.body).writes[0], path = w.update.name.split('/documents/')[1];
-      if (!rules || path !== 'hh/push') return denied();
+      if (!rules || !canWrite(path)) return denied();
+      if (fail['update ' + path]) return broke('update ' + path);
       if (!docs[path]) return json(404, { error: { status: 'NOT_FOUND' } });
+      seen.writes.push(path);
       const before = JSON.stringify(docs[path]), next = JSON.parse(before), data = fromFs({ mapValue: { fields: w.update.fields } });
       w.updateMask.fieldPaths.forEach((fp) => {
         const keys = parse(fp); let from = data, to = next;
@@ -410,8 +438,10 @@ function fakeFirebase(docs, { rules = true } = {}) {
       docs[path] = next;
       return json(200, { writeResults: [{}] });
     }
-    const path = url.slice(base.length + 1);
-    if (!rules || ['hh/deals', 'hh/push'].indexOf(path) < 0) return denied();
+    const path = url.slice(base.length + 1).split('/').map(decodeURIComponent).join('/');
+    seen.reads.push(path);
+    if (!rules || !canRead(path)) return denied();
+    if (fail['read ' + path]) return broke('read ' + path);
     return docs[path] ? json(200, { name: path, fields: toFs(docs[path]).mapValue.fields }) : json(404, { error: { status: 'NOT_FOUND' } });
   };
   return { fetch, seen };
@@ -468,6 +498,298 @@ await t('before any phone is on, it only notes that it ran', async () => {
   const none = fakeFirebase({});
   assert.strictEqual(await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: none.fetch, send: async () => ({ ok: true }) }), null);
   assert.strictEqual(none.seen.commits, 0, "with no phones document yet, it doesn't try to make one");
+});
+
+/* Several households, each in households/{id}, with the website specials everyone shares in shared/web. The one
+   household at the top stays there during the switch-over. */
+const H1 = 'home1a2b3c4d5e6f', H2 = 'home2g7h8j9k3m4n';
+const hdoc = (hid, p) => 'households/' + hid + (p ? '/hh/' + p : '');
+const home = (o) => Object.assign({ owner: 'u1', members: ['u1', 'u2'], emails: ['robin@example.com', 'jules@example.com'], label: 'Robin and Jules', createdAt: 1731500000000, active: true }, o || {});
+const theirPush = () => ({
+  vapid: { pub: 'KEY2', d: 'secret2' },
+  subs: {
+    q1: { who: 'a', endpoint: 'https://fcm.googleapis.com/q1', keys, vapid: 'KEY2', welcomed: true, device: 'Android phone' },
+    q2: { who: 'b', endpoint: 'https://fcm.googleapis.com/q2', keys, vapid: 'KEY2', welcomed: false, device: 'iPhone' }
+  },
+  prefs: {}, sent: {}
+});
+/* H1 is the household the one at the top moved into (legacy), with the same phones, so the top is left out. */
+const two = (extra) => Object.assign({
+  [hdoc(H1)]: home({ legacy: true }), [hdoc(H1, 'push')]: push(), [hdoc(H1, 'deals')]: deals(),
+  [hdoc(H2)]: home({ owner: 'u3', members: ['u3', 'u4'], emails: ['sam@example.com'], label: 'Sam and Alex' }), [hdoc(H2, 'push')]: theirPush(), [hdoc(H2, 'deals')]: { sales: [], watch: ['muffins'] },
+  'hh/push': push(), 'hh/deals': deals()
+}, extra || {});
+const allOk = (calls) => async (s, payload, vapid) => { calls.push([vapid.pub, s.id, payload.title]); return { ok: true }; };
+const SENT_4 = "Sent 4 pop-ups (a welcome, a sale day reminder, the week's top specials).";
+const LIST = '/households?pageSize=100&mask.fieldPaths=legacy';
+
+await t('the one household at the top, while the rules refuse the households list or there are none yet', async () => {
+  const docs = two(), fb = fakeFirebase(docs), calls = [];
+  const r = await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb.fetch, send: allOk(calls) });
+  assert.deepStrictEqual(fb.seen.lists, [LIST], 'it asks for the households once, and is refused (403)');
+  assert.deepStrictEqual([fb.seen.reads.slice().sort(), fb.seen.writes], [['hh/deals', 'hh/push'], ['hh/push']], 'then reads and notes in the old documents only, as before');
+  assert.deepStrictEqual(calls.map((c) => c[0] + ' ' + c[1]), ['KEY p1', 'KEY p1', 'KEY p2', 'KEY p1']);
+  assert.strictEqual(runSummary(r), SENT_4, 'the summary is just as before');
+  assert.ok(!('households' in r) && docs[hdoc(H1, 'push')].last === undefined && docs[hdoc(H2, 'push')].last === undefined, 'the households are left alone');
+
+  const empty = { 'hh/push': push(), 'hh/deals': deals(), 'shared/web': WEB }, fb2 = fakeFirebase(empty, { multi: true });
+  const r2 = await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb2.fetch, send: allOk([]) });
+  assert.deepStrictEqual([fb2.seen.lists.length, fb2.seen.reads.slice().sort(), fb2.seen.writes], [1, ['hh/deals', 'hh/push'], ['hh/push']],
+    'new rules but no household yet: the old documents, and not the shared website specials');
+  assert.deepStrictEqual(empty['hh/push'].last, { at: FRI_EVENING.toISOString(), sent: 4, failed: 0 });
+  assert.strictEqual(runSummary(r2), SENT_4);
+
+  const fb3 = fakeFirebase(two(), { multi: true, fail: { 'list households': 500 } });
+  await assert.rejects(job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb3.fetch, send: allOk([]) }), /Firebase list failed \(500: /);
+  assert.deepStrictEqual([fb3.seen.reads, fb3.seen.commits], [[], 0], "any other trouble listing them stops the run, rather than sending the old household's pop-ups instead");
+});
+
+await t('the household at the top keeps going alongside the others until the one it moves into is there, never both', async () => {
+  const pilot = () => ({ 'hh/push': push(), 'hh/deals': Object.assign(deals(), { watch: ['weetbix', 'tokyo mart', 'jameson'] }), 'shared/web': WEB,
+    [hdoc(H2)]: home({ owner: 'u3', members: ['u3', 'u4'], emails: ['sam@example.com'], label: 'Sam and Alex' }), [hdoc(H2, 'push')]: theirPush(), [hdoc(H2, 'deals')]: { sales: [], watch: ['muffins'] } });
+  const pops = [], rec = async (s, payload, vapid) => { pops.push([vapid.pub, s.id, payload]); return { ok: true }; };
+  await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fakeFirebase(pilot()).fetch, send: rec });
+  const alone = pops.splice(0);
+  let docs = pilot(), fb = fakeFirebase(docs, { multi: true });
+  let r = await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb.fetch, send: rec });
+  assert.deepStrictEqual(pops.map((c) => c[0] + ' ' + c[1]), ['KEY p1', 'KEY p1', 'KEY p2', 'KEY p1', 'KEY2 q2', 'KEY2 q1', 'KEY2 q2'],
+    'a pilot household but no moved-across one yet: the one at the top first, then each household');
+  assert.deepStrictEqual(pops.filter((c) => c[0] === 'KEY'), alone, "the one at the top sends just what it sends on its own, with its own copy of the website specials (no Jameson from the shared one)");
+  assert.deepStrictEqual([fb.seen.writes, docs['hh/push'].last], [['hh/push', hdoc(H2, 'push')], { at: FRI_EVENING.toISOString(), sent: 4, failed: 0 }]);
+  assert.strictEqual(runSummary(r), "Sent 7 pop-ups (a welcome, a sale day reminder, the week's top specials). Households: top-level sent 4; home2g sent 3.");
+  assert.deepStrictEqual([fb.seen.listed, fb.seen.reads.filter((p) => p === 'shared/web').length], [[], 1], 'a household without the mark comes back with no fields at all; the shared specials are still read for the households');
+
+  docs = pilot(); docs[hdoc(H2)].legacy = false; fb = fakeFirebase(docs, { multi: true });
+  await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb.fetch, send: allOk([]) });
+  assert.strictEqual(fb.seen.writes[0], 'hh/push', 'legacy: false is no mark');
+
+  docs = Object.assign(pilot(), { [hdoc(H1)]: home({ legacy: true }), [hdoc(H1, 'push')]: push(), [hdoc(H1, 'deals')]: deals() });
+  fb = fakeFirebase(docs, { multi: true });
+  const got = [];
+  r = await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb.fetch, send: async (s, payload) => { got.push(s.endpoint + ' ' + payload.title); return { ok: true }; } });
+  assert.deepStrictEqual([got.length, got.filter((x, i) => got.indexOf(x) !== i)], [7, []], 'the moved-across household is there, with the same phones: each pop-up reaches each phone once');
+  assert.deepStrictEqual([fb.seen.reads.filter((p) => /^hh\//.test(p)), fb.seen.writes], [[], [hdoc(H1, 'push'), hdoc(H2, 'push')]], 'and the one at the top is neither read nor noted');
+  assert.strictEqual(runSummary(r), "Sent 7 pop-ups (a welcome, a sale day reminder, the week's top specials). Households: home1a sent 4; home2g sent 3.");
+
+  docs = pilot(); fb = fakeFirebase(docs, { multi: true, fail: { 'read hh/push': 500 } });
+  const logs = [];
+  r = await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb.fetch, send: allOk([]), log: (m) => logs.push(m) });
+  assert.deepStrictEqual(logs, ['Household top-level went wrong: Firebase read failed (500: Something broke at projects/demo-household/databases/(default)/documents/hh/push).']);
+  assert.deepStrictEqual([docs[hdoc(H2, 'push')].last.sent, runSummary(r)], [3, "Sent 3 pop-ups (a welcome, the week's top specials). Households: top-level couldn't be done; home2g sent 3."],
+    "the one at the top going wrong doesn't stop the households");
+});
+
+await t('two households: each gets only its own pop-ups, noted in its own phones document', async () => {
+  const docs = two(), fb = fakeFirebase(docs, { multi: true }), calls = [], logs = [];
+  const r = await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb.fetch, send: allOk(calls), log: (m) => logs.push(m) });
+  assert.deepStrictEqual(calls, [
+    ['KEY', 'p1', '🔔 Notifications are on'], ['KEY', 'p1', '📅 Lucky Mart sale tomorrow'], ['KEY', 'p2', '📅 Lucky Mart sale tomorrow'], ['KEY', 'p1', '🏷️ Check out the top weekly specials'],
+    ['KEY2', 'q2', '🔔 Notifications are on'], ['KEY2', 'q1', '🏷️ Check out the top weekly specials'], ['KEY2', 'q2', '🏷️ Check out the top weekly specials']],
+    "each household's own phones, with its own key, for its own sale days and watch list");
+  const a = docs[hdoc(H1, 'push')], b = docs[hdoc(H2, 'push')];
+  assert.deepStrictEqual([Object.keys(a.sent).sort(), a.subs.p1.welcomed, a.last.sent], [['sale:s1|2026-11-14:eve', 'sp:2026-11-11', 'top:2026-11-11'], true, 4]);
+  assert.deepStrictEqual([Object.keys(b.sent).sort(), b.sent['sp:2026-11-11'], b.subs.q2.welcomed, b.last.sent], [['sp:2026-11-11', 'top:2026-11-11'], ['Muffins'], true, 3]);
+  assert.deepStrictEqual(fb.seen.writes, [hdoc(H1, 'push'), hdoc(H2, 'push')]);
+  assert.ok(docs['hh/push'].last === undefined && fb.seen.reads.indexOf('hh/push') < 0, 'with the moved-across household there, the one at the top is left alone');
+  assert.deepStrictEqual(new URL('https://x' + fb.seen.lists[0]).searchParams.getAll('mask.fieldPaths'), ['legacy'], 'the list asks for just the legacy mark');
+  assert.deepStrictEqual(fb.seen.listed, ['legacy'], "so all that comes back is H1's mark: no emails, labels or members");
+  assert.deepStrictEqual(r.households, [{ id: 'home1a', ok: 4, failed: 0, none: false, error: false }, { id: 'home2g', ok: 3, failed: 0, none: false, error: false }]);
+  assert.strictEqual(runSummary(r), "Sent 7 pop-ups (a welcome, a sale day reminder, the week's top specials). Households: home1a sent 4; home2g sent 3.");
+  assert.deepStrictEqual(logs, []);
+  assert.strictEqual((await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb.fetch, send: allOk([]) })).ok, 0, 'nothing twice, in either household');
+  const night = await job({ email: BOT, password: 'long-pass', config, feed, now: new Date('2026-11-10T16:22:00Z'), fetch: fakeFirebase(two(), { multi: true }).fetch, send: async () => assert.fail('night') });
+  assert.strictEqual(runSummary(night), 'Night time in Sydney, so nothing went out. Anything due goes on the first run after 6:30am. Households: home1a sent 0; home2g sent 0.');
+
+  const sp = two({ [hdoc(H2, 'push')]: Object.assign(theirPush(), { events: { a: [ev('e1', 1, { n: 'Sam', t: '💸 Sam added $42.10' })] } }), 'shared/web': WEB });
+  const fb3 = fakeFirebase(sp, { multi: true }), got = [];
+  await job({ email: BOT, password: 'long-pass', config, feed: {}, now: FRI_EVENING, mode: 'spends', fetch: fb3.fetch, send: allOk(got) });
+  assert.deepStrictEqual(got.filter((c) => /^💸/.test(c[2])), [['KEY2', 'q2', '💸 Sam added $42.10']], "a spend goes to the other person's phone in its own household only");
+  assert.ok(fb3.seen.reads.length === 2 && fb3.seen.reads.every((p) => /\/hh\/push$/.test(p)), 'a spends run reads only the phones documents: no sale days, watch lists or website specials');
+  assert.ok(sp[hdoc(H2, 'push')].sent['ev:2026-11-13:e1'] && !sp[hdoc(H1, 'push')].sent['ev:2026-11-13:e1']);
+});
+
+await t('the shared website specials feed every household, or its own copy if they are missing or unreadable', async () => {
+  const solo = (pub, id) => ({ vapid: { pub, d: 'secret' }, subs: { [id]: { who: 'a', endpoint: 'https://web.push.apple.com/' + id, keys, vapid: pub, welcomed: true, device: 'iPhone' } }, prefs: {}, sent: {} });
+  const ham = { at: '2026-11-04T22:47:00Z', by: 'a', to: '2026-11-17', items: [['Coles', 'Coles Smoked Leg Ham 250g', 600, 900, '', 'Deli', 'Ham', ''].join('\t')] };
+  const homes = (extra) => Object.assign({
+    [hdoc(H1)]: home({ legacy: true }), [hdoc(H1, 'push')]: solo('KEY', 'p1'), [hdoc(H1, 'deals')]: { sales: [], watch: ['jameson', 'ham'], web: ham },
+    [hdoc(H2)]: home(), [hdoc(H2, 'push')]: solo('KEY2', 'q1'), [hdoc(H2, 'deals')]: { sales: [], watch: ['mangoes'] }
+  }, extra || {});
+  const bodies = async (docs, opts) => {
+    const fb = fakeFirebase(docs, Object.assign({ multi: true }, opts)), got = {}, logs = [];
+    await job({ email: BOT, password: 'long-pass', config, feed: week(), now: FRI_EVENING, fetch: fb.fetch, log: (m) => logs.push(m),
+      send: async (s, payload) => { got[s.id] = payload.body; return { ok: true }; } });
+    return { got, logs, reads: fb.seen.reads.filter((p) => p === 'shared/web').length };
+  };
+  const shared = await bodies(homes({ 'shared/web': Object.assign({ hid: H2 }, WEB) }));
+  assert.deepStrictEqual([shared.got.p1.split('\n')[0], shared.got.q1.split('\n')[0], shared.logs, shared.reads],
+    ['Jameson Irish Whiskey 700ml · $55.00 at Liquorland', 'Coles Medium Calypso Mangoes · $2.90 at Coles', [], 1], "both households' watch lists see the one shared copy, read once");
+  assert.ok(!/Ham/.test(shared.got.p1), "it stands in for a household's own older copy");
+
+  const missing = await bodies(homes());
+  assert.deepStrictEqual([missing.got.p1.split('\n')[0], missing.logs, missing.reads], ['Coles Smoked Leg Ham · $6.00 at Coles', [], 1], "no shared copy yet: the household's own, quietly");
+  assert.ok(!/Jameson/.test(missing.got.p1) && !/Mangoes/.test(missing.got.q1), 'and a household without its own copy has none');
+  const blank = await bodies(homes({ 'shared/web': { at: '2026-11-11T22:47:00Z', by: 'a' } }));
+  assert.strictEqual(blank.got.p1.split('\n')[0], 'Coles Smoked Leg Ham · $6.00 at Coles', 'a shared copy with no list of specials counts as missing');
+
+  const refused = await bodies(homes({ 'shared/web': WEB }), { fail: { 'read shared/web': 403 } });
+  assert.deepStrictEqual([refused.got.p1.split('\n')[0], refused.reads], ['Coles Smoked Leg Ham · $6.00 at Coles', 1], "can't be read: the household's own");
+  assert.deepStrictEqual(refused.logs, ["Couldn't read the shared website specials, so each household's own copy is used. Firestore didn't let the bot in. Publish the new Firestore rules, the ones with isBot() in them."],
+    'noted once, not once per household');
+});
+
+await t("one household going wrong doesn't stop the others, and the log names no one", async () => {
+  const said = [];
+  const go = async (docs, opts, send) => {
+    const fb = fakeFirebase(docs, Object.assign({ multi: true }, opts)), logs = [];
+    const r = await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb.fetch, send: send || allOk([]), log: (m) => logs.push(m) });
+    said.push(...logs, runSummary(r));
+    return { r, logs };
+  };
+  let docs = two(), x = await go(docs, { fail: { ['read ' + hdoc(H1, 'push')]: 500 } });
+  assert.deepStrictEqual(x.logs, ['Household home1a went wrong: Firebase read failed (500: Something broke at projects/demo-household/databases/(default)/documents/households/home1a/hh/push).'],
+    "a read that fails is noted, with the household's id cut short");
+  assert.deepStrictEqual([docs[hdoc(H1, 'push')].last, docs[hdoc(H2, 'push')].last.sent], [undefined, 3], 'and the next household still goes');
+  assert.strictEqual(runSummary(x.r), "Sent 3 pop-ups (a welcome, the week's top specials). Households: home1a couldn't be done; home2g sent 3.");
+
+  docs = two(); x = await go(docs, { fail: { ['update ' + hdoc(H1, 'push')]: 500 } });
+  assert.ok(x.logs.length === 1 && /^Household home1a went wrong: Firebase update failed \(500: /.test(x.logs[0]), x.logs.join('|'));
+  assert.deepStrictEqual([docs[hdoc(H1, 'push')].last, docs[hdoc(H2, 'push')].last.sent], [undefined, 3], 'a note that fails, the same');
+  assert.strictEqual(runSummary(x.r), "Sent 7 pop-ups (a welcome, a sale day reminder, the week's top specials). Households: home1a sent 4, but couldn't note what it sent; home2g sent 3.",
+    'what went out before the note failed still counts');
+
+  docs = two();
+  x = await go(docs, {}, async (s) => { if (s.id === 'p1') throw new TypeError("Cannot create property 'x' on string 'Robin paid $42.10'"); return { ok: true }; });
+  assert.deepStrictEqual(x.logs, ['Household home1a went wrong: the job hit an error (TypeError).'], "anything else (bad data, say): only the kind of error, as its words could quote what's in the documents");
+  assert.strictEqual(docs[hdoc(H2, 'push')].last.sent, 3);
+
+  docs = two(); x = await go(docs, { fail: { ['read ' + hdoc(H1, 'push')]: 500, ['read ' + hdoc(H2, 'push')]: 503 } });
+  assert.deepStrictEqual([x.r.ok, x.r.households.map((h) => h.error), x.logs.length], [0, [true, true], 2]);
+  assert.strictEqual(runSummary(x.r), "Sent 0 pop-ups. Households: home1a couldn't be done; home2g couldn't be done.");
+  assert.ok(said.every((m) => !/Robin|Jules|Sam|Alex|@|\$|42|home1a2|home2g7/.test(m)), 'no names, emails, spends or whole ids in the public log: ' + said.join(' | '));
+});
+
+await t('the households come a page at a time', async () => {
+  const H3 = 'home3p5q6r7s8t9u';
+  const docs = two({ [hdoc(H1)]: home(), [hdoc(H3)]: home({ legacy: true }), [hdoc(H3, 'push')]: { prefs: {} } }), fb = fakeFirebase(docs, { multi: true, page: 1 });
+  const r = await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb.fetch, send: allOk([]) });
+  assert.deepStrictEqual(fb.seen.lists, [LIST, LIST + '&pageToken=p%2F1%3D', LIST + '&pageToken=p%2F2%3D'],
+    'it follows each page token as Firebase gives it, asking the same question each time, until there are no more');
+  assert.deepStrictEqual(r.households.map((h) => [h.id, h.ok, h.none]), [['home1a', 4, false], ['home2g', 3, false], ['home3p', 0, true]], 'every household, from every page');
+  assert.ok(fb.seen.reads.indexOf('hh/push') < 0 && docs['hh/push'].last === undefined, 'a legacy mark on the last page still leaves out the one at the top');
+  assert.deepStrictEqual(docs[hdoc(H3, 'push')], { prefs: {}, last: { at: FRI_EVENING.toISOString(), sent: 0, failed: 0 } }, 'one with no phone on yet only notes that it ran');
+  assert.strictEqual(runSummary(r), "Sent 7 pop-ups (a welcome, a sale day reminder, the week's top specials). Households: home1a sent 4; home2g sent 3; home3p has no phone on yet.");
+  const quiet = await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fakeFirebase({ [hdoc(H3)]: home(), [hdoc(H3, 'push')]: { prefs: {} } }, { multi: true }).fetch, send: allOk([]) });
+  assert.strictEqual(runSummary(quiet), 'No phone has turned notifications on yet.', 'no household has a phone on yet');
+});
+
+/* Ids and paths: a household made with an odd id (the rules now refuse them, but the job doesn't count on it). */
+const FS = 'https://firestore.googleapis.com/v1/projects/demo-household/databases/(default)/documents';
+await t("household ids the app doesn't make are left alone, never fetched, and counted, not named", async () => {
+  assert.ok(HID.test(H1) && HID.test(H2) && ['%2e%2e', '..', 'ABCDEFGHJKMNPQRS', 'abcdefgh/jkmnpqrs', 'abcdefghjkmnpqr', 'abcdefghjkmnpqrs2', ''].every((x) => !HID.test(x)));
+  const docs = two({ 'households/%2e%2e': home(), 'households/%2e%2e/hh/push': push(), 'households/ABCDEFGHJKMNPQRS': home(), 'households/short1': home() });
+  const fb = fakeFirebase(docs, { multi: true, names: ['households/abcdefgh/jkmnpqrstuvwxyz2', 'elsewhere/abcdefghjkmnpqrs'] }), logs = [];
+  const r = await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb.fetch, send: allOk([]), log: (m) => logs.push(m) });
+  assert.deepStrictEqual(logs, ["Left out 5 households with an id the app doesn't make."], 'by count only: the dot-dot one, upper case, too short, one with a / in it, and one from another collection');
+  assert.deepStrictEqual(fb.seen.urls.map((u) => u.slice(FS.length)).filter((u) => !/^\/households\?/.test(u)).sort(),
+    [':commit', ':commit', '/households/' + H1 + '/hh/deals', '/households/' + H1 + '/hh/push', '/households/' + H2 + '/hh/deals', '/households/' + H2 + '/hh/push', '/shared/web'].sort(),
+    'only the two real households are read, each at its own path, and nothing at the top or in the odd ones');
+  assert.deepStrictEqual([fb.seen.writes, r.households.map((h) => h.id)], [[hdoc(H1, 'push'), hdoc(H2, 'push')], ['home1a', 'home2g']]);
+  assert.ok(docs['hh/push'].last === undefined && docs['households/%2e%2e/hh/push'].last === undefined, 'neither the household at the top nor the odd one is touched');
+
+  const only = { 'hh/push': push(), 'hh/deals': deals(), 'households/%2e%2e': home({ legacy: true }) }, fb2 = fakeFirebase(only, { multi: true }), logs2 = [];
+  await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb2.fetch, send: allOk([]), log: (m) => logs2.push(m) });
+  assert.deepStrictEqual([logs2, fb2.seen.writes, only['hh/push'].last.sent], [["Left out 1 household with an id the app doesn't make."], ['hh/push'], 4],
+    'with only an odd one, it is as if there were none: the household at the top goes on, and the odd legacy mark counts for nothing');
+  const mixed = Object.assign({}, only, { [hdoc(H2)]: home(), [hdoc(H2, 'push')]: theirPush() }), fb3 = fakeFirebase(mixed, { multi: true });
+  await job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb3.fetch, send: allOk([]) });
+  assert.deepStrictEqual(fb3.seen.writes, ['hh/push', hdoc(H2, 'push')], 'nor alongside a real household: the one at the top still goes too');
+});
+
+await t('every path is checked, and encoded a piece at a time, so fetch keeps it where it is', async () => {
+  const seen = [], f = async (url, init) => { seen.push([url, init]); return { ok: true, status: 200, json: async () => ({ idToken: 't', fields: {} }) }; };
+  const fb = firebase({ apiKey: 'k', projectId: 'p', fetch: f });
+  await fb.signIn('e', 'p');
+  const docs = 'https://firestore.googleapis.com/v1/projects/p/databases/(default)/documents';
+  await fb.get('households/%2e%2e/hh/push');
+  assert.strictEqual(seen[1][0], docs + '/households/%252e%252e/hh/push', 'a % is sent as %25');
+  assert.strictEqual(new URL(seen[1][0]).pathname, '/v1/projects/p/databases/(default)/documents/households/%252e%252e/hh/push', 'which fetch leaves where it is');
+  assert.strictEqual(new URL(docs + '/households/%2e%2e/hh/push').pathname, '/v1/projects/p/databases/(default)/documents/hh/push', 'where unencoded it would have read the household at the top');
+  await fb.get('shared/we b');
+  assert.strictEqual(seen[2][0], docs + '/shared/we%20b');
+  for (const bad of ['households/../hh/push', 'households/./hh/push', 'households//hh/push', '../hh/push', 'hh/push/']) {
+    await assert.rejects(fb.get(bad), /a Firestore path it doesn't allow/, bad);
+    await assert.rejects(fb.update(bad, { last: { at: 'x', sent: 0, failed: 0 } }), /a Firestore path it doesn't allow/, bad);
+  }
+  await assert.rejects(fb.list('households/..'), /a Firestore path it doesn't allow/);
+  assert.strictEqual(seen.length, 3, 'none of those was fetched');
+  await fb.get('hh/push');
+  assert.strictEqual(seen[3][0], docs + '/hh/push', 'ordinary paths are just as before');
+  await fb.update('households/' + H1 + '/hh/push', { last: { at: 'x', sent: 0, failed: 0 } });
+  assert.deepStrictEqual([seen[4][0], JSON.parse(seen[4][1].body).writes[0].update.name], [docs + ':commit', 'projects/p/databases/(default)/documents/households/' + H1 + '/hh/push'],
+    "a write names the document Firestore's own way");
+});
+
+/* Sending: only to the big push services, at most 8 phones a household, and no waiting on a slow one. */
+const phone = (id, endpoint, o) => Object.assign({ who: 'a', endpoint, keys, vapid: 'KEY', welcomed: true, device: 'iPhone' }, o || {});
+const phones = (list) => Object.assign(onePhone(), { subs: Object.fromEntries(list.map((x) => [x[0], phone(x[0], x[1], x[2])])) });
+const welcomeAll = (P) => { Object.values(P.subs).forEach((s) => { s.welcomed = false; }); return P; };
+await t('pop-ups only go to the big push services', async () => {
+  const good = ['https://web.push.apple.com/QK1', 'https://fcm.googleapis.com/fcm/send/abc', 'https://updates.push.services.mozilla.com/wpush/v2/x', 'https://wns2-par02p.notify.windows.com/w/?token=x',
+    'https://WEB.PUSH.APPLE.COM/x', 'https://web.push.apple.com:443/x'];
+  const bad = ['https://evil.example/push', 'https://fcm.googleapis.com.evil.example/x', 'https://evilpush.apple.com/x', 'http://web.push.apple.com/x', 'https://web.push.apple.com:8443/x', 'https://u:p@fcm.googleapis.com/x',
+    'https://push.apple.com/x', 'https://push.services.mozilla.com/x', 'https://android.googleapis.com/gcm/send/x', 'not a url', '', null];
+  assert.deepStrictEqual(good.map(knownPush), good.map(() => true), 'Apple, Google, Mozilla and Microsoft (any case, the usual port)');
+  assert.deepStrictEqual(bad.map(knownPush), bad.map(() => false), 'look-alikes, plain http, odd ports, logins in the address and anything else are not');
+  const P = welcomeAll(phones([['p1', 'https://web.push.apple.com/1'], ['p2', 'https://evil.example/collect?x=1'], ['p3', 'https://fcm.googleapis.com/fcm/send/3', { device: 'Android phone' }]]));
+  const calls = [], logs = [];
+  const r = await run({ push: P, deals: { sales: [], watch: [] }, feed: week(), now: WED_AM, send: async (s) => { calls.push(s.id); return { ok: true }; }, log: (m) => logs.push(m) });
+  assert.deepStrictEqual(calls, ['p1', 'p3', 'p1', 'p3'], 'the welcome and the top specials go to the two real phones');
+  assert.deepStrictEqual([r.ok, r.failed], [4, 2], 'the other counts as not sent, each time');
+  assert.deepStrictEqual(logs, ["Not sent to iPhone (its address isn't a known push service)"], 'noted once, without its address');
+  assert.deepStrictEqual(r.write.subs, { p1: { welcomed: true }, p3: { welcomed: true } });
+});
+
+await t('at most 8 phones a household, the most recently turned on', async () => {
+  const list = [];
+  for (let i = 1; i <= 10; i++) list.push(['p' + i, 'https://web.push.apple.com/' + i, { at: i === 3 ? 0 : 1000 + i }]);
+  const P = phones(list), p = plan({ push: P, deals: { sales: [], watch: [] }, feed: week(), now: WED_AM });
+  assert.deepStrictEqual([MAX_PHONES, p.capped, p.subs.map((s) => s.id)], [8, 2, ['p2', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10']], 'the two oldest are left out, the rest keep their order');
+  const calls = [], logs = [];
+  const r = await run({ push: P, deals: { sales: [], watch: [] }, feed: week(), now: WED_AM, send: async (s) => { calls.push(s.id); return { ok: true }; }, log: (m) => logs.push(m) });
+  assert.deepStrictEqual([calls.length, r.ok, logs], [8, 8, ['Sent to 8 phones only; 2 more were left out.']]);
+  assert.strictEqual(plan({ push: onePhone(), deals: {}, feed: week(), now: WED_AM }).capped, 0);
+});
+
+/* This test has a limit of its own, so a send that never answers fails it, rather than stopping the whole file. */
+const inTime = (p, ms = 3000) => { let tm; return Promise.race([p, new Promise((ok, no) => { tm = setTimeout(no, ms, new Error('still waiting after ' + ms + 'ms')); })]).finally(() => clearTimeout(tm)); };
+await t("a phone that doesn't answer in time counts as not sent, and doesn't hold up the rest", async () => {
+  const P = welcomeAll(phones([['p1', 'https://web.push.apple.com/1'], ['p2', 'https://web.push.apple.com/2']]));
+  const calls = [], logs = [], t0 = Date.now();
+  const r = await inTime(run({ push: P, deals: { sales: [], watch: [] }, feed: week(), now: WED_AM, wait: 30, log: (m) => logs.push(m),
+    send: (s) => { calls.push(s.id); return s.id === 'p1' ? new Promise(() => {}) : Promise.resolve({ ok: true }); } }));
+  assert.deepStrictEqual(calls, ['p1', 'p2', 'p2'], 'the slow one is tried once, then left for this run');
+  assert.deepStrictEqual([r.ok, r.failed, logs], [2, 2, ['Not sent to iPhone (no answer in time)']]);
+  assert.deepStrictEqual(r.write.subs, { p2: { welcomed: true } }, "and isn't marked as gone: it may just be slow today");
+  assert.ok(Date.now() - t0 < 2000);
+
+  const docs = two(), fb = fakeFirebase(docs, { multi: true }), seen = [], hlogs = [];
+  const x = await inTime(job({ email: BOT, password: 'long-pass', config, feed, now: FRI_EVENING, fetch: fb.fetch, wait: 30, log: (m) => hlogs.push(m),
+    send: (s, payload, vapid) => { seen.push(vapid.pub + ' ' + s.id); return vapid.pub === 'KEY' ? new Promise(() => {}) : Promise.resolve({ ok: true }); } }));
+  assert.deepStrictEqual(seen, ['KEY p1', 'KEY p2', 'KEY2 q2', 'KEY2 q1', 'KEY2 q2'], "a household whose phones don't answer doesn't hold up the next one");
+  assert.strictEqual(runSummary(x), "Sent 3 pop-ups (a welcome, a sale day reminder, the week's top specials), 4 couldn't be sent. Households: home1a sent 0, 4 couldn't be sent; home2g sent 3.");
+  assert.deepStrictEqual(hlogs, ['Household home1a: Not sent to iPhone (no answer in time)', 'Household home1a: Not sent to iPhone (no answer in time)'], 'each slow phone once');
+});
+
+await t("a phone's name is made safe before it goes in the public log", async () => {
+  assert.deepStrictEqual(['iPhone', 'Android phone', "Robin's Pixel (2)", 'iPhone\n::error::owned %0A <script>', 'x'.repeat(60), '::\n\r', null, 42].map((d) => deviceOf({ device: d })),
+    ['iPhone', 'Android phone', "Robin's Pixel (2)", 'iPhoneerrorowned 0A script', 'x'.repeat(40), 'a phone', 'a phone', '42']);
+  assert.strictEqual(deviceOf(undefined), 'a phone');
+  const P = phones([['p1', 'https://web.push.apple.com/1', { device: 'iPhone\n::error file=x::pwned\r\n::add-mask::secret' }]]);
+  const logs = [];
+  await run({ push: welcomeAll(P), deals: { sales: [], watch: [] }, feed: week(), now: WED_AM, send: async () => ({ ok: false, status: 410 }), log: (m) => logs.push(m) });
+  assert.deepStrictEqual(logs, ['Not sent to iPhoneerror filexpwnedadd-masksecret (410, it has unsubscribed)'], 'one line, no colons or % to make a GitHub command of it');
+  assert.ok(logs.every((m) => !/[\r\n:%]/.test(m.replace(/^Not sent to /, ''))));
 });
 
 console.log(passed + ' groups passed');

@@ -1,6 +1,6 @@
 # Our household: the home-screen app
 
-A shared spending app for two people that opens full screen from your phone's home screen. Your data lives in your own free Firebase project, and only your two logins can read it.
+A shared spending app for couples that opens full screen from your phone's home screen. Your data lives in your own free Firebase project, and each couple's household can only be read by its two logins.
 
 What's in this folder:
 - `site/` is the app. This is the only folder you put online.
@@ -10,7 +10,9 @@ What's in this folder:
 1. Go to console.firebase.google.com and create a project. You can turn Analytics off.
 2. Go to **Build → Authentication → Get started**, choose **Email/Password**, switch it on and save.
 3. Go to **Build → Firestore Database → Create database**. Pick a location near you and **Production mode**.
-4. In **Firestore Database → Rules**, replace everything with `firestore.rules`. Check your two email addresses are in the list, in lower case, and that `isBot` has the bot email for phone notifications (your email with `+bot` before the @). Then tap **Publish**.
+4. In **Firestore Database → Rules**, replace everything with `firestore.rules`. Check your two email addresses are in `isUs`, in lower case, that `isAdmin` has yours (it sees the list of households and switches pilot features on), and that `isBot` has the bot email for phone notifications (your email with `+bot` before the @). Then tap **Publish**.
+
+Each couple who signs up gets their own household, and only the two of them can open it. Anyone can make a login and start a household. The first time either of the original two opens the app after the rules are published, your existing spends move into your household by themselves; the other one joins it on their next open.
 5. Open **Project settings** (the gear icon). Under **Your apps**, add a **Web** app, then copy its config values into `site/firebase-config.js`.
 
 ## 2. Put it online (free)

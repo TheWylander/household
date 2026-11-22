@@ -119,7 +119,7 @@ try:
         check(any(c.endswith('/firebase-firestore-compat.js') for c in cached) and any(c.endswith('/index.html') for c in cached), f'app files cached for offline ({len(cached)} files)')
         ctx1.set_offline(True)
         pg.reload(); pg.wait_for_timeout(1500)
-        check('Our household' in text(pg), 'opens with no connection, from the cache')
+        check('Two of Us' in text(pg), 'opens with no connection, from the cache')
         ctx1.close()
 
         # without Firebase settings it says what's missing instead of failing
@@ -187,7 +187,7 @@ try:
         a.evaluate("() => { localStorage.clear(); sessionStorage.clear(); localStorage.setItem('__fbrules', JSON.stringify(['robin@example.com', 'jules@example.com'])); }")
         a.reload(); a.wait_for_timeout(600)
         t = text(a)
-        check('Our household' in t and 'Sign in to see your shared spends' in t and a.locator('.nav').count() == 0, 'opens on sign-in')
+        check('Two of Us' in t and 'Sign in to see your shared spends' in t and a.locator('.nav').count() == 0, 'opens on sign-in')
         check('Preview only' not in t, 'no preview banner once Firebase is set up')
         shot(a, 'p01-signin')
         act(a, 'aumode', 'create')
@@ -249,7 +249,7 @@ try:
 
         # Robin shows Claude's draft note to Jules
         act(a, 'go', 'home'); act(a, 'go', 'newsedit'); act(a, 'newspublish'); a.wait_for_timeout(300)
-        check(a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/news'].notes['2026-11-22'].status") == 'published', 'the update note is saved to Firestore')
+        check(a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/news'].notes['2026-11-22b'].status") == 'published', 'the update note is saved to Firestore')
         act(a, 'go', 'home')
 
         # ---------- Jules's phone ----------

@@ -1,27 +1,138 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Only your two logins can read or change anything, and only once each email is confirmed.
-    function isUs() {
-      return request.auth != null
-        && request.auth.token.email_verified == true
-        && request.auth.token.email.lower() in [__EMAILS__];
+    // A login with a confirmed email.
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
     }
-    // The GitHub job that sends phone notifications signs in as this bot user. It can only read the sale days,
-    // watch list and phones, and note what it sent.
+    function me() { return request.auth.uid; }
+    function myEmail() { return request.auth.token.email.lower(); }
+    // The two original logins, from before households. They can read the old data to move it across.
+    function isUs() {
+      return signedIn() && myEmail() in [__EMAILS__];
+    }
+    // Whoever runs the app: sees the list of households and switches pilot features on. Nothing inside other households.
+    function isAdmin() {
+      return signedIn() && myEmail() == __ADMIN_EMAIL__;
+    }
+    // The GitHub job that sends phone notifications signs in as this bot user. It can only read each household's
+    // sale days, watch list and phones, the shared specials, and note what it sent.
+    // It is pinned to that user's UID too, so nobody can sign up with the bot's email if its account is ever deleted.
     function isBot() {
       return request.auth != null
+        && request.auth.uid == __BOT_UID__
         && request.auth.token.firebase.sign_in_provider == 'password'
         && request.auth.token.email.lower() == __BOT_EMAIL__;
     }
+    function housePath(hid) { return /databases/$(database)/documents/households/$(hid); }
+    function isMember(hid) {
+      return signedIn() && exists(housePath(hid)) && me() in get(housePath(hid)).data.members;
+    }
+    // Joining a household with one person in it: add yourself and your email, nothing else. The original two join
+    // the moved-across household; anyone else needs an unused invite code from that household, under 14 days old.
+    function joining(hid) {
+      return signedIn()
+        && !(me() in resource.data.members)
+        && resource.data.members.size() == 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'emails'])
+        && request.resource.data.members == resource.data.members.concat([me()])
+        && request.resource.data.emails == resource.data.emails.concat([myEmail()])
+        && ((resource.data.get('legacy', false) == true && isUs()) || invited(hid));
+    }
+    function invited(hid) {
+      let u = getAfter(/databases/$(database)/documents/users/$(me())).data;
+      let inv = get(/databases/$(database)/documents/invites/$(u.via)).data;
+      return u.hid == hid && inv.hid == hid && !('usedBy' in inv) && request.time.toMillis() < inv.at + 1209600000
+        && getAfter(/databases/$(database)/documents/invites/$(u.via)).data.get('usedBy', '') == me();
+    }
+
+    // Household ids are 16 letters and digits, as the app makes them: nothing that could read as a path.
+    match /households/{hid} {
+      allow get: if isMember(hid) || isAdmin()
+        || (resource.data.get('legacy', false) == true && isUs());
+      allow list: if isAdmin() || isBot();
+      // Starting a household: just you, pointing your login at it in the same write. Only the original two can
+      // mark it as the moved-across one, and only they or the owner can switch pilot features on.
+      allow create: if signedIn()
+        && hid.matches('^[a-z0-9]{16}$')
+        && request.resource.data.keys().hasOnly(['owner', 'members', 'emails', 'label', 'createdAt', 'active', 'legacy', 'pilot'])
+        && request.resource.data.owner == me()
+        && request.resource.data.members == [me()]
+        && request.resource.data.emails == [myEmail()]
+        && (!('legacy' in request.resource.data) || (request.resource.data.legacy == true && isUs()))
+        && (!('pilot' in request.resource.data) || isAdmin() || ('legacy' in request.resource.data && isUs()))
+        && (request.resource.data.get('legacy', false) == true
+          || getAfter(/databases/$(database)/documents/users/$(me())).data.hid == hid);
+      allow update: if (isMember(hid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['label', 'active']))
+        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pilot']))
+        || joining(hid);
+      allow delete: if isMember(hid);
+    }
+
+    // Everything a household saves: its settings and lists in hh, a month of spends in each months/YYYY-MM.
+    match /households/{hid}/{col}/{doc} {
+      allow read: if (col == 'hh' || col == 'months') && isMember(hid);
+      allow write: if isMember(hid)
+        && ((col == 'hh' && doc in ['settings', 'tab', 'rules', 'import', 'photos', 'news', 'deals', 'push', 'ai'])
+          || (col == 'months' && doc.matches('^[0-9]{4}-[0-9]{2}$')));
+      allow get: if isBot() && col == 'hh' && doc in ['deals', 'push'];
+      allow update: if isBot() && col == 'hh' && doc == 'push'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['subs', 'sent', 'last'])
+        && request.resource.data.get('subs', {}).keys().hasOnly(resource.data.get('subs', {}).keys());
+    }
+
+    // Which household a login belongs to: only one you're in, once the write is done. What you can open is decided
+    // by the members list above.
+    match /users/{uid} {
+      allow get, delete: if signedIn() && uid == me();
+      allow create, update: if signedIn() && uid == me()
+        && request.resource.data.keys().hasOnly(['hid', 'via', 'at'])
+        && request.resource.data.hid is string
+        && me() in getAfter(housePath(request.resource.data.hid)).data.members;
+    }
+
+    // Invite codes. Anyone signed in can look one up by its code (they're long and random), never list them.
+    match /invites/{code} {
+      allow get: if signedIn();
+      allow create: if code.matches('^[a-z0-9]{12}$')
+        && request.resource.data.keys().hasOnly(['hid', 'by', 'at', 'label'])
+        && request.resource.data.by == me()
+        && request.resource.data.at is int
+        && request.resource.data.at > request.time.toMillis() - 600000
+        && request.resource.data.at < request.time.toMillis() + 600000
+        && isMember(request.resource.data.hid);
+      allow update: if signedIn()
+        && !('usedBy' in resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedBy'])
+        && request.resource.data.usedBy == me()
+        && me() in getAfter(housePath(resource.data.hid)).data.members;
+      allow delete: if isMember(resource.data.hid);
+    }
+
+    // The shop specials read on the owner's laptop each week, shared with every signed-in household.
+    match /shared/{doc} {
+      allow get: if signedIn() || isBot();
+      allow write: if isAdmin() && doc == 'web';
+    }
+
+    // Reading anything here tells the app this login is the owner's.
+    match /admin/{doc} {
+      allow get: if isAdmin();
+    }
+
+    // The old single household, kept read-only while it moves across. The first of the two to open the new version
+    // claims the move here, once.
     match /hh/{doc} {
-      allow read, write: if isUs();
+      allow read: if isUs();
+      allow create: if isUs() && doc == 'migrated' && request.resource.data.by == me()
+        && request.resource.data.keys().hasOnly(['hid', 'by', 'at']);
       allow get: if isBot() && doc in ['deals', 'push'];
       allow update: if isBot() && doc == 'push'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['subs', 'sent', 'last']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['subs', 'sent', 'last'])
+        && request.resource.data.get('subs', {}).keys().hasOnly(resource.data.get('subs', {}).keys());
     }
     match /months/{month} {
-      allow read, write: if isUs();
+      allow read: if isUs();
     }
   }
 }

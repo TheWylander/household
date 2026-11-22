@@ -80,6 +80,13 @@
      decides when the other person gets it; edits live in hh/news. The other person sees the newest shown note once,
      or as a few things to try straight after the welcome. */
   const RELEASES = [
+    { id: '2026-11-22b', date: '2026-11-22', title: 'Gift cards, and Two of Us for other couples', items: [
+      ['star', 'Paid with a gift card.', 'Bought a gift card on special? When you add the spend, choose Paid with, then Gift card or Both. It saves what it really cost, and Home adds up what gift cards have saved.'],
+      ['duo', 'Share Two of Us.', 'Other couples can have Two of Us too, each in their own locked household. Only the two of you can open yours.'],
+      ['star', 'How to use it.', 'Settings has a quick guide to each part of the app, and how your data is kept.'],
+      ['gear', 'Your household.', 'Settings shows who\'s in your household.'],
+      ['check', 'Nothing to redo.', 'Everything we had moved into our household by itself.']
+    ] },
     { id: '2026-11-22', date: '2026-11-22', title: 'TCN gift cards in Deals', items: [
       ['tag', 'TCN gift card deals.', "Deals shows The Card Network's gift card deals while they run, like 15% off at Coles, and the popular shops each one covers."],
       ['cart', 'A page for TCN.', 'Every TCN card and the shops that take it. Type a shop, like Uber Eats, to see which cards take it.'],
@@ -130,7 +137,10 @@
     dealsDoc: null, feed: null, feedAt: 0, feedBusy: false, feedErr: null, dealsFetch: null, spStore: 'all', spAisle: 'all', spSort: 'best', spWatch: false, spQuery: '', spAll: false, ozbAll: false, tcnQuery: '', tcnOpen: '', tcnAll: false, tcnAmt: '', tcnOff: '', tcnPay: 'amex', watchNew: '', listNew: '', aiDoc: null, aiTokNew: '', ghTokNew: '',
     importResult: null, importing: false, pendingRender: false,
     imp: null, impParsed: null, impKey: null, impBad: false,
-    whoPick: false, welcomePreview: false, welcomeT: 0
+    whoPick: false, welcomePreview: false, welcomeT: 0,
+    /* Households: which one this login belongs to, its details, and the steps before you're in one. */
+    root: null, hid: null, house: null, houseGone: false, gate: null, isAdmin: false, webDoc: null, legacyRules: false,
+    admin: null, invite: null, adminChecked: false, guideNew: false
   };
   const knownDocs = {};
   const queues = {};
@@ -156,6 +166,15 @@
       createdAt: Date.now()
     };
   }
+  /* Pilot features are switched on for a household by whoever runs the app. Before households, everything is on.
+     The last switches seen are kept on the phone so nothing flickers while the household loads. */
+  const PILOTS = { splitwise: 'Splitwise import', insights: 'Insights and budgets' };
+  function pilot(k) {
+    if (!S.hid) return true;
+    let p = S.house && S.house.pilot;
+    if (!S.house) { try { p = JSON.parse(lsGet('hh.pilot') || 'null'); } catch (e) { p = null; } }
+    return !!(p && typeof p === 'object' && p[k] === true);
+  }
   function cfg() {
     const d = defaults();
     const s = S.settings && typeof S.settings === 'object' ? S.settings : {};
@@ -164,7 +183,7 @@
     const goal = pick('goal'), card = pick('card'), welcome = pick('welcome'), rent = pick('rent'), news = pick('news');
     return {
       names: pick('names'), colours: pick('colours'), members: pick('members'),
-      budget: num(s.budget) && s.budget > 0 ? s.budget : null,
+      budget: num(s.budget) && s.budget > 0 && pilot('insights') ? s.budget : null,
       resetDay: L.clamp(parseInt(s.resetDay, 10) || 1, 1, 28),
       splitA: s.splitA == null ? 50 : L.clamp(s.splitA, 0, 100),
       categories: Array.isArray(s.categories) ? s.categories.filter((c) => typeof c === 'string' && c.trim()).slice(0, 30) : [],
@@ -296,8 +315,11 @@
     };
   }
 
-  /* The same small interface on Firebase Firestore, for the PWA. update merges nested maps like the Claude store does. */
-  function FirebaseDB(fs) {
+  /* The same small interface on Firebase Firestore, for the PWA. update merges nested maps like the Claude store does.
+     Paths like 'hh/settings' sit inside the household (prefix 'households/<id>/'); a path starting with '/' is from
+     the top, like '/shared/web'. */
+  function FirebaseDB(fs, prefix) {
+    const full = (p) => (p.charAt(0) === '/' ? p.slice(1) : (prefix || '') + p);
     const meta = (m) => ({ fromCache: !!(m && m.fromCache), hasPendingWrites: !!(m && m.hasPendingWrites) });
     const fail = (e) => {
       const c = String((e && e.code) || '').replace(/^firestore\//, '');
@@ -308,7 +330,7 @@
     const snap = (s) => ({ id: s.id, exists: !!s.exists, data: () => s.data(), metadata: meta(s.metadata) });
     const many = (q) => ({ docs: q.docs.map(snap), size: q.size, empty: q.empty, metadata: meta(q.metadata) });
     function docRef(path) {
-      const ref = fs.doc(path);
+      const ref = fs.doc(full(path));
       return {
         id: ref.id, path,
         get: () => ref.get().then(snap, (e) => Promise.reject(fail(e))),
@@ -318,13 +340,31 @@
         onSnapshot: (next, error) => ref.onSnapshot((s) => next(snap(s)), (e) => { if (error) error(fail(e)); })
       };
     }
+    /* Several writes that land together or not at all: ['set', path, data], ['merge', path, data], ['delete', path].
+       { union: [...] } in a merge adds to a list without reading it first. */
+    const FV = window.firebase && window.firebase.firestore && window.firebase.firestore.FieldValue;
+    const withUnions = (d) => {
+      const o = {};
+      Object.keys(d).forEach((k) => { const v = d[k]; o[k] = v && typeof v === 'object' && Array.isArray(v.union) ? FV.arrayUnion.apply(FV, v.union) : v; });
+      return o;
+    };
+    function batch(ops) {
+      const b = fs.batch();
+      ops.forEach((o) => {
+        const ref = fs.doc(full(o[1]));
+        if (o[0] === 'delete') b.delete(ref);
+        else if (o[0] === 'merge') b.set(ref, withUnions(plain(o[2])), { merge: true });
+        else b.set(ref, plain(o[2]));
+      });
+      return b.commit().catch((e) => Promise.reject(fail(e)));
+    }
     return {
-      doc: docRef,
+      doc: docRef, batch,
       collection: (path) => ({
         path,
         doc: (id) => docRef(path + '/' + (id || uid('d'))),
-        get: () => fs.collection(path).get().then(many, (e) => Promise.reject(fail(e))),
-        onSnapshot: (next, error) => fs.collection(path).onSnapshot((q) => next(many(q)), (e) => { if (error) error(fail(e)); })
+        get: () => fs.collection(full(path)).get().then(many, (e) => Promise.reject(fail(e))),
+        onSnapshot: (next, error) => fs.collection(full(path)).onSnapshot((q) => next(many(q)), (e) => { if (error) error(fail(e)); })
       })
     };
   }
@@ -366,6 +406,14 @@
   const putEntries = (ym, map) => upsert('months/' + ym, { entries: map }, { month: ym, entries: {} });
 
   /* ---------- entries ---------- */
+  /* Paid partly or wholly with a gift card bought at a discount: the bill, how much went on the gift card, the
+     discount, and what that saved. The spend itself is what it really cost: the bill less the saving. */
+  function giftOk(g) {
+    if (!g || typeof g !== 'object') return null;
+    const bill = Math.round(Number(g.bill)), face = Math.round(Number(g.face)), off = Number(g.off);
+    if (!(bill > 0 && face > 0 && face <= bill && off > 0 && off < 100)) return null;
+    return { bill, face, off: Math.round(off * 10) / 10, saved: Math.round(face * off / 100) };
+  }
   function makeEntry(o) {
     const C = cfg();
     const amount = Math.round(o.amount);
@@ -389,6 +437,7 @@
       parts: o.parts && o.parts.length ? o.parts : null,
       payer: o.kind === 'settlement' || o.kind === 'rent' ? o.from : (o.payer || null), splitA, paid, owed, onCard: !!o.onCard, offBudget: !!o.offBudget,
       category: o.kind === 'settlement' ? null : o.kind === 'rent' ? 'Rent' : (o.category || 'Other'), dupOf: o.dupOf || null, orig: o.orig || null,
+      gift: giftOk(o.gift),
       createdAt: o.createdAt || Date.now(), updatedAt: Date.now(), by: o.by || S.me || null
     };
   }
@@ -447,6 +496,13 @@
       try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* fine either way */ }
     }
     webHash();
+    /* An invite link: ?join=<code>. Kept on this phone until the login is made and the household joined. */
+    const join = /(?:^|[?&])join=([a-z0-9]{10,24})(?:&|$)/i.exec(location.search || '');
+    if (join) {
+      lsSet('hh.join', join[1].toLowerCase());
+      try { history.replaceState(null, '', location.pathname + location.hash); } catch (e) { /* fine either way */ }
+      if (!S.signin) S.signin = { mode: 'create', email: '', password: '', error: null, note: null, busy: false };
+    }
     window.addEventListener('hashchange', () => { if (webHash()) { webPending(); safeRender(); } });
     setTimeout(() => loadFeed(), 1200);
     render();
@@ -479,10 +535,188 @@
     S.auth.onAuthStateChanged((u) => {
       S.authUser = u || null; S.authReady = true;
       if (!u) splashSet(null);
-      if (u && u.emailVerified && !S.db) {
-        S.db = FirebaseDB(fb.firestore()); S.myId = u.uid; S.idResolved = true;
-        subHH(); subMonths();
+      if (u && u.emailVerified && !S.root) {
+        S.root = FirebaseDB(fb.firestore(), ''); S.myId = u.uid; S.idResolved = true;
+        findHousehold();
       }
+      safeRender();
+    });
+  }
+
+  /* ---------- households ---------- */
+  /* Each couple has its own household, and everything they save sits inside it. A login points at its household
+     from users/<uid>. Before the new rules are published that read is refused, so the app carries on as it always
+     has, with the one set of data at the top. */
+  const HOUSE = (hid) => '/households/' + hid;
+  const myEmail = () => String((S.authUser && S.authUser.email) || '').toLowerCase();
+  const newCode = (n) => {
+    const abc = 'abcdefghjkmnpqrstuvwxyz23456789', b = new Uint8Array(n), out = [];
+    (window.crypto || window.msCrypto).getRandomValues(b);
+    b.forEach((x) => out.push(abc[x % abc.length]));
+    return out.join('');
+  };
+  function findHousehold() {
+    S.root.doc('/users/' + S.myId).get().then((snap) => {
+      const d = snap.exists ? snap.data() : null;
+      if (d && typeof d.hid === 'string' && d.hid) openHousehold(d.hid);
+      else noHousehold();
+    }, (e) => {
+      if (e && e.denied) { S.legacyRules = true; startLegacy(); return; }
+      /* Offline: the household this phone opened last time. */
+      const last = lsGet('hh.hid');
+      if (last) { openHousehold(last); return; }
+      subError('hh', e, findHousehold);
+    });
+  }
+  function startLegacy() {
+    S.db = S.root;
+    subHH(); subMonths();
+  }
+  let houseUnsub = null, sharedUnsub = null;
+  function openHousehold(hid) {
+    S.hid = hid; S.gate = null; S.houseGone = false; lsSet('hh.hid', hid);
+    S.db = FirebaseDB(window.firebase.firestore(), 'households/' + hid + '/');
+    if (houseUnsub) houseUnsub();
+    houseUnsub = S.db.doc(HOUSE(hid)).onSnapshot((snap) => {
+      if (snap.metadata && snap.metadata.fromCache && !snap.exists) return;
+      if (!snap.exists) { S.house = null; S.houseGone = true; safeRender(); return; }
+      S.house = snap.data() || {};
+      lsSet('hh.pilot', JSON.stringify(S.house.pilot && typeof S.house.pilot === 'object' ? S.house.pilot : {}));
+      syncLabel();
+      const t = today();
+      if (S.house.active !== t && !S.readOnly) S.db.doc(HOUSE(hid)).update({ active: t }).catch(noop);
+      safeRender();
+    }, (e) => { if (e && e.denied) { S.house = null; S.houseGone = true; } safeRender(); });
+    if (!sharedUnsub) {
+      sharedUnsub = S.db.doc('/shared/web').onSnapshot((snap) => {
+        if (snap.metadata && snap.metadata.fromCache && !snap.exists) return;
+        S.webDoc = snap.exists ? snap.data() : null; S.sharedLoaded = true;
+        seedShared(); safeRender();
+      }, noop);
+    }
+    /* Only the owner's login may read admin/; the answer says whether this is the owner. */
+    S.db.doc('/admin/flag').get().then(() => { S.isAdmin = true; }, () => { S.isAdmin = false; })
+      .then(() => { S.adminChecked = true; seedShared(); webPending(); safeRender(); });
+    subHH(); subMonths();
+  }
+  /* No household yet. One of the two original logins moves the old data across first; anyone else starts their own
+     or joins their partner's with a code. */
+  function noHousehold() {
+    const code = lsGet('hh.join');
+    /* Only a clear no means this isn't one of the original two. Offline or any other hiccup asks to try again, so
+       neither of them starts an empty household by mistake. */
+    const hiccup = () => { S.gate = { step: 'retry', busy: false, error: null }; safeRender(); };
+    S.root.doc('/hh/migrated').get().then((snap) => {
+      const m = snap.exists ? snap.data() : null;
+      if (m && typeof m.hid === 'string') { m.by === S.myId ? moveLegacy(m.hid) : joinLegacy(m.hid); return; }
+      S.root.doc('/hh/settings').get().then((s) => { if (s.exists) moveLegacy(null); else gateStart(code); }, hiccup);
+    }, (e) => { if (e && e.denied) gateStart(code); else hiccup(); });
+  }
+  function gateStart(code) {
+    S.gate = { step: code ? 'join' : 'start', code: code || '', label: '', busy: false, error: null };
+    if (code) lookInvite();
+    safeRender();
+  }
+  function lookInvite() {
+    const G = S.gate, code = String(G.code || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (code.length < 10) { G.error = 'That code looks too short. Check it and try again.'; safeRender(); return; }
+    G.code = code; G.busy = true; G.error = null; safeRender();
+    S.root.doc('/invites/' + code).get().then((snap) => {
+      const d = snap.exists ? snap.data() : null;
+      G.busy = false;
+      if (!d || typeof d.hid !== 'string') { G.error = 'That code didn\'t work. Ask your partner to send a new one.'; G.step = 'join'; }
+      else if (d.usedBy) { G.error = 'That code has already been used. Ask your partner for a new one.'; G.step = 'join'; }
+      else if (!(Date.now() - Number(d.at) < INVITE_DAYS * 864e5)) { G.error = 'That code has run out. Ask your partner for a new one.'; G.step = 'join'; }
+      else { G.step = 'confirm'; G.hid = d.hid; G.label = String(d.label || '').slice(0, 60); }
+      safeRender();
+    }, () => { G.busy = false; G.error = 'That code didn\'t work. Check you\'re online and try again.'; safeRender(); });
+  }
+  const INVITE_DAYS = 14;
+  function startHousehold() {
+    const G = S.gate, hid = newCode(16), t = today();
+    G.busy = true; G.error = null; safeRender();
+    S.root.batch([
+      ['set', HOUSE(hid), { owner: S.myId, members: [S.myId], emails: [myEmail()], label: '', createdAt: Date.now(), active: t }],
+      ['set', '/users/' + S.myId, { hid, at: Date.now() }]
+    ]).then(() => { lsSet('hh.join', ''); S.guideNew = true; openHousehold(hid); }, () => {
+      G.busy = false; G.error = 'Your household couldn\'t be started. Check you\'re online and try again.'; safeRender();
+    });
+  }
+  function joinHousehold() {
+    const G = S.gate;
+    G.busy = true; G.error = null; safeRender();
+    S.root.batch([
+      ['set', '/users/' + S.myId, { hid: G.hid, via: G.code, at: Date.now() }],
+      ['merge', HOUSE(G.hid), { members: { union: [S.myId] }, emails: { union: [myEmail()] } }],
+      ['merge', '/invites/' + G.code, { usedBy: S.myId }]
+    ]).then(() => { lsSet('hh.join', ''); openHousehold(G.hid); }, () => {
+      G.busy = false; G.step = 'join';
+      G.error = 'That code didn\'t work. It may have been used, or the household already has two people. Ask your partner for a new one.';
+      safeRender();
+    });
+  }
+  /* The original two: the first to open the new version moves everything into a household and the other joins it. */
+  function moveLegacy(hid) {
+    S.gate = { step: 'moving', busy: true, error: null };
+    safeRender();
+    const fresh = !hid;
+    if (fresh) hid = newCode(16);
+    const claim = fresh ? S.root.doc('/hh/migrated').set({ hid, by: S.myId, at: Date.now() }) : Promise.resolve();
+    claim.then(() => copyLegacy(hid, fresh), (e) => {
+      /* The other phone got there first. */
+      if (e && e.denied) return S.root.doc('/hh/migrated').get().then((s) => { const m = s.data() || {}; if (m.hid) joinLegacy(m.hid); else throw e; });
+      throw e;
+    }).catch(() => { S.gate = { step: 'moving', busy: false, error: 'Moving your household didn\'t finish. Check you\'re online and try again.' }; safeRender(); });
+  }
+  const HH_DOCS = ['settings', 'tab', 'rules', 'import', 'photos', 'news', 'deals', 'push', 'ai'];
+  function copyLegacy(hid, fresh) {
+    const base = HOUSE(hid);
+    let had = {};
+    const made = fresh ? Promise.resolve(false) : S.root.doc(base).get().then((s) => s.exists, () => false);
+    return made.then((exists) => {
+      /* Picking up a move that stopped part way: only what isn't there yet, so nothing either of you has saved since
+         gets written over. */
+      if (exists) {
+        return Promise.all([S.root.collection(base + '/hh').get(), S.root.collection(base + '/months').get()]).then((q) => {
+          q[0].docs.forEach((d) => { if (d.exists) had['hh/' + d.id] = true; });
+          q[1].docs.forEach((d) => { if (d.exists) had['months/' + d.id] = true; });
+        });
+      }
+      return S.root.doc(base).set({ owner: S.myId, members: [S.myId], emails: [myEmail()], label: '', createdAt: Date.now(), active: today(), legacy: true,
+        pilot: { splitwise: true, insights: true } });
+    }).then(() => Promise.all([S.root.collection('/hh').get(), S.root.collection('/months').get()])).then((r) => {
+      const ops = [];
+      let web = null;
+      r[0].docs.forEach((d) => {
+        if (HH_DOCS.indexOf(d.id) < 0 || !d.exists) return;
+        const data = d.data();
+        if (d.id === 'deals' && data && data.web) web = data.web;
+        if (!had['hh/' + d.id]) ops.push(['set', base + '/hh/' + d.id, data]);
+      });
+      r[1].docs.forEach((d) => { if (d.exists && /^\d{4}-\d{2}$/.test(d.id) && !had['months/' + d.id]) ops.push(['set', base + '/months/' + d.id, d.data()]); });
+      /* The website specials become everyone's, if this login is the one that may share them. */
+      return eachWrite(ops).then(() => (web ? S.root.doc('/shared/web').set(web).catch(noop) : null));
+    }).then(() => S.root.doc('/users/' + S.myId).set({ hid, at: Date.now() })).then(() => openHousehold(hid));
+  }
+  /* Writes in small groups, each one on its own: the rules check every write against the household, and a batch
+     may only make 20 such checks in all. */
+  function eachWrite(ops) {
+    let p = Promise.resolve();
+    for (let i = 0; i < ops.length; i += 8) {
+      const part = ops.slice(i, i + 8);
+      p = p.then(() => Promise.all(part.map((o) => (o[0] === 'delete' ? S.root.doc(o[1]).delete() : S.root.doc(o[1]).set(o[2])))));
+    }
+    return p;
+  }
+  function joinLegacy(hid) {
+    S.gate = { step: 'moving', busy: true, error: null };
+    safeRender();
+    S.root.batch([
+      ['set', '/users/' + S.myId, { hid, at: Date.now() }],
+      ['merge', HOUSE(hid), { members: { union: [S.myId] }, emails: { union: [myEmail()] } }]
+    ]).then(() => openHousehold(hid), () => {
+      /* Not moved across yet: give the other phone a moment and try again. */
+      S.gate = { step: 'moving', busy: false, error: 'Your household is still moving across. Give it a minute, then try again.' };
       safeRender();
     });
   }
@@ -524,7 +758,7 @@
       applyPhotos();
       parseStaged();
       S.hhLoaded = true; S.offline = false;
-      markLive('hh', snap); resolveMe(); ensureRent(); ensureEditor(); pushCheck(); refreshDeals(); webPending(); updateSplash(); safeRender();
+      markLive('hh', snap); resolveMe(); syncLabel(); ensureRent(); ensureEditor(); pushCheck(); refreshDeals(); seedShared(); webPending(); updateSplash(); safeRender();
     }, (e) => subError('hh', e, subHH));
   }
   function subMonths() {
@@ -535,6 +769,16 @@
       S.months = m; S.monthsLoaded = true; S.offline = false;
       rebuild(); markLive('months', snap); ensureRent(); safeRender();
     }, (e) => subError('months', e, subMonths));
+  }
+  /* The household's name in the owner's list and on an invite: your two first names. */
+  function houseLabel() {
+    const C = cfg(), a = String(C.names.a || '').trim(), b = String(C.names.b || '').trim();
+    return (a && b ? a + ' & ' + b : a || b || '').slice(0, 60);
+  }
+  function syncLabel() {
+    if (!S.hid || !S.house || !S.settings || S.readOnly) return;
+    const l = houseLabel();
+    if (l && S.house.label !== l) { S.house.label = l; S.db.doc(HOUSE(S.hid)).update({ label: l }).catch(noop); }
   }
   /* Staged Splitwise files carry a fingerprint of the original export; a copy that doesn't match is not used. */
   const normText = (t) => String(t).replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').replace(/\s+$/, '');
@@ -598,14 +842,17 @@
     const bn = '<div data-live="banners">' + banners() + '</div>';
     if (S.mode === 'firebase') { const gate = authGate(); if (gate) return bn + gate + dialogHtml(); }
     if (!ready) return viewLoading();
-    if (!S.settings) return bn + (S.readOnly ? viewNotSetUp() : viewSetup()) + dialogHtml();
+    if (!S.settings) {
+      if (S.hid && !S.house) return bn + viewLoading();
+      return bn + (S.readOnly ? viewNotSetUp() : S.hid && S.house.owner !== S.myId ? viewWaitSetup() : viewSetup()) + dialogHtml();
+    }
     if (!S.me) { const w = welcomeFor(); return bn + (w ? viewWelcome(w, false) : viewWho()) + dialogHtml(); }
     if (S.welcomePreview) return bn + viewWelcome(other(S.me), true) + dialogHtml();
     if (!S.dialog && !S.newsShown && !S.readOnly && S.view === 'home' && S.live.hh) {
       const due = newsDue();
       if (due) { S.newsShown = true; S.dialog = { type: 'news', id: due.id }; }
     }
-    const nav = ['home', 'cal', 'deals', 'tcn', 'insights', 'settings', 'upload', 'custom', 'profile', 'newsedit', 'recap', 'tab'].indexOf(S.view) >= 0;
+    const nav = ['home', 'cal', 'deals', 'tcn', 'insights', 'settings', 'upload', 'custom', 'profile', 'newsedit', 'recap', 'tab', 'help', 'admin'].indexOf(S.view) >= 0;
     const sw = S.view === 'insights' || S.view === 'recap' ? (S.insMode === 'year' ? 'insyear' : 'recapmove') : S.view === 'cal' ? 'calmove' : '';
     return bn + '<main class="main' + (nav ? '' : ' no-nav') + '" style="' + meVars() + '"' + (sw ? ' data-swipe="' + sw + '"' : '') + '>' + viewFor(S.view) + '</main>' +
       (nav ? '<div data-live="nav">' + navBar() + '</div>' : '') + dialogHtml();
@@ -725,7 +972,9 @@
       case 'tab': return viewTab();
       case 'upload': return viewUpload();
       case 'recap':
-      case 'insights': return viewInsights();
+      case 'insights': return pilot('insights') ? viewInsights() : viewHome();
+      case 'help': return viewHelp();
+      case 'admin': return S.isAdmin ? viewAdmin() : viewSettings();
       case 'settings': return viewSettings();
       case 'profile': return viewProfile();
       case 'newsedit': return viewNewsEdit();
@@ -794,7 +1043,7 @@
       (S.readOnly ? '' : snapReady() ? '<button class="nav-add" data-act="addpick" aria-label="Add a spend or capture a receipt">' + icon('plus') + '</button>'
         : '<button class="nav-add" data-act="add" aria-label="Add a spend">' + icon('plus') + '</button>') +
       item('deals', 'tag', 'Deals', fresh ? '<span class="dot-badge" aria-hidden="true"></span><span class="sr">, new specials</span>' : '') +
-      item('insights', 'chart', 'Insights') + '</nav>';
+      (pilot('insights') ? item('insights', 'chart', 'Insights') : item('settings', 'gear', 'Settings')) + '</nav>';
   }
   /* While it opens: the other one of us rotating, or the blob before there's a photo. Each redraw picks the turn up
      where it was rather than starting it again. The picture fits a circle the box can hold, so it never pokes out as it
@@ -926,12 +1175,13 @@
         '<span class="blob" aria-hidden="true"></span>' +
         '<p class="hero-k">Spent so far</p><p class="hero-v" data-count="' + spent + '" data-ck="home-spent">' + L.fmtRound(spent) + '</p>' +
         '<p class="hero-sub">' + esc(L.periodLabel(p, t)) + ' · ' + (daysLeft === 1 ? 'last day' : daysLeft + ' days left') + '</p>' +
-        '<div class="hero-foot"><button class="link" data-act="go" data-arg="custom">Set a monthly budget</button></div></section>';
+        (pilot('insights') ? '<div class="hero-foot"><button class="link" data-act="go" data-arg="custom">Set a monthly budget</button></div>' : '') + '</section>';
     }
     let out = '<header class="top"><div><p class="eyebrow">Hi ' + esc(nm(S.me)) + '</p><h1 class="title">' + esc(L.periodLabel(p, t)) + '</h1></div>' +
       '<div class="top-right"><div class="duo" aria-hidden="true">' + av('a') + av('b') + '</div>' +
       '<button class="icon-btn" data-act="go" data-arg="settings" aria-label="Settings">' + icon('gear') + '</button></div></header>' + notices().map(noticeHtml).join('') + stagedCard() + hero;
 
+    out += guideCard();
     const items = tabItems();
     if (S.tab && S.tab.open) {
       out += '<button class="card row-card attn" data-act="go" data-arg="tab"><span class="row-lead"><span><span class="k">Day tab open</span>' +
@@ -947,6 +1197,7 @@
       out += '<button class="card row-card attn" data-act="go" data-arg="newsedit"><span><span class="k">Note for ' + esc(nm(other(S.me))) + '</span><span class="row-t">Claude\'s draft for ' + esc(dateY(waiting.date)) + ' is ready</span></span>' + icon('arrow') + '</button>';
     }
     out += balanceCard();
+    out += giftSavedCard();
     if (C.home.sale !== false) out += nextSaleCard();
     if (C.home.fact !== false) out += factCard();
     if (C.home.soon !== false) out += comingUpCard();
@@ -954,7 +1205,7 @@
     if (C.home.week !== false) out += weekCard();
     const tiles = (C.home.goal !== false ? goalTile() : '') + (C.home.spot !== false ? spotTile() : '');
     if (tiles) out += '<div class="grid2">' + tiles + '</div>';
-    if (C.home.recap !== false) {
+    if (C.home.recap !== false && pilot('insights')) {
       out += '<button class="card row-card" data-act="go" data-arg="recap"><span><span class="k">Insights</span><span class="row-t">Where ' + esc(L.periodLabel(L.shiftPeriod(p, -1), t)) + ' went</span></span>' + icon('arrow') + '</button>';
     }
     if (!S.entries.length) {
@@ -1033,7 +1284,7 @@
     }).join('');
     const isThisMonth = ym === t.slice(0, 7);
     return '<header class="top"><div><p class="eyebrow">Every spend, day by day</p><h1 class="title">Calendar</h1></div>' +
-      '<button class="link" data-act="go" data-arg="recap">Insights</button></header>' +
+      (pilot('insights') ? '<button class="link" data-act="go" data-arg="recap">Insights</button>' : '') + '</header>' +
       '<section class="card cal bold"><div class="cal-head"><button class="icon-btn" data-act="calmove" data-arg="-1" aria-label="Previous month">' + icon('left') + '</button>' +
       '<h2>' + L.MONTHS_FULL[c.m] + ' ' + c.y + '</h2><button class="icon-btn" data-act="calmove" data-arg="1" aria-label="Next month">' + icon('right') + '</button></div>' +
       '<div class="cal-dow" aria-hidden="true"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>' +
@@ -1080,6 +1331,8 @@
     if (lines) sub = '<ul class="e-lines">' + lines.map((l) => '<li><span class="ln-n' + (l.note ? '' : ' muted') + '">' + esc(l.note || 'No note') + '</span><span class="ln-a">' + L.fmt(l.amount) + '</span></li>').join('') + '</ul>';
     else if (e.parts && e.parts.length) sub = '<p class="e-sub">' + esc(e.parts.map((x) => (x.label ? x.label + ' ' : '') + L.fmt(x.amount)).join(', ')) + '</p>';
     else if (e.items && e.items.length > 1) sub = '<p class="e-sub">' + e.items.map(L.fmt).join(' + ') + '</p>';
+    const gc = giftOk(e.gift);
+    if (gc) sub += '<p class="e-sub gift-tag">' + icon('star') + 'Bill ' + L.fmt(gc.bill) + ' · ' + L.fmt(gc.saved) + ' saved with a gift card</p>';
     if (e.source === 'import' && e.raw) sub += '<p class="e-sub">' + esc(e.raw) + '</p>';
     if (e.orig && e.orig.currency) sub += '<p class="e-sub">' + esc(fmtForeign(e.orig)) + '</p>';
     let tag = '', actions = '';
@@ -1106,9 +1359,18 @@
     S.add = {
       id: null, date: opts.date || today(), expr: '', notes: [], title: '', category: null,
       payer: H, onCard: true, budget: true, splitMode: 'even', splitA: C.splitA, locked: false, orig: null,
+      pay: 'card', gift: '', off: giftOffDefault(),
       from: S.view === 'add' ? 'home' : S.view
     };
     S.view = 'add'; render(); window.scrollTo(0, 0);
+  }
+  /* The discount a gift card was last bought at, or the gift card deal on now, or 15%. */
+  function giftOffDefault() {
+    const last = lsGet('hh.giftOff');
+    if (last && Number(last) > 0) return last;
+    const T = S.feed && S.feed.tcn, t = today();
+    const live = T && Array.isArray(T.deals) ? T.deals.filter((d) => d.off > 0 && (!d.to || d.to >= t) && (!d.from || d.from <= t))[0] : null;
+    return String(live ? live.off : 15);
   }
   function openEdit(id) {
     const r = S.byId[id];
@@ -1122,8 +1384,11 @@
       notes: e.notes && e.items && e.notes.length === e.items.length ? e.notes.slice() : [],
       title: e.title || '', category: e.category || 'Other', payer: payer === 'mixed' ? 'mixed' : payer,
       onCard: !!e.onCard, budget: !e.offBudget, splitMode: (e.splitA == null || e.splitA === C.splitA) ? 'even' : 'custom', splitA: e.splitA == null ? C.splitA : e.splitA,
-      locked: payer === 'mixed', orig: e, from: S.view === 'add' ? 'home' : S.view
+      locked: payer === 'mixed', orig: e, from: S.view === 'add' ? 'home' : S.view,
+      pay: 'card', gift: '', off: giftOffDefault()
     };
+    const g = giftOk(e.gift);
+    if (g && !S.add.locked) Object.assign(S.add, { expr: centsToStr(g.bill), notes: [], pay: g.face >= g.bill ? 'gift' : 'both', gift: centsToStr(g.face), off: String(g.off) });
     S.view = 'add'; render(); window.scrollTo(0, 0);
   }
   function addTotal(A) {
@@ -1138,7 +1403,8 @@
   }
   function saveLabel(A, r) {
     if (A.id) return 'Save changes';
-    return r.ok && r.total > 0 ? 'Save ' + L.fmt(r.total) : 'Save';
+    const g = giftCalc(A, r);
+    return r.ok && r.total > 0 ? 'Save ' + L.fmt(g && !g.error ? g.cost : r.total) : 'Save';
   }
   function nudgeHtml(A, r) {
     const C = cfg(), H = holder();
@@ -1158,6 +1424,47 @@
       '<div class="ln-row"><span class="ln-i" aria-hidden="true">' + (i + 1) + '</span><span class="ln-amt" id="lnAmt' + i + '">' + L.fmt(partCents(t)) + '</span>' +
       '<label class="ln-field"><span class="sr">Note for line ' + (i + 1) + '</span><input class="input ln-note" id="lnNote' + i + '" data-bind="add.notes.' + i + '" placeholder="' + (i === 0 ? 'What was it? Coffee, crepes' : 'Note') + '" maxlength="60" autocomplete="off" value="' + esc((A.notes && A.notes[i]) || '') + '"></label></div>').join('') +
       '</section>';
+  }
+  /* Paying with a gift card is for a single amount you typed in, not lines or a spend from the statement. */
+  const giftable = (A) => !A.locked && !(A.orig && A.orig.source && A.orig.source !== 'manual') && addParts(A).length < 2;
+  function giftCalc(A, r) {
+    if (!giftable(A) || A.pay === 'card' || !r.ok || r.total <= 0) return null;
+    const bill = r.total, off = parseFloat(String(A.off || '').replace('%', '')), face = A.pay === 'gift' ? bill : L.parseMoneyInput(A.gift);
+    if (A.pay === 'both' && (face == null || face <= 0)) return { bill, error: 'How much went on the gift card?' };
+    if (face > bill) return { bill, error: 'The gift card part can\'t be more than ' + L.fmt(bill) + '.' };
+    if (A.pay === 'both' && face === bill) return { bill, error: 'That\'s all of it: choose Gift card instead.' };
+    if (!(off > 0 && off < 100)) return { bill, error: 'What discount was the gift card bought at? Like 15.' };
+    const g = giftOk({ bill, face, off });
+    return Object.assign(g, { cost: bill - g.saved, card: bill - face, paid: face - g.saved });
+  }
+  function giftLine(g) {
+    if (!g) return '';
+    if (g.error) return g.error;
+    return 'Costs you ' + L.fmt(g.cost) + ': ' + L.fmt(g.paid) + ' for the gift card' + (g.card ? ' and ' + L.fmt(g.card) + ' on the card' : '') + '. ' + L.fmt(g.saved) + ' saved.';
+  }
+  function payBlock(A, r) {
+    if (!giftable(A)) return '';
+    const g = giftCalc(A, r);
+    return '<fieldset><legend>Paid with</legend><div class="seg">' + segBtn('addpay', 'card', A.pay === 'card', 'Card') + segBtn('addpay', 'gift', A.pay === 'gift', 'Gift card') +
+      segBtn('addpay', 'both', A.pay === 'both', 'Both') + '</div>' +
+      (A.pay === 'card' ? '' : '<div class="gift-fields">' +
+        (A.pay === 'both' ? '<label class="field"><span>On the gift card</span><div class="money"><input class="input" id="addGift" inputmode="decimal" placeholder="0" autocomplete="off" data-bind="add.gift" data-input="addgift" value="' + esc(A.gift) + '"></div></label>' : '') +
+        '<label class="field"><span>Gift card bought at</span><div class="pct"><input class="input" id="addOff" inputmode="decimal" placeholder="15" autocomplete="off" maxlength="5" data-bind="add.off" data-input="addgift" value="' + esc(A.off) + '"><span aria-hidden="true">% off</span></div></label>' +
+        '<p class="gift-sum' + (g && g.error ? ' err-text' : '') + '" id="giftSum" role="status">' + esc(giftLine(g)) + '</p></div>') + '</fieldset>';
+  }
+  /* What gift cards bought at a discount have saved you this year, once there's something to show. */
+  function giftSavedCard() {
+    const p = curPeriod(), yr = today().slice(0, 4);
+    let m = 0, y = 0;
+    S.entries.forEach((e) => {
+      const g = e.kind === 'expense' && e.status === 'shared' ? giftOk(e.gift) : null;
+      if (!g) return;
+      if (e.date.slice(0, 4) === yr) y += g.saved;
+      if (e.date >= p.start && e.date <= p.end) m += g.saved;
+    });
+    if (!y) return '';
+    return '<section class="card gift-saved" id="giftSaved"><div class="card-head"><h2>Saved with gift cards</h2><span class="k">' + yr + '</span></div>' +
+      '<p><strong class="gift-big">' + L.fmt(y) + '</strong> this year' + (m && m !== y ? ', ' + L.fmt(m) + ' of it this month' : '') + '.</p></section>';
   }
   function viewAdd() {
     const A = S.add, C = cfg(), H = holder(), r = addTotal(A);
@@ -1192,7 +1499,7 @@
       '<section class="amount-box" aria-live="polite"><p class="amt-total" id="amtTotal">' + L.fmt(r.ok ? r.total : 0) + '</p><p class="amt-expr" id="amtExpr">' + esc(exprLine(A, r)) + '</p></section>' +
       (A.locked ? '<p class="hint" style="text-align:center;margin:-6px 0 16px">' + esc(A.orig.parts ? A.orig.parts.map((x) => nm(x.payer) + ' ' + L.fmt(x.amount)).join(', ') : '') + '</p>' : keypad()) +
       linesCard(A) +
-      '<section class="card">' + payerBlock +
+      '<section class="card">' + payerBlock + payBlock(A, r) +
       '<label class="field"><span>What was it?</span><input class="input" id="addTitle" data-bind="add.title" value="' + esc(A.title) + '" placeholder="Dinner, groceries, a gift" autocomplete="off" maxlength="60"></label>' +
       (isImport ? '<p class="hint" style="margin:-10px 0 16px">On the statement: ' + esc(A.orig.raw || '') + '</p>' : '') +
       '<fieldset><legend>Category</legend><div class="chips">' + cats.map((c) => '<button type="button" class="chip" data-act="addcat" data-arg="' + esc(c) + '" aria-pressed="' + (A.category === c) + '">' + esc(c) + '</button>').join('') + '</div>' +
@@ -1238,6 +1545,8 @@
     if (b) { b.textContent = saveLabel(A, r); b.disabled = !(r.ok && r.total > 0); }
     const n = document.getElementById('nudge');
     if (n) n.innerHTML = nudgeHtml(A, r);
+    const gs = document.getElementById('giftSum');
+    if (gs) { const g = giftCalc(A, r); gs.textContent = giftLine(g); gs.classList.toggle('err-text', !!(g && g.error)); }
     const parts = addParts(A);
     if (parts.length > 1) set('lnAmt' + (parts.length - 1), L.fmt(partCents(parts[parts.length - 1])));
   }
@@ -1245,6 +1554,9 @@
     const A = S.add, C = cfg(), r = addTotal(A);
     if (!r.ok || r.total <= 0) { toast('Enter an amount first.'); return; }
     const base = A.orig || {};
+    const g = giftCalc(A, r);
+    if (g && g.error) { toast(g.error); return; }
+    if (g) lsSet('hh.giftOff', String(g.off));
     const splitA = A.splitMode === 'even' ? C.splitA : A.splitA;
     const kept = addParts(A).map((t, i) => ({ c: partCents(t), note: String((A.notes && A.notes[i]) || '').trim().slice(0, 60) })).filter((x) => x.c > 0);
     const notes = kept.length > 1 && kept.length === r.items.length ? kept.map((x) => x.note) : null;
@@ -1255,7 +1567,8 @@
     } else {
       e = makeEntry({
         id: A.id || uid('m'), kind: 'expense', source: base.source || 'manual', status: base.status || 'shared',
-        date: A.date, title, raw: base.raw, key: base.key, amount: r.total, items: r.items, notes,
+        date: A.date, title, raw: base.raw, key: base.key, amount: g ? g.cost : r.total, items: g ? null : r.items, notes: g ? null : notes,
+        gift: g ? { bill: g.bill, face: g.face, off: g.off } : null,
         parts: base.parts && base.amount === r.total ? base.parts : null, payer: A.payer, onCard: A.onCard, offBudget: A.budget === false, splitA,
         category: A.category || 'Other', dupOf: base.dupOf, orig: base.orig && base.amount === r.total ? base.orig : null, createdAt: base.createdAt, by: base.by
       });
@@ -1613,7 +1926,7 @@
         '<li>Choose Export CSV, pick the ' + esc(cardLabel()) + ' account and the dates.</li>' +
         '<li>Save the file, then choose it here. On a phone it will be in Files or Downloads.</li></ol></details></section>';
     }
-    if (!S.readOnly) {
+    if (!S.readOnly && pilot('splitwise')) {
       out += stagedCard() || swHistoryCard() || ('<section class="card"><h2 style="font-size:19px;margin-bottom:6px">Moving from Splitwise?</h2>' +
         (S.impBad ? '<p class="err-text" style="margin:0 0 8px">The prepared copy of your Splitwise files didn\'t match the originals, so it wasn\'t used. Choose the files here instead.</p>' : '') +
         '<p class="muted" style="margin-bottom:12px">Bring in your Splitwise export and your balance carries over. You can pick more than one file, one per group.</p>' +
@@ -1664,6 +1977,7 @@
       const rows = L.parseCSV(text);
       if (L.isSplitwise(rows)) {
         S.importing = false;
+        if (!pilot('splitwise')) { S.importResult = { error: 'That\'s a Splitwise export. Bringing in Splitwise history is a pilot feature that isn\'t on for your household yet.' }; render(); return; }
         const g = L.parseSplitwise(rows);
         if (g.error) { S.importResult = { error: g.error }; render(); } else openSplitwise([g], {});
         return;
@@ -1710,7 +2024,12 @@
     S.entries.forEach((e) => { if (e.source === 'import' && e.dupOf) used[e.dupOf] = true; });
     S.entries.forEach((e) => {
       if (e.kind !== 'expense' || e.source === 'import' || e.status !== 'shared') return;
-      if (e.parts && e.parts.length) {
+      const g = giftOk(e.gift);
+      if (g) {
+        /* The card part matches its own line. The gift card was most likely bought on the card too, some days before. */
+        if (e.onCard && g.bill > g.face) pool.push({ ref: e.id + ':0', amount: g.bill - g.face, date: e.date });
+        pool.push({ ref: e.id + ':g', amount: g.face - g.saved, date: e.date, gift: true });
+      } else if (e.parts && e.parts.length) {
         e.parts.forEach((p, i) => { if (p.payer === H) pool.push({ ref: e.id + ':' + i, amount: p.amount, date: e.date }); });
       } else if (e.onCard) {
         const amts = e.items && e.items.length > 1 ? e.items : [e.amount];
@@ -1723,6 +2042,12 @@
     let best = null, bestGap = 99;
     pool.forEach((p) => {
       if (p.taken || p.amount !== sp.amount) return;
+      if (p.gift) {
+        /* A gift card is bought up to two months before it's spent, or a day or two after, on the statement. */
+        const gap = sp.date >= p.date ? L.daysBetweenInclusive(p.date, sp.date) - 1 : L.daysBetweenInclusive(sp.date, p.date) - 1;
+        if ((sp.date >= p.date ? gap <= 4 : gap <= 60) && gap + 5 < bestGap) { best = p; bestGap = gap + 5; }
+        return;
+      }
       const gap = Math.abs(L.daysBetweenInclusive(p.date, sp.date) - 1);
       if (sp.date >= p.date && gap <= 4 && gap < bestGap) { best = p; bestGap = gap; }
     });
@@ -2767,13 +3092,24 @@
     });
     return out;
   }
+  /* The website specials: one shared copy for every household, read on the owner's laptop. Before households they
+     lived in hh/deals. */
+  const webDoc = () => (S.hid ? S.webDoc || (S.dealsDoc && S.dealsDoc.web) : S.dealsDoc && S.dealsDoc.web) || null;
+  /* If the shared copy isn't there yet (the other phone moved the household across), the owner's own copy fills it. */
+  function seedShared() {
+    if (!S.hid || !S.isAdmin || !S.sharedLoaded || S.webDoc || S.readOnly || !S.dealsDoc || !S.dealsDoc.web || seedShared.done) return;
+    seedShared.done = true;
+    S.db.doc('/shared/web').set(S.dealsDoc.web).catch(noop);
+  }
+  const webMine = () => !S.hid || S.isAdmin || !!(S.house && S.house.legacy);
   let webBusy = false;
   function webPending() {
-    if (webBusy || S.mode !== 'firebase' || !S.me || S.readOnly || !S.hhLoaded) return;
+    if (webBusy || S.mode !== 'firebase' || !S.me || S.readOnly || !S.hhLoaded || (S.hid && !S.adminChecked)) return;
     let st = null;
     try { st = JSON.parse(lsGet('hh.webIn') || 'null'); } catch (e) { st = null; }
     if (!st || typeof st.d !== 'string') return;
     lsSet('hh.webIn', '');
+    if (S.hid && !S.isAdmin) { S.dialog = { type: 'webdone', err: 'Shop specials can only be read in on the laptop of the person who runs Two of Us.' }; safeRender(); return; }
     if (!(Date.now() - Number(st.at) < 3 * 864e5)) return;
     webBusy = true;
     unpackWeb(st.d).then((j) => {
@@ -2782,13 +3118,18 @@
       /* The shops this read covered, even one with nothing on special this week; an older reader just sends its lines. */
       const read = (Array.isArray(j.shops) ? j.shops : []).map((s) => L.storeName(String(s))).filter((s) => WEB_SHOPS.indexOf(s) >= 0);
       lines.forEach((l) => { if (read.indexOf(lineShop(l)) < 0) read.push(lineShop(l)); });
-      const t = today(), to = L.specialsWeek(t).to, at = new Date().toISOString(), prev = S.dealsDoc && S.dealsDoc.web, before = webShops(prev), shops = {}, per = {};
+      const t = today(), to = L.specialsWeek(t).to, at = new Date().toISOString(), prev = webDoc(), before = webShops(prev), shops = {}, per = {};
       /* Each shop's specials replace only its own last ones: a Woolies read leaves Coles' as they are, and the other way round. */
       Object.keys(before).forEach((s) => { if (read.indexOf(s) < 0 && before[s].to >= t) shops[s] = before[s]; });
       read.forEach((s) => { shops[s] = { at, by: S.me, to, n: lines.filter((l) => lineShop(l) === s).length }; });
       const kept = (prev && Array.isArray(prev.items) ? prev.items : []).filter((l) => typeof l === 'string' && read.indexOf(lineShop(l)) < 0 && !!shops[lineShop(l)]);
       lines.forEach((l) => { const f = l.split('\t'), k = f[0] === 'Liquorland' ? f[0] : f[0] + '|' + f[5]; per[k] = (per[k] || 0) + 1; });
-      const save = saveDeals({ web: { at, by: S.me, to: Object.keys(shops).map((s) => shops[s].to).sort().pop() || to, items: lines.concat(kept).slice(0, WEB_MAX), shops } });
+      const web = { at, by: S.me, to: Object.keys(shops).map((s) => shops[s].to).sort().pop() || to, items: lines.concat(kept).slice(0, WEB_MAX), shops };
+      let save;
+      if (S.hid) {
+        S.webDoc = web;
+        save = enqueue('/shared/web', (ref) => ref.set(web));
+      } else save = saveDeals({ web });
       /* Noted on this browser too, for each shop, so the weekly run's Thursday catch-up can see Wednesday's went in. */
       let last = null;
       try { last = JSON.parse(lsGet('hh.webLast') || 'null'); } catch (e) { last = null; }
@@ -2808,8 +3149,9 @@
   let webMemo = { doc: undefined, day: '', list: [] };
   function webSpecials() {
     const t = today();
-    if (webMemo.doc === S.dealsDoc && webMemo.day === t) return webMemo.list;
-    const w = S.dealsDoc && S.dealsDoc.web, sh = webShops(w), list = [];
+    const w = webDoc();
+    if (webMemo.doc === w && webMemo.day === t) return webMemo.list;
+    const sh = webShops(w), list = [];
     if (w && Array.isArray(w.items)) {
       w.items.slice(0, WEB_MAX).forEach((line) => {
         if (typeof line !== 'string') return;
@@ -2820,12 +3162,12 @@
           img: '', src: 'web', to: info.to, promo: String(f[4] || '').slice(0, 40) });
       });
     }
-    webMemo = { doc: S.dealsDoc, day: t, list };
+    webMemo = { doc: w, day: t, list };
     return list;
   }
   /* When each website's specials were last read, and on whose laptop, while they're still running. */
   function webInfo() {
-    const sh = webShops(S.dealsDoc && S.dealsDoc.web), live = {};
+    const sh = webShops(webDoc()), live = {};
     webSpecials().forEach((x) => { live[x.s] = true; });
     const one = (s) => (live[s] && sh[s] && sh[s].at ? { at: sh[s].at, by: sh[s].by } : null);
     return { coles: one('Coles') || one('Liquorland'), ww: one('Woolworths') };
@@ -2981,8 +3323,8 @@
     if (hf.ok || hf.stale) srcs.push('Harris Farm from its online specials');
     if (F.sources.umall.ok || F.sources.umall.stale) srcs.push('Umall, Sydney\'s online Asian supermarket, from its half-price and weekly specials (delivery only)');
     if (F.sources.meat.ok || F.sources.meat.stale) srcs.push('Meat Emporium, Sydney\'s big meat market, from what its online shop has marked down');
-    const W = webInfo(), onLaptop = (x) => 'read in the browser on ' + esc(poss(nm(x.by))) + ' laptop ' + esc(agoLabel(x.at));
-    if (W.coles) srcs.push('Coles fresh food and Liquorland from Coles\' website (Liquorland\'s ' + LIQ_MIN_OFF + '% off or more, plus anything on our watch list), ' + onLaptop(W.coles));
+    const W = webInfo(), mine = webMine(), onLaptop = (x) => (mine ? 'read in the browser on ' + esc(poss(nm(x.by))) + ' laptop ' : 'read ') + esc(agoLabel(x.at));
+    if (W.coles) srcs.push('Coles fresh food and Liquorland from Coles\' website (Liquorland\'s ' + LIQ_MIN_OFF + '% off or more' + (mine ? ', plus anything on our watch list' : '') + '), ' + onLaptop(W.coles));
     if (W.ww) srcs.push('Woolies fresh food from Woolworths\' website, ' + onLaptop(W.ww));
     return srcs.length ? '<p class="hint sp-src">' + srcs.join('. ') + '. Updated ' + esc(agoLabel(F.updated)) + '. Prices can differ by store.</p>' : '';
   }
@@ -3494,7 +3836,10 @@
     if (m.b && !m.a) return 'b';
     return 'a';
   }
-  const isEditor = () => !!S.me && S.me === editorOf();
+  /* Update notes are written for the original household, where one of you edits them for the other. Every other
+     household gets them as written, from Two of Us. */
+  const ownNotes = () => !S.hid || !!(S.house && S.house.legacy);
+  const isEditor = () => ownNotes() && !!S.me && S.me === editorOf();
   /* Records who set the app up while that's still certain: the only one signed in so far. */
   function ensureEditor() {
     const C = cfg(), m = C.members || {};
@@ -3515,7 +3860,7 @@
         const e = items[i] && typeof items[i] === 'object' ? items[i] : {};
         return { icon: x[0], head: typeof e.head === 'string' ? e.head.slice(0, 40) : x[1], text: typeof e.text === 'string' ? e.text.slice(0, 240) : x[2], on: e.on !== false };
       }),
-      status: E.status === 'published' || E.status === 'skipped' ? E.status : 'draft',
+      status: E.status === 'published' || E.status === 'skipped' ? E.status : ownNotes() ? 'draft' : 'published',
       publishedAt: typeof E.publishedAt === 'number' ? E.publishedAt : 0,
       edited: !!E.editedAt
     };
@@ -3611,29 +3956,198 @@
     let out = '<header class="top"><div><p class="eyebrow">Our household</p><h1 class="title">Settings</h1></div></header>';
     const waiting = pendingAll().length;
     out += '<button class="card row-card' + (waiting ? ' attn' : '') + '" data-act="go" data-arg="upload"><span class="row-lead">' + (waiting ? '<span class="count">' + waiting + '<span class="sr"> to check</span></span>' : '') +
-      '<span><span class="row-t">Upload</span><span class="k">' + esc(poss(nm(holder()))) + ' Westpac statement and Splitwise files</span></span></span>' + icon('arrow') + '</button>';
+      '<span><span class="row-t">Upload</span><span class="k">' + esc(poss(nm(holder()))) + ' Westpac statement' + (pilot('splitwise') ? ' and Splitwise files' : '') + '</span></span></span>' + icon('arrow') + '</button>';
     out += '<button class="card row-card" data-act="go" data-arg="profile"><span class="row-lead"><span class="duo" aria-hidden="true">' + av('a') + av('b') + '</span><span><span class="row-t">Profiles</span><span class="k">Photos, names and colours</span></span></span>' + icon('arrow') + '</button>';
-    out += '<button class="card row-card" data-act="go" data-arg="custom"><span><span class="row-t">Customise</span><span class="k">Look, budget, rent, card and categories</span></span>' + icon('arrow') + '</button>';
+    out += '<button class="card row-card" data-act="go" data-arg="custom"><span><span class="row-t">Customise</span><span class="k">' + (pilot('insights') ? 'Look, budget, rent, card and categories' : 'Look, rent, card and categories') + '</span></span>' + icon('arrow') + '</button>';
     if (isEditor() && RELEASES.length) {
       out += '<button class="card row-card" data-act="go" data-arg="newsedit"><span><span class="row-t">Notes for ' + esc(nm(other(S.me))) + '</span><span class="k">Just for you: what ' + esc(nm(other(S.me))) + ' sees after an update</span></span>' + icon('arrow') + '</button>';
-    } else if (publishedNote()) {
+    } else if (publishedNote() && (ownNotes() || !S.house || publishedNote().date > isoOf(S.house.createdAt))) {
       out += '<button class="card row-card" data-act="newsopen"><span><span class="row-t">What\'s new</span><span class="k">' + esc(publishedNote().title) + '</span></span>' + icon('arrow') + '</button>';
     }
+    if (inHouse()) out += partnerCard();
     if (fb) out += pushCard();
+    out += '<button class="card row-card" data-act="gohelp"><span><span class="row-t">How to use Two of Us</span><span class="k">A quick guide to each part, and how your data is kept</span></span>' + icon('arrow') + '</button>';
+    if (S.isAdmin) out += '<button class="card row-card" data-act="go" data-arg="admin"><span><span class="row-t">Households</span><span class="k">Just for you: everyone using Two of Us, and their pilot features</span></span>' + icon('arrow') + '</button>';
     if (fb) {
       out += '<section class="card"><div class="card-head"><h2>Account</h2></div><p class="muted">Signed in as <strong>' + esc((S.authUser && S.authUser.email) || '') + '</strong></p>' +
         '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="auout">Sign out</button></section>';
     }
-    out += '<section class="card"><div class="card-head"><h2>Sharing</h2></div>' + (fb
+    if (!inHouse()) out += '<section class="card"><div class="card-head"><h2>Sharing</h2></div>' + (fb
       ? '<p>To use this together, send ' + them + ' the link to this app. ' + them + ' makes a login with the email you put in your Firebase rules.</p>'
       : '<p>To use this together, share the app with ' + them + ' by email as an <strong>Editor</strong>. Don\'t turn on a public link: anyone with it could read your spends, and it stops outside editors from saving.</p>') + '</section>';
     out += '<section class="card"><div class="card-head"><h2>Your data</h2></div><button class="btn btn-secondary btn-block" data-act="copycsv">Copy all spends as CSV</button><p class="hint">' +
-      S.entries.length + (S.entries.length === 1 ? ' spend' : ' spends') + ' saved. Paste into a spreadsheet for your own records.</p></section>';
+      S.entries.length + (S.entries.length === 1 ? ' spend' : ' spends') + ' saved. Paste into a spreadsheet for your own records.</p>' +
+      (inHouse() && S.house && !S.house.legacy && !S.readOnly ? '<button class="btn btn-danger btn-block" style="margin-top:14px" data-act="hhdelete">Delete our household</button><p class="hint">Every spend, photo and setting, for both of you.</p>' : '') + '</section>';
     if (fb) {
       out += '<section class="card"><div class="card-head"><h2>App</h2></div><p class="muted" style="margin-bottom:12px">Updates go live without reinstalling. This loads the newest version now.</p>' +
         '<button class="btn btn-secondary btn-block" data-act="reload">Get the latest version</button></section>';
     }
     return out;
+  }
+
+  /* ---------- your partner, the guide, help and the owner's list ---------- */
+  const inHouse = () => S.mode === 'firebase' && !!S.hid;
+  const houseFull = () => !!(S.house && Array.isArray(S.house.members) && S.house.members.length >= 2);
+  const pushHere = () => pushCfg().subs.some((x) => x.id === myPushId() && x.who === S.me);
+  const inviteLink = (code) => location.origin + location.pathname + '?join=' + code;
+  const isoOf = (ms) => { const d = new Date(Number(ms) || 0); return L.ymd(d); };
+  function makeInvite() {
+    if (!inHouse() || S.readOnly || houseFull()) return;
+    const I = S.invite = { code: '', busy: true, error: null };
+    render();
+    const code = newCode(12);
+    S.db.doc('/invites/' + code).set({ hid: S.hid, by: S.myId, at: Date.now(), label: houseLabel() }).then(() => {
+      I.code = code; I.busy = false; render();
+    }, () => { I.busy = false; I.error = 'The invite couldn\'t be made. Check you\'re online and try again.'; render(); });
+  }
+  function copyText(text, done) {
+    const fallback = () => openDialog({ type: 'csv', text, title: 'Copy the link' });
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast(done), fallback);
+    else fallback();
+  }
+  function shareInvite() {
+    const I = S.invite;
+    if (!I || !I.code) return;
+    const link = inviteLink(I.code);
+    if (navigator.share) { navigator.share({ title: 'Two of Us', text: 'Join our household on Two of Us', url: link }).catch(noop); return; }
+    copyText(link, 'Link copied. Send it to ' + nm(other(S.me || 'a')) + '.');
+  }
+  function partnerCard() {
+    const them = esc(nm(other(S.me || 'a')));
+    let out = '<section class="card" id="partnerCard"><div class="card-head"><h2>Your household</h2></div>';
+    if (houseFull()) return out + '<p class="muted">You\'re both in, so you see the same spends on both phones.</p></section>';
+    if (S.house && S.house.legacy) return out + '<p class="muted">' + them + ' joins by opening the app once. Everything you two had is already here.</p></section>';
+    const I = S.invite;
+    out += '<p class="muted" style="margin-bottom:12px">Invite ' + them + ' so you both see the same spends. The link works once, for ' + INVITE_DAYS + ' days.</p>';
+    if (I && I.code) {
+      out += '<p class="inv-link" id="invLink">' + esc(inviteLink(I.code)) + '</p><p class="hint">Or type the code: <strong id="invCode">' + esc(I.code) + '</strong></p>' +
+        '<div class="row2"><button class="btn btn-primary" data-act="invshare">Send the link</button><button class="btn btn-secondary" data-act="invcopy">Copy it</button></div>';
+    } else if (!S.readOnly) {
+      out += '<button class="btn btn-primary btn-block" id="invMake" data-act="invmake"' + (I && I.busy ? ' disabled' : '') + '>Invite ' + them + '</button>';
+    }
+    if (I && I.error) out += '<p class="err-text" role="alert">' + esc(I.error) + '</p>';
+    return out + '</section>';
+  }
+  /* A short list on Home for a new household, ticked off as you go. Each phone can hide it. */
+  function guideSteps() {
+    const them = nm(other(S.me || 'a'));
+    return [
+      { k: 'invite', ic: 'duo', t: 'Invite ' + them, d: 'Send a link so you both see the same spends.', done: houseFull(), act: 'guideinvite' },
+      { k: 'home', ic: 'home', t: 'Put it on your Home Screen', d: 'It opens like an app, and iPhones need this for pop-ups.', done: standalone(), act: 'a2hs' },
+      { k: 'push', ic: 'bell', t: 'Turn on pop-ups', d: 'Hear when ' + them + ' adds a spend and when specials start.', done: pushHere(), act: 'guidepush' },
+      { k: 'spend', ic: 'plus', t: 'Add your first spend', d: 'Tap + and type it in, or snap the receipt.', done: S.entries.some((e) => e.kind !== 'settlement' && e.kind !== 'rent'), act: 'add' },
+      { k: 'help', ic: 'star', t: 'See how it all works', d: 'A quick guide to each part of the app.', done: lsGet('hh.helpSeen') === '1', act: 'gohelp' }
+    ];
+  }
+  function guideCard() {
+    if (!inHouse() || !S.me || S.readOnly || (S.house && S.house.legacy) || lsGet('hh.guide') === 'off') return '';
+    const st = guideSteps(), left = st.filter((x) => !x.done).length;
+    if (!left) return '';
+    return '<section class="card guide" id="guideCard"><div class="card-head"><h2>Get set up</h2><span class="hint">' + (st.length - left) + ' of ' + st.length + ' done</span></div>' +
+      '<ol class="guide-list">' + st.map((x) => '<li' + (x.done ? ' class="done"' : '') + '><button type="button" class="guide-row" data-act="' + x.act + '" data-guide="' + x.k + '"' + (x.done ? ' disabled' : '') + '>' +
+        '<span class="guide-ic" aria-hidden="true">' + icon(x.done ? 'check' : x.ic) + '</span><span><span class="row-t">' + esc(x.t) + (x.done ? '<span class="sr">, done</span>' : '') + '</span><span class="k">' + esc(x.d) + '</span></span></button></li>').join('') + '</ol>' +
+      '<button class="link sm" data-act="guideoff">Hide this</button></section>';
+  }
+  function a2hsDialog() {
+    return '<h2 id="dlgT">Put Two of Us on your Home Screen</h2>' +
+      '<ol class="a2hs"><li>Open this page in Safari on your iPhone.</li><li>Tap Share: the square with an arrow. In newer Safari it\'s under the ••• button.</li>' +
+      '<li>Tap Add to Home Screen, then Add.</li><li>From now on, open Two of Us from its icon.</li></ol>' +
+      '<p class="hint">On Android, open Chrome\'s menu and tap Add to Home screen or Install app.</p>' +
+      '<div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">Got it</button></div>';
+  }
+  function viewHelp() {
+    lsSet('hh.helpSeen', '1');
+    const them = nm(other(S.me || 'a'));
+    const items = [
+      ['plus', 'Add a spend', 'Tap + to type one in or snap a receipt. Pick who paid and how it splits, and untick anything that\'s just yours.'],
+      ['duo', 'Stay square', 'Home shows who owes who. When money moves between you, record it with Settle up.'],
+      ['gear', 'Bring in a statement', 'Settings, then Upload, takes your card statement and lists the spends to check, so you only keep the shared ones.'],
+      ['tag', 'Deals', 'What\'s on special at Coles, Woolies, Harris Farm, Umall, Liquorland and Meat Emporium, plus gift card deals. Tap + on one to put it on your weekend list.'],
+      ['cal', 'Calendar and sale days', 'Each day\'s spends, and the sale days you\'re keen on.'],
+      ['bell', 'Pop-ups', 'Put the app on your Home Screen, then turn on pop-ups in Settings. Each of you turns them on for your own phone, so you hear when ' + them + ' adds a spend.'],
+      ['star', 'Make it yours', 'Profiles has your photos, names and colours. Customise has the look, rent, card and categories.']
+    ];
+    if (pilot('insights')) items.splice(5, 0, ['chart', 'Insights and budgets', 'Set a monthly budget in Customise. Insights then shows how each month is tracking and where the money goes.']);
+    const off = Object.keys(PILOTS).filter((k) => !pilot(k));
+    let out = '<header class="top"><div><button class="back-link" data-act="go" data-arg="settings">' + icon('left') + 'Settings</button><p class="eyebrow">How it works</p><h1 class="title">Using Two of Us</h1></div></header>';
+    out += '<section class="card"><ol class="wl-tour help-list">' + items.map((it) => '<li><span class="wl-ic">' + icon(it[0]) + '</span><span><strong>' + esc(it[1]) + '</strong><span class="wl-t">' + esc(it[2]) + '</span></span></li>').join('') + '</ol></section>';
+    if (!standalone()) out += '<button class="card row-card" data-act="a2hs"><span><span class="row-t">Put it on your Home Screen</span><span class="k">How to add Two of Us like an app</span></span>' + icon('arrow') + '</button>';
+    if (off.length) out += '<section class="card"><div class="card-head"><h2>Pilot features</h2></div><p class="muted">A few features are being tried with some households first: ' + esc(listNames(off.map((k) => PILOTS[k]).map((x, i) => (i ? x.charAt(0).toLowerCase() + x.slice(1) : x)))) + '. They\'ll appear once they\'re switched on for you.</p></section>';
+    if (inHouse()) out += '<section class="card" id="privacy"><div class="card-head"><h2>Your data</h2></div><p class="muted">' + esc(PRIVACY) + '</p></section>';
+    return out;
+  }
+  function adminLoad() {
+    const A = S.admin = S.admin || {};
+    A.busy = true; A.error = null; render();
+    S.root.collection('/households').get().then((q) => {
+      A.list = q.docs.filter((d) => d.exists).map((d) => Object.assign({ hid: d.id }, d.data())).sort((a, b) => (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0));
+      A.busy = false; render();
+    }, () => { A.busy = false; A.error = 'The list couldn\'t be loaded. Check you\'re online and try again.'; render(); });
+  }
+  function viewAdmin() {
+    const A = S.admin || {};
+    if (!A.list && !A.busy && !A.error) setTimeout(adminLoad, 0);
+    let out = '<header class="top"><div><button class="back-link" data-act="go" data-arg="settings">' + icon('left') + 'Settings</button><p class="eyebrow">Just for you</p><h1 class="title">Households</h1></div></header>';
+    if (A.error) out += '<p class="err-text" role="alert">' + esc(A.error) + '</p>';
+    if (!A.list) return out + '<p class="hint" role="status">Loading the list…</p>';
+    const wk = L.addDays(today(), -6), used = A.list.filter((h) => typeof h.active === 'string' && h.active >= wk).length;
+    out += '<section class="card"><p id="admCount"><strong>' + A.list.length + '</strong> ' + (A.list.length === 1 ? 'household' : 'households') + ' · <strong>' + used + '</strong> used this week</p>' +
+      '<button class="link sm" data-act="adminload"' + (A.busy ? ' disabled' : '') + '>Refresh</button></section>';
+    out += '<section class="card"><div class="card-head"><h2>Locks</h2></div><p class="muted" style="margin-bottom:12px">Checks that a login can\'t open another household\'s spends. It tries with yours, which can see this list but nothing inside the others.</p>' +
+      '<button class="btn btn-secondary btn-block" data-act="lockcheck">Check the locks</button>' +
+      (A.lock ? '<p class="' + (A.lock.ok ? 'push-on' : 'err-text') + '" role="status" id="lockResult" data-ok="' + (A.lock.ok ? 1 : 0) + '">' + (A.lock.ok ? icon('check') : '') + esc(A.lock.text) + '</p>' : '') + '</section>';
+    A.list.forEach((h) => {
+      const mine = h.hid === S.hid, n = Array.isArray(h.members) ? h.members.length : 0, em = Array.isArray(h.emails) ? h.emails.filter((x) => typeof x === 'string') : [];
+      const name = String(h.label || '') || em.join(' & ') || 'New household';
+      out += '<section class="card adm-h" data-hid="' + esc(h.hid) + '"><div class="card-head"><h2>' + esc(name) + (mine ? ' <span class="tag">Yours</span>' : '') + '</h2></div>' +
+        '<p class="k">Started ' + esc(L.fmtDay(isoOf(h.createdAt))) + ' · ' + (typeof h.active === 'string' && h.active ? 'last used ' + esc(L.fmtDay(h.active)) : 'not used yet') + ' · ' + (n >= 2 ? 'both in' : 'waiting for their partner') + '</p>' +
+        (em.length ? '<p class="hint">' + esc(em.join(', ')) + '</p>' : '') +
+        '<p class="lbl" style="margin-top:10px">Pilot features</p><div class="chips">' + Object.keys(PILOTS).map((k) => {
+          const on = !!(h.pilot && h.pilot[k] === true);
+          return '<button type="button" class="chip" data-act="adminpilot" data-arg="' + esc(h.hid + '|' + k) + '" aria-pressed="' + on + '">' + (on ? icon('check') : '') + esc(PILOTS[k]) + '</button>';
+        }).join('') + '</div></section>';
+    });
+    return out;
+  }
+  function adminPilot(arg) {
+    const A = S.admin, i = String(arg).lastIndexOf('|'), hid = String(arg).slice(0, i), k = String(arg).slice(i + 1);
+    const h = A && A.list && A.list.filter((x) => x.hid === hid)[0];
+    if (!h || !PILOTS[k]) return;
+    const next = !(h.pilot && h.pilot[k] === true);
+    h.pilot = Object.assign({}, h.pilot || {}, { [k]: next });
+    render();
+    S.root.doc(HOUSE(hid)).update({ pilot: { [k]: next } }).then(() => toast(PILOTS[k] + (next ? ' is on for ' : ' is off for ') + (h.label || 'them') + '.'), () => {
+      h.pilot[k] = !next; render(); toast('That didn\'t save. Check you\'re online and try again.');
+    });
+  }
+  /* Tries to open another household's settings and months with your login. Both should be refused. */
+  function lockCheck() {
+    const A = S.admin;
+    if (!A || !A.list) return;
+    const them = A.list.filter((h) => h.hid !== S.hid)[0];
+    if (!them) { A.lock = { ok: true, text: 'Only your household so far. Check again once another couple joins.' }; render(); return; }
+    A.lock = { ok: false, text: 'Checking…' }; render();
+    const tries = [S.root.doc(HOUSE(them.hid) + '/hh/settings').get(), S.root.collection(HOUSE(them.hid) + '/months').get()];
+    Promise.all(tries.map((p) => p.then(() => 'open', (e) => (e && e.denied ? 'locked' : 'error')))).then((r) => {
+      if (r.every((x) => x === 'locked')) A.lock = { ok: true, text: 'Locked. Your login can\'t open another household\'s spends or settings.' };
+      else if (r.indexOf('open') >= 0) A.lock = { ok: false, text: 'Not locked: your login opened another household\'s data. Check the rules in the Firebase console before anyone else joins.' };
+      else A.lock = { ok: false, text: 'Couldn\'t check. Make sure you\'re online, then try again.' };
+      render();
+    });
+  }
+  function deleteHousehold() {
+    const d = S.dialog;
+    if (!d || !inHouse()) return;
+    d.busy = true; d.error = null; render();
+    const base = HOUSE(S.hid);
+    Promise.all([S.db.collection('hh').get(), S.db.collection('months').get()]).then((r) => {
+      const ops = [];
+      r[0].docs.forEach((x) => ops.push(['delete', base + '/hh/' + x.id]));
+      r[1].docs.forEach((x) => ops.push(['delete', base + '/months/' + x.id]));
+      return eachWrite(ops);
+    }).then(() => S.root.batch([['delete', '/users/' + S.myId], ['delete', base]])).then(() => {
+      lsSet('hh.hid', ''); lsSet('hh.pilot', ''); lsSet('hh.guide', ''); location.reload();
+    }, () => { d.busy = false; d.error = 'Not everything was deleted. Check you\'re online and try again.'; render(); });
   }
 
   /* ---------- customise ---------- */
@@ -3737,11 +4251,11 @@
     out += '<section class="card"><div class="card-head"><h2>Colour scheme</h2></div>' + schemePicker('cscheme', D.scheme) +
       '<p class="hint">Tap one to preview the whole app, then save to keep it for both of you.</p></section>';
     out += '<section class="card"><div class="card-head"><h2>Money</h2></div>' +
-      '<label class="field"><span>Monthly budget for shared spends</span><div class="money"><input class="input" id="dbudget" inputmode="decimal" placeholder="0" data-bind="draft.budget" data-change="dirty" value="' + esc(D.budget) + '"' + ro + '></div><p class="hint">Leave empty to just track what you spend.</p></label>' +
-      '<label class="field"><span>Budget resets on the</span><select class="input" id="dreset" data-bind="draft.resetDay" data-change="dirty"' + ro + '>' + days.join('') + '</select></label>' +
+      (pilot('insights') ? '<label class="field"><span>Monthly budget for shared spends</span><div class="money"><input class="input" id="dbudget" inputmode="decimal" placeholder="0" data-bind="draft.budget" data-change="dirty" value="' + esc(D.budget) + '"' + ro + '></div><p class="hint">Leave empty to just track what you spend.</p></label>' : '') +
+      '<label class="field"><span>' + (pilot('insights') ? 'Budget resets on the' : 'Each month starts on the') + '</span><select class="input" id="dreset" data-bind="draft.resetDay" data-change="dirty"' + ro + '>' + days.join('') + '</select></label>' +
       '<fieldset style="margin:0 0 18px"><legend>Usual split</legend>' + stepper('cstep', D.splitA) + '</fieldset>' +
-      '<fieldset style="margin:0"><legend>Leave out of the budget</legend><div class="chips">' + D.categories.concat(D.categories.indexOf('Other') >= 0 ? [] : ['Other']).map((c) => '<button type="button" class="chip" data-act="cskip" data-arg="' + esc(c) + '" aria-pressed="' + (D.budgetSkip.indexOf(c) >= 0) + '"' + ro + '>' + esc(c) + '</button>').join('') + '</div>' +
-      '<p class="hint">These still count in the balance and the recap, just not against the monthly budget. Handy for bills.</p></fieldset></section>';
+      (pilot('insights') ? '<fieldset style="margin:0"><legend>Leave out of the budget</legend><div class="chips">' + D.categories.concat(D.categories.indexOf('Other') >= 0 ? [] : ['Other']).map((c) => '<button type="button" class="chip" data-act="cskip" data-arg="' + esc(c) + '" aria-pressed="' + (D.budgetSkip.indexOf(c) >= 0) + '"' + ro + '>' + esc(c) + '</button>').join('') + '</div>' +
+      '<p class="hint">These still count in the balance and the recap, just not against the monthly budget. Handy for bills.</p></fieldset>' : '') + '</section>';
     out += rentCard(D, ro);
     out += '<section class="card"><div class="card-head"><h2>Categories</h2></div>' +
       (D.categories.length ? '<div class="chips" style="margin-bottom:12px">' + D.categories.map((c) => '<button type="button" class="chip" data-act="cdelcat" data-arg="' + esc(c) + '" aria-label="Remove ' + esc(c) + '"' + ro + '>' + esc(c) + icon('close') + '</button>').join('') + '</div>' : '<p class="muted" style="margin-bottom:12px">None yet. Spends go under Other until you add some.</p>') +
@@ -3813,8 +4327,8 @@
         err + '<div class="setup-actions"><button class="btn btn-primary" data-act="snext">Next</button></div>';
     } else if (U.step === 2) {
       const days = []; for (let i = 1; i <= 28; i++) days.push('<option value="' + i + '"' + (String(i) === String(U.resetDay) ? ' selected' : '') + '>' + ordinal(i) + ' of the month</option>');
-      body = '<h1>Your monthly money</h1><p class="lead">A budget for shared spends shows how much is left each day. You can skip it and add it later.</p>' +
-        '<label class="field"><span>Monthly budget for shared spends</span><div class="money"><input class="input" id="sbudget" inputmode="decimal" placeholder="0" autocomplete="off" data-bind="setup.budget" value="' + esc(U.budget) + '"></div><p class="hint">Leave empty to just track what you spend.</p></label>' +
+      body = (pilot('insights') ? '<h1>Your monthly money</h1><p class="lead">A budget for shared spends shows how much is left each day. You can skip it and add it later.</p>' : '<h1>How you share</h1><p class="lead">When each month starts and how you split shared spends. You can change these later.</p>') +
+        (pilot('insights') ? '<label class="field"><span>Monthly budget for shared spends</span><div class="money"><input class="input" id="sbudget" inputmode="decimal" placeholder="0" autocomplete="off" data-bind="setup.budget" value="' + esc(U.budget) + '"></div><p class="hint">Leave empty to just track what you spend.</p></label>' : '') +
         '<label class="field"><span>Pick a reset day</span><select class="input" id="sreset" data-bind="setup.resetDay">' + days.join('') + '</select><p class="hint">Payday works well. The 1st keeps it to calendar months.</p></label>' +
         '<fieldset><legend>How do you split shared spends?</legend>' + stepperSetup(U.splitA, nA, nB) + '</fieldset>' +
         (PRESET && PRESET.rent ? '<fieldset><legend>Rent</legend><label class="switch-row"><span>' + esc(rentLine(defaults().rent, nA, nB)) + '</span><input type="checkbox" class="switch" role="switch" id="srent" data-bind="setup.rentOn"' + (U.rentOn ? ' checked' : '') + '></label>' +
@@ -3917,7 +4431,7 @@
     const from = nm(other(p));
     return [
       ['camera', 'Add a spend', 'Tap + to capture a receipt, or type one in. Mark anything that\'s just yours.'],
-      ['duo', 'Stay square', 'Home shows where you two stand, what\'s left of the month\'s budget and what\'s coming up.'],
+      ['duo', 'Stay square', pilot('insights') ? 'Home shows where you two stand, what\'s left of the month\'s budget and what\'s coming up.' : 'Home shows where you two stand and what\'s coming up.'],
       ['tag', 'Grab the specials', 'Deals has what\'s on special at Coles, Woolies, Harris Farm, Umall, Liquorland and Meat Emporium. Tap + to put one on our weekend list.'],
       ['cal', 'Every day, and sale days', 'The Calendar shows each day\'s spends, and the sale days we\'re keen on.'],
       ['bell', 'Pop-ups', 'Turn them on in Settings to hear when ' + from + ' adds a spend, and when something we buy is on special.']
@@ -3991,8 +4505,52 @@
     if (S.fbMissing) return viewNoConnection();
     if (!S.authReady) return viewLoading();
     if (!S.authUser || !S.authUser.emailVerified) return viewSignIn();
+    if (S.gate) return viewGate();
+    if (S.houseGone) return viewGone();
     if (S.denied) return viewDenied();
     return '';
+  }
+  /* Before you're in a household: start one, join your partner's with their code, or wait while the original two
+     move across. */
+  const PRIVACY = 'Your spends are saved in the app\'s Firebase database, and only the two of you can open your household in the app. ' +
+    'The person who runs Two of Us sees a list of households (your emails, when you started and when you last used it) and can switch on pilot features. ' +
+    'As the database owner they could technically see what\'s saved, but they don\'t look. Delete your household any time in Settings and it\'s gone.';
+  function viewGate() {
+    const G = S.gate, err = G.error ? '<p class="err-text" role="alert" style="margin-bottom:12px">' + esc(G.error) + '</p>' : '';
+    const out = '<p class="si-links"><button class="link sm" data-act="auout">Sign out</button></p></div>';
+    if (G.step === 'moving') {
+      return signinHead(G.error ? 'Nearly there' : 'Moving your household across', G.error ? 'Your spends are safe. Moving them into the new version stopped part way.' : 'Your spends are moving into the new version. It takes a few seconds, so keep the app open.') +
+        err + (G.error ? '<button class="btn btn-primary btn-block" data-act="gateretry">Try again</button>' : '<p class="hint" role="status" id="gateMoving">Moving…</p>') + out;
+    }
+    if (G.step === 'retry') {
+      return signinHead('Can\'t reach your household', 'The app couldn\'t check which household is yours. Make sure you\'re online, then try again.') +
+        '<button class="btn btn-primary btn-block" data-act="gateretry">Try again</button>' + out;
+    }
+    if (G.step === 'confirm') {
+      return signinHead('Join ' + (G.label ? esc(G.label) + '\'s' : 'your partner\'s') + ' household?', 'You\'ll both see the same spends, deals and balance.') + err +
+        '<button class="btn btn-primary btn-block" data-act="gateconfirm"' + (G.busy ? ' disabled' : '') + '>Join</button>' +
+        '<button class="btn btn-secondary btn-block" style="margin-top:10px" data-act="gateback">Not now</button>' + out;
+    }
+    const codeField = '<label class="field"><span>Invite code</span><input class="input" id="gatecode" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="30" data-bind="gate.code" data-enter="gatejoin" value="' + esc(G.code) + '"></label>';
+    if (G.step === 'join') {
+      return signinHead('Join your partner', 'Type the code from the link your partner sent you.') + codeField + err +
+        '<button class="btn btn-primary btn-block" data-act="gatejoin"' + (G.busy ? ' disabled' : '') + '>Join</button>' +
+        '<p class="si-links"><button class="link sm" data-act="gateback">Start our own household instead</button><button class="link sm" data-act="auout">Sign out</button></p></div>';
+    }
+    return signinHead('Welcome to Two of Us', 'Your own little place for shared spends, for the two of you.') + err +
+      '<button class="btn btn-primary btn-block" id="gateStart" data-act="gatestart"' + (G.busy ? ' disabled' : '') + '>Start our household</button>' +
+      '<p class="hint" style="margin:8px 0 18px">You\'ll set it up in a minute, then invite your partner.</p>' +
+      '<button class="btn btn-secondary btn-block" data-act="gatehave">I have an invite code</button>' +
+      '<details class="gate-privacy"><summary>How your data is kept</summary><p class="hint">' + esc(PRIVACY) + '</p></details>' + out;
+  }
+  function viewWaitSetup() {
+    return signinHead('Nearly ready', 'Your partner is still setting up your household. This page carries on by itself as soon as they\'re done.') +
+      '<p class="si-links"><button class="link sm" data-act="auout">Sign out</button></p></div>';
+  }
+  function viewGone() {
+    return signinHead('This household has gone', 'It was deleted, or you\'re no longer in it. Your login still works, so you can start a new household.') +
+      '<button class="btn btn-primary btn-block" data-act="gonestart">Start again</button>' +
+      '<p class="si-links"><button class="link sm" data-act="auout">Sign out</button></p></div>';
   }
   const signinHead = (title, lead) => '<div class="setup signin"><div class="si-mark">' + markSvg() + '</div><h1>' + title + '</h1><p class="lead">' + lead + '</p>';
   function viewSignIn() {
@@ -4005,7 +4563,9 @@
         '<p class="si-links"><button class="link sm" data-act="auresend">Send the link again</button><button class="link sm" data-act="auout">Use a different email</button></p></div>';
     }
     const create = A.mode === 'create', act = create ? 'aucreate' : 'auin';
-    return signinHead(create ? 'Create your login' : 'Our household', create ? 'Use the email you two set up for this app. You\'ll get a link to confirm it.' : 'Sign in to see your shared spends.') +
+    const invited = !!lsGet('hh.join');
+    return signinHead(create ? (invited ? 'You\'re invited' : 'Create your login') : 'Two of Us',
+      create ? (invited ? 'Make a login to join your partner\'s household. You\'ll get a link to confirm your email.' : 'Use your own email. You\'ll get a link to confirm it.') : 'Sign in to see your shared spends.') +
       '<label class="field"><span>Email</span><input class="input" id="auemail" type="email" autocomplete="email" inputmode="email" autocapitalize="off" spellcheck="false" data-bind="signin.email" data-enter="' + act + '" value="' + esc(A.email) + '"></label>' +
       '<label class="field"><span>Password</span><input class="input" id="aupw" type="password" autocomplete="' + (create ? 'new-password' : 'current-password') + '" data-bind="signin.password" data-enter="' + act + '"></label>' +
       (create ? '<p class="hint" style="margin:-10px 0 16px">At least 8 characters.</p>' : '') + msg +
@@ -4115,6 +4675,12 @@
       body = snapsDialog(d);
     } else if (d.type === 'webdone') {
       body = webDoneDialog(d);
+    } else if (d.type === 'a2hs') {
+      body = a2hsDialog();
+    } else if (d.type === 'hhdelete') {
+      body = '<h2 id="dlgT">Delete your household?</h2><p>Every spend, photo and setting for the two of you goes, on both phones. This can\'t be undone.</p>' +
+        '<p class="hint">Copy your spends as a CSV first if you\'d like a record.</p>' + (d.error ? '<p class="err-text" role="alert">' + esc(d.error) + '</p>' : '') +
+        '<div class="dialog-actions"><button class="btn btn-secondary" data-act="dlgclose">Keep it</button><button class="btn btn-danger" data-act="dlghhdelete"' + (d.busy ? ' disabled' : '') + '>' + (d.busy ? 'Deleting' : 'Delete everything') + '</button></div>';
     } else if (d.type === 'aitoken') {
       body = aiTokenDialog(d);
     } else if (d.type === 'ghtoken') {
@@ -4129,10 +4695,10 @@
       body = '<p class="eyebrow">' + (d.fresh ? 'A few things to try' : 'What\'s new · ' + esc(dateY(n.date))) + '</p><h2 id="dlgT">' + esc(n.title) + '</h2>' +
         (n.intro ? '<p class="muted" style="margin-top:6px">' + esc(n.intro) + '</p>' : '') +
         '<ul class="news">' + n.items.filter((x) => x.on && (x.head || x.text)).map((x) => '<li><span class="news-ic" aria-hidden="true">' + icon(x.icon) + '</span><span>' + (x.head ? '<strong>' + esc(x.head) + '</strong> ' : '') + esc(x.text) + '</span></li>').join('') + '</ul>' +
-        '<p class="news-from">' + av(ed, true) + '<span>From ' + esc(nm(ed)) + '</span></p>' +
+        (ownNotes() ? '<p class="news-from">' + av(ed, true) + '<span>From ' + esc(nm(ed)) + '</span></p>' : '<p class="news-from"><span>From Two of Us</span></p>') +
         '<div class="dialog-actions"><button class="btn btn-primary" data-act="newsok">' + (d.preview ? 'Close the preview' : d.again ? 'Done' : 'Lovely, thanks') + '</button></div>';
     } else if (d.type === 'csv') {
-      body = '<h2 id="dlgT">Copy your spends</h2><p>Copying isn\'t allowed here, so select all of this and copy it yourself.</p><textarea class="input" id="dlgCsv" readonly>' + esc(d.text) + '</textarea><div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
+      body = '<h2 id="dlgT">' + esc(d.title || 'Copy your spends') + '</h2><p>Copying isn\'t allowed here, so select all of this and copy it yourself.</p><textarea class="input" id="dlgCsv" readonly>' + esc(d.text) + '</textarea><div class="dialog-actions"><button class="btn btn-primary" data-act="dlgclose">Done</button></div>';
     }
     return '<div class="scrim" data-act="dlgclose"></div><div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgT">' + body + '</div>';
   }
@@ -4171,6 +4737,7 @@
     key: (k) => pressKey(k),
     addcat: (c) => { S.add.category = S.add.category === c ? null : c; render(); },
     addpayer: (p) => { S.add.payer = p; S.add.onCard = p === holder(); render(); },
+    addpay: (m) => { if (['card', 'gift', 'both'].indexOf(m) >= 0) { S.add.pay = m; render(); } },
     addsplit: (m) => { S.add.splitMode = m; render(); },
     addstep: (d) => { S.add.splitA = L.clamp(S.add.splitA + Number(d), 0, 100); render(); },
     saveadd: () => saveAdd(),
@@ -4236,6 +4803,26 @@
       const u = S.auth && S.auth.currentUser, A = S.signin || (S.signin = { mode: 'in', email: '', password: '', error: null, note: null, busy: false });
       if (u) u.sendEmailVerification().then(() => { A.error = null; A.note = 'Sent. Check your inbox.'; render(); }, (e) => { A.error = authMsg(e); render(); });
     },
+    gatestart: () => startHousehold(),
+    gatehave: () => { S.gate.step = 'join'; S.gate.error = null; render(); },
+    gatejoin: () => lookInvite(),
+    gateconfirm: () => joinHousehold(),
+    gateback: () => { lsSet('hh.join', ''); S.gate.step = 'start'; S.gate.error = null; S.gate.code = ''; render(); },
+    gateretry: () => { S.gate = null; render(); noHousehold(); },
+    gonestart: () => { S.root.doc('/users/' + S.myId).delete().catch(noop).then(() => { lsSet('hh.hid', ''); lsSet('hh.pilot', ''); location.reload(); }); },
+    invmake: () => makeInvite(),
+    invshare: () => shareInvite(),
+    invcopy: () => { if (S.invite && S.invite.code) copyText(inviteLink(S.invite.code), 'Link copied. Send it to ' + nm(other(S.me || 'a')) + '.'); },
+    guideinvite: () => { go('settings'); if (!S.invite || !S.invite.code) makeInvite(); setTimeout(() => { const el = document.getElementById('partnerCard'); if (el) el.scrollIntoView({ block: 'center' }); }, 60); },
+    guidepush: () => { go('settings'); setTimeout(() => { const el = document.getElementById('pushCard'); if (el) el.scrollIntoView({ block: 'center' }); }, 60); },
+    a2hs: () => openDialog({ type: 'a2hs' }),
+    gohelp: () => go('help'),
+    guideoff: () => { lsSet('hh.guide', 'off'); render(); toast('Hidden. The guide is still in Settings, under How to use Two of Us.'); },
+    adminload: () => adminLoad(),
+    adminpilot: (arg) => adminPilot(arg),
+    lockcheck: () => lockCheck(),
+    hhdelete: () => openDialog({ type: 'hhdelete' }),
+    dlghhdelete: () => deleteHousehold(),
     auout: () => { splashSet(null); if (S.auth) S.auth.signOut().then(() => location.reload(), () => location.reload()); },
     reload: () => location.reload(),
     welcomein: () => welcomeIn(),
@@ -4568,6 +5155,7 @@
   };
 
   const INPUT = {
+    addgift: () => { if (S.add) updateAmount(); },
     /* Typing a name updates the "Which one are you?" buttons in place, without redrawing the field being typed in. */
     snames: () => {
       const U = S.setup;
