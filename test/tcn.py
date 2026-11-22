@@ -52,6 +52,7 @@ CARDS = [
     card('TCN Teen', ['Culture Kings', 'Glue Store', 'Hype DC'], [], 'javascript:window.__xss=1'),
     card('TCN Kids', ['Timezone', 'Smiggle', 'Lego'], ['Timezone']),
     {'n': 'TCN Pamper', 'link': '', 'shops': [], 'top': [], 'note': 'Merchants around Australia categorised as Barber and Beauty Shops (MCC 7230), Health and Beauty Spas (MCC 7298) or Hotels, Motels and Resorts (MCC 7011).'},
+    {'n': 'TCN Pub & Bar', 'link': '', 'shops': [], 'top': [], 'note': 'Merchants around Australia categorised as Eating Places and Restaurants (MCC 5812), Drinking Places (MCC 5813) or Country Clubs (MCC 7997). Gift card subject to individual merchant acceptance.'},
 ]
 state = {'deals': []}
 
@@ -109,9 +110,10 @@ try:
               'five cards to start, the ones with the most popular shops first: ' + ' | '.join(r.replace('\n', ' ') for r in rows)[:300])
         act(a, 'tcnall'); a.wait_for_timeout(200)
         rows = a.locator('#tcnList .tcn-row').all_inner_texts()
-        check(len(rows) == 10 and any('TCN Good Food' in r and 'not fast food' in r for r in rows) and any('TCN Cinema' in r for r in rows)
-              and sum('TCN Pamper' in r for r in rows) == 1 and not any('0 shops' in r for r in rows),
-              'see all: the seven cards and the three taken at a kind of place, Pamper once, never as 0 shops')
+        check(len(rows) == 11 and any('TCN Good Food' in r and 'not fast food' in r for r in rows) and any('TCN Cinema' in r for r in rows)
+              and sum('TCN Pamper' in r for r in rows) == 1 and not any('0 shops' in r for r in rows)
+              and any('TCN Pub & Bar' in r and 'Eating Places and Restaurants, Drinking Places or Country Clubs' in r and 'MCC' not in r for r in rows),
+              'see all: the seven cards and the ones taken at a kind of place, Pamper once, never as 0 shops, the wiki\'s in plain words')
         check('Fewer cards' in a.locator('#tcnCard').inner_text(), 'and back to fewer')
         hint = a.locator('#tcnCard .hint').inner_text()
         check("OzBargain’s gift card wiki, correct as at Fri 16 Oct" in hint and 'check its own list before you buy' in hint, 'it says where the lists come from and when: ' + hint[:160])
