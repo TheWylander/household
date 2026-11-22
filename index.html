@@ -877,6 +877,12 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
 .gift-tag .ic { width: 14px; height: 14px; flex: none; }
 .gift-big { font-family: var(--display, inherit); font-size: 28px; font-weight: 800; }
 
+/* Feedback notes on the owner's page. */
+.fb-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 12px; }
+.fb-list li { padding: 10px 12px; border: 2px solid var(--line); border-radius: var(--r-md); }
+.fb-list li.new { border-color: var(--ink); background: var(--marigold-soft); }
+.fb-text { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
+
 </style>
 </head>
 <body>
@@ -1584,7 +1590,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       ['duo', 'Share Two of Us.', 'Other couples can have Two of Us too, each in their own locked household. Only the two of you can open yours.'],
       ['star', 'How to use it.', 'Settings has a quick guide to each part of the app, and how your data is kept.'],
       ['gear', 'Your household.', 'Settings shows who\'s in your household.'],
-      ['check', 'Nothing to redo.', 'Everything we had moved into our household by itself.']
+      ['check', 'Nothing to redo.', 'Everything we had moved into our household by itself.'],
+      ['pencil', 'Send feedback.', 'Settings has Send feedback, for ideas and anything that doesn\'t work.']
     ] },
     { id: '2026-11-22', date: '2026-11-22', title: 'TCN gift cards in Deals', items: [
       ['tag', 'TCN gift card deals.', "Deals shows The Card Network's gift card deals while they run, like 15% off at Coles, and the popular shops each one covers."],
@@ -1667,9 +1674,10 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   }
   /* Pilot features are switched on for a household by whoever runs the app. Before households, everything is on.
      The last switches seen are kept on the phone so nothing flickers while the household loads. */
-  const PILOTS = { splitwise: 'Splitwise import', insights: 'Insights and budgets' };
+  const BANKS = ['Westpac', 'CommBank', 'ANZ', 'NAB', 'Amex', 'Macquarie', 'ING', 'St.George', 'Bankwest', 'Other'];
+  const PILOTS = { insights: 'Insights and budgets' };
   function pilot(k) {
-    if (!S.hid) return true;
+    if (!S.hid || !PILOTS[k]) return true;
     let p = S.house && S.house.pilot;
     if (!S.house) { try { p = JSON.parse(lsGet('hh.pilot') || 'null'); } catch (e) { p = null; } }
     return !!(p && typeof p === 'object' && p[k] === true);
@@ -1688,8 +1696,9 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       categories: Array.isArray(s.categories) ? s.categories.filter((c) => typeof c === 'string' && c.trim()).slice(0, 30) : [],
       goal: { name: String(goal.name || ''), target: num(goal.target), saved: num(goal.saved) || 0 },
       card: {
-        name: String(card.name || ''), holder: card.holder === 'a' ? 'a' : 'b', program: String(card.program || ''), rate: num(card.rate),
-        earns: ['qantas', 'velocity', 'altitude'].indexOf(card.earns) >= 0 ? card.earns : null,
+        name: String(card.name || ''), holder: card.holder === 'a' ? 'a' : 'b', program: String(card.program || '').slice(0, 40), rate: num(card.rate),
+        earns: ['qantas', 'velocity', 'altitude', 'other'].indexOf(card.earns) >= 0 ? card.earns : null,
+        none: card.none === true, bank: BANKS.indexOf(card.bank) >= 0 ? card.bank : (L.CARD_PRESETS[card.earns] ? 'Westpac' : ''),
         rates: card.rates && typeof card.rates === 'object' ? { intl: num(card.rates.intl), everyday: num(card.rates.everyday), other: num(card.rates.other), after: num(card.rates.after) } : null,
         ratio: num(card.ratio) || 3,
         pointsBal: num(card.pointsBal) != null && num(card.pointsBal) >= 0 ? Math.round(num(card.pointsBal)) : null,
@@ -1750,9 +1759,16 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   }
   const colOf = (p) => { const ppl = pal().people; return ppl[cfg().colours[p]] || (p === 'a' ? ppl.cobalt : ppl.coral); };
   const initial = (n) => (String(n).trim().charAt(0) || '?').toUpperCase();
-  const holder = () => cfg().card.holder;
-  const cardLabel = () => cfg().card.name || 'shared card';
+  /* A couple may share one card for shared spends, or each pay with their own. Without a shared card, whoever is using
+     the phone is the one paying by default, and there are no card points. */
+  const hasCard = () => !cfg().card.none;
+  const holder = () => { const c = cfg().card; return c.none ? (S.me === 'b' ? 'b' : 'a') : c.holder; };
+  const cardBank = () => cfg().card.bank;
+  /* Without a shared card, whose statement is being brought in: yours unless you pick the other. */
+  const impWho = () => (S.impWho === 'a' || S.impWho === 'b' ? S.impWho : S.me === 'b' ? 'b' : 'a');
+  const cardLabel = () => { const c = cfg().card; return c.name || (c.bank && c.bank !== 'Other' ? c.bank + ' card' : c.none ? 'card' : 'shared card'); };
   const programLabel = () => { const c = cfg().card, pr = L.CARD_PRESETS[c.earns]; return (pr && pr.program) || c.program || 'reward'; };
+  const earnsPoints = () => { const c = cfg().card; return hasCard() && (!!L.CARD_PRESETS[c.earns] || (c.earns === 'other' && c.rate > 0)); };
   const curPeriod = () => L.periodFor(today(), cfg().resetDay);
   const spendsIn = (p) => S.entries.filter((e) => L.isSpend(e) && L.inPeriod(e.date, p));
   const pendingAll = () => S.entries.filter((e) => e.kind === 'expense' && e.status === 'check');
@@ -1769,6 +1785,28 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   const EARNS_LABEL = { qantas: 'Qantas', velocity: 'Velocity', altitude: 'Altitude' };
   const EARNS_HINT = 'Altitude Qantas Black earns Qantas Points, Altitude Velocity Black earns Velocity Points, and Altitude Rewards Black earns Altitude Points you move to an airline.';
   const earnsSeg = (act, current) => '<div class="seg">' + ['qantas', 'velocity', 'altitude'].map((k) => segBtn(act, k, current === k, EARNS_LABEL[k])).join('') + '</div>';
+  /* The card question, the same in setup and Customise: whose card, which bank, and what points it earns. Westpac's
+     Altitude cards have their rates filled in; any other card takes a points program and points per $1, or none. */
+  function cardFields(pre, X) {
+    const nA = nm('a') || 'Person one', nB = nm('b') || 'Person two';
+    const names = pre === 's' ? { a: X.nA, b: X.nB } : { a: nA, b: nB };
+    let out = '<fieldset><legend>Do you share a card for shared spends?</legend><div class="seg seg3">' +
+      segBtn(pre + 'holder', 'a', X.holder === 'a', poss(names.a) + ' card', pre === 's' ? null : 'a') + segBtn(pre + 'holder', 'b', X.holder === 'b', poss(names.b) + ' card', pre === 's' ? null : 'b') +
+      segBtn(pre + 'holder', 'none', X.holder === 'none', 'We each pay') + '</div>' +
+      (X.holder === 'none' ? '<p class="hint">You\'ll pick who paid on each spend. Card points are left out.</p>' : '') + '</fieldset>';
+    if (X.holder === 'none') return out;
+    if (X.name) out += '<p class="muted" style="margin:-6px 0 12px">' + esc(poss(names[X.holder]) + ' ' + X.name) + (L.CARD_PRESETS[X.earns] ? ' · earns ' + esc(L.CARD_PRESETS[X.earns].unit) : '') + '</p>';
+    out += '<label class="field"><span>Bank</span><select class="input" id="' + pre + 'bank" data-bind="' + X.bind + '.bank" data-change="' + pre + 'bank">' +
+      '<option value=""' + (X.bank ? '' : ' selected') + '>Pick one</option>' + BANKS.map((b) => '<option' + (X.bank === b ? ' selected' : '') + '>' + b + '</option>').join('') + '</select></label>';
+    if (X.bank === 'Westpac') {
+      out += '<fieldset style="margin-bottom:12px"><legend>Which points does it earn?</legend>' + earnsSeg(pre + 'earns', X.earns) + '</fieldset>';
+    } else if (X.bank) {
+      out += '<fieldset style="margin-bottom:12px"><legend>Does it earn points?</legend><div class="seg">' + segBtn(pre + 'earns', 'other', X.earns === 'other', 'Yes') + segBtn(pre + 'earns', 'none', X.earns !== 'other', 'No') + '</div></fieldset>' +
+        (X.earns === 'other' ? '<div class="row2"><label class="field"><span>Points program</span><input class="input" id="' + pre + 'prog" maxlength="40" placeholder="Qantas, Amex" data-bind="' + X.bind + '.program" data-change="dirty" value="' + esc(X.program || '') + '"></label>' +
+          '<label class="field"><span>Points per $1</span><input class="input" id="' + pre + 'rate" inputmode="decimal" placeholder="1" data-bind="' + X.bind + '.rate" data-change="dirty" value="' + esc(X.rate || '') + '"></label></div>' : '');
+    }
+    return out;
+  }
   function ratesLine(earns, rates, ratio) {
     const pr = L.CARD_PRESETS[earns];
     const r = rates || (pr && pr.rates);
@@ -2094,7 +2132,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       }, noop);
     }
     /* Only the owner's login may read admin/; the answer says whether this is the owner. */
-    S.db.doc('/admin/flag').get().then(() => { S.isAdmin = true; }, () => { S.isAdmin = false; })
+    S.db.doc('/admin/flag').get().then(() => { S.isAdmin = true; loadNotes(); }, () => { S.isAdmin = false; })
       .then(() => { S.adminChecked = true; seedShared(); webPending(); safeRender(); });
     subHH(); subMonths();
   }
@@ -2351,7 +2389,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       const due = newsDue();
       if (due) { S.newsShown = true; S.dialog = { type: 'news', id: due.id }; }
     }
-    const nav = ['home', 'cal', 'deals', 'tcn', 'insights', 'settings', 'upload', 'custom', 'profile', 'newsedit', 'recap', 'tab', 'help', 'admin'].indexOf(S.view) >= 0;
+    const nav = ['home', 'cal', 'deals', 'tcn', 'insights', 'settings', 'upload', 'custom', 'profile', 'newsedit', 'recap', 'tab', 'help', 'admin', 'feedback'].indexOf(S.view) >= 0;
     const sw = S.view === 'insights' || S.view === 'recap' ? (S.insMode === 'year' ? 'insyear' : 'recapmove') : S.view === 'cal' ? 'calmove' : '';
     return bn + '<main class="main' + (nav ? '' : ' no-nav') + '" style="' + meVars() + '"' + (sw ? ' data-swipe="' + sw + '"' : '') + '>' + viewFor(S.view) + '</main>' +
       (nav ? '<div data-live="nav">' + navBar() + '</div>' : '') + dialogHtml();
@@ -2473,6 +2511,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       case 'recap':
       case 'insights': return pilot('insights') ? viewInsights() : viewHome();
       case 'help': return viewHelp();
+      case 'feedback': return inHouse() ? viewFeedback() : viewSettings();
       case 'admin': return S.isAdmin ? viewAdmin() : viewSettings();
       case 'settings': return viewSettings();
       case 'profile': return viewProfile();
@@ -2689,7 +2728,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     const n = pendingAll().length;
     if (n) {
       out += '<button class="card row-card attn" data-act="go" data-arg="upload"><span class="row-lead"><span class="count">' + n + '</span>' +
-        '<span><span class="row-t">' + (n === 1 ? 'spend' : 'spends') + ' to check</span><span class="k">From ' + esc(poss(nm(holder()))) + ' card</span></span></span>' + icon('arrow') + '</button>';
+        '<span><span class="row-t">' + (n === 1 ? 'spend' : 'spends') + ' to check</span><span class="k">' + (hasCard() ? 'From ' + esc(poss(nm(holder()))) + ' card' : 'From card statements') + '</span></span></span>' + icon('arrow') + '</button>';
     }
     const waiting = isEditor() && !S.readOnly && RELEASES.length ? noteFor(RELEASES[0].id) : null;
     if (waiting && waiting.status === 'draft') {
@@ -2708,7 +2747,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       out += '<button class="card row-card" data-act="go" data-arg="recap"><span><span class="k">Insights</span><span class="row-t">Where ' + esc(L.periodLabel(L.shiftPeriod(p, -1), t)) + ' went</span></span>' + icon('arrow') + '</button>';
     }
     if (!S.entries.length) {
-      out += '<section class="card note-card"><h2>Start with one spend</h2><p>Tap the plus to add what you spent today, or bring in ' + esc(poss(nm(holder()))) + ' card statement from Settings, under Upload.</p></section>';
+      out += '<section class="card note-card"><h2>Start with one spend</h2><p>Tap the plus to add what you spent today, or bring in ' + (hasCard() ? esc(poss(nm(holder()))) + ' card statement' : 'a card statement') + ' from Settings, under Upload.</p></section>';
     }
     return out;
   }
@@ -2824,7 +2863,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
         '<p class="e-meta">' + esc(nm(from)) + ' to ' + esc(nm(other(from))) + ' · ' + (e.source === 'splitwise' ? 'From Splitwise' : 'Weekly rent') + '</p></div>' +
         '<div class="e-right"><p class="e-amt">' + L.fmt(e.amount) + '</p>' + (S.readOnly ? '' : '<button class="link sm" data-act="delentry" data-arg="' + id + '">Remove</button>') + '</div></div></li>';
     }
-    const src = e.source === 'import' ? 'From ' + poss(nm(H)) + ' card' : e.source === 'splitwise' ? 'From Splitwise' : e.source === 'tab' ? 'Day tab' : 'Added by ' + (e.by === 'a' || e.by === 'b' ? nm(e.by) : 'one of you');
+    const src = e.source === 'import' ? 'From ' + poss(nm(e.payer === 'a' || e.payer === 'b' ? e.payer : H)) + ' card' : e.source === 'splitwise' ? 'From Splitwise' : e.source === 'tab' ? 'Day tab' : 'Added by ' + (e.by === 'a' || e.by === 'b' ? nm(e.by) : 'one of you');
     let sub = '';
     const lines = entryLines(e);
     if (lines) sub = '<ul class="e-lines">' + lines.map((l) => '<li><span class="ln-n' + (l.note ? '' : ' muted') + '">' + esc(l.note || 'No note') + '</span><span class="ln-a">' + L.fmt(l.amount) + '</span></li>').join('') + '</ul>';
@@ -2857,7 +2896,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     const C = cfg(), H = holder();
     S.add = {
       id: null, date: opts.date || today(), expr: '', notes: [], title: '', category: null,
-      payer: H, onCard: true, budget: true, splitMode: 'even', splitA: C.splitA, locked: false, orig: null,
+      payer: H, onCard: hasCard(), budget: true, splitMode: 'even', splitA: C.splitA, locked: false, orig: null,
       pay: 'card', gift: '', off: giftOffDefault(),
       from: S.view === 'add' ? 'home' : S.view
     };
@@ -2907,7 +2946,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   }
   function nudgeHtml(A, r) {
     const C = cfg(), H = holder();
-    if (A.locked || A.payer === H || !r.ok || r.total <= 0) return '';
+    if (!earnsPoints() || A.locked || A.payer === H || !r.ok || r.total <= 0) return '';
     const est = L.estimatePoints([{ date: A.date, amount: r.total, category: A.category || 'Other' }], C.card);
     const pts = est ? est.velocity : 0;
     if (pts < 1) return '';
@@ -2979,7 +3018,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     let payerBlock = '';
     if (!A.locked) {
       payerBlock = '<fieldset><legend>Who paid?</legend><div class="seg">' + segBtn('addpayer', 'a', A.payer === 'a', nm('a'), 'a') + segBtn('addpayer', 'b', A.payer === 'b', nm('b'), 'b') + segBtn('addpayer', 'both', A.payer === 'both', 'Both') + '</div></fieldset>' +
-        '<label class="check-row"><input type="checkbox" id="addCard" data-bind="add.onCard"' + (A.onCard ? ' checked' : '') + '> On ' + esc(poss(nm(H))) + ' ' + esc(cardLabel()) + '</label>';
+        (hasCard() ? '<label class="check-row"><input type="checkbox" id="addCard" data-bind="add.onCard"' + (A.onCard ? ' checked' : '') + '> On ' + esc(poss(nm(H))) + ' ' + esc(cardLabel()) + '</label>' : '');
     }
     /* Whether it counts towards the monthly budget: on unless it's a one-off you'd rather keep out. A category left out in
        Customise is out anyway, so then the box says so. Only shown once there's a budget. */
@@ -3271,7 +3310,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     const d = String((j && j.date) || ''), cats = C.categories.concat(C.categories.indexOf('Other') >= 0 ? [] : ['Other']);
     const cat = cats.indexOf(j && j.category) >= 0 ? j.category : cats.indexOf('Groceries') >= 0 ? 'Groceries' : 'Other';
     return { shop: String((j && j.shop) || '').trim().replace(/\s+/g, ' ').slice(0, 60) || 'Receipt', date: ISO_DAY.test(d) && d <= t && d >= L.addDays(t, -400) ? d : t,
-      total: (total / 100).toFixed(2), category: cat, payer: S.me === 'b' ? 'b' : 'a', onCard: (S.me === 'b' ? 'b' : 'a') === holder(), budget: true, items };
+      total: (total / 100).toFixed(2), category: cat, payer: S.me === 'b' ? 'b' : 'a', onCard: hasCard() && (S.me === 'b' ? 'b' : 'a') === holder(), budget: true, items };
   }
   function startReceipt(file) {
     if (!file) return;
@@ -3409,21 +3448,26 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
 
   /* ---------- upload: statements, Splitwise files, and spends to check ---------- */
   function viewUpload() {
-    const H = holder(), C = cfg(), hn = nm(H);
+    const C = cfg(), H = hasCard() ? holder() : impWho(), hn = nm(H), bank = cardBank(), westpac = hasCard() && bank === 'Westpac';
     const pend = pendingAll().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : (a.createdAt || 0) - (b.createdAt || 0)));
     const groups = {};
     pend.forEach((e) => { (groups[e.date] = groups[e.date] || []).push(e); });
-    let out = '<header class="top"><div><button class="back-link" data-act="go" data-arg="settings">' + icon('left') + 'Settings</button><p class="eyebrow">' + esc(poss(hn)) + ' ' + esc(cardLabel()) + '</p><h1 class="title">Upload</h1></div></header>' + snapCard();
+    let out = '<header class="top"><div><button class="back-link" data-act="go" data-arg="settings">' + icon('left') + 'Settings</button><p class="eyebrow">' + (hasCard() ? esc(poss(hn)) + ' ' + esc(cardLabel()) : 'Card statements') + '</p><h1 class="title">Upload</h1></div></header>' + snapCard();
     if (!S.readOnly) {
+      const from = westpac ? 'Westpac' : bank && bank !== 'Other' ? bank : 'your bank';
       out += '<section class="card bold"><h2 style="font-size:21px;margin-bottom:6px">Bring in ' + esc(poss(hn)) + ' card spends</h2>' +
-        '<p class="muted" style="margin-bottom:14px">Export a CSV from Westpac, then choose the file here. Anything you\'ve already brought in is skipped, so overlapping dates are fine.</p>' +
+        (hasCard() ? '' : '<fieldset><legend>Whose statement is it?</legend><div class="seg">' + segBtn('impwho', 'a', H === 'a', poss(nm('a')), 'a') + segBtn('impwho', 'b', H === 'b', poss(nm('b')), 'b') + '</div></fieldset>') +
+        '<p class="muted" style="margin-bottom:14px">Export a CSV from ' + esc(from) + ', then choose the file here. Anything you\'ve already brought in is skipped, so overlapping dates are fine.</p>' +
         '<label class="btn btn-primary btn-block file-btn">' + (S.importing ? 'Bringing them in' : 'Choose CSV file') +
-        '<input type="file" accept=".csv,text/csv,text/plain,application/vnd.ms-excel" data-change="importfile" aria-label="Choose a CSV file from Westpac"' + (S.importing ? ' disabled' : '') + '></label>' +
-        '<details><summary>How to export from Westpac</summary><ol>' +
+        '<input type="file" accept=".csv,text/csv,text/plain,application/vnd.ms-excel" data-change="importfile" aria-label="Choose a CSV file from ' + esc(from) + '"' + (S.importing ? ' disabled' : '') + '></label>' +
+        (westpac ? '<details><summary>How to export from Westpac</summary><ol>' +
         '<li>Sign in to Westpac Online Banking in a web browser. The app may not offer exports.</li>' +
         '<li>Go to Overview, then Exports and reports.</li>' +
         '<li>Choose Export CSV, pick the ' + esc(cardLabel()) + ' account and the dates.</li>' +
-        '<li>Save the file, then choose it here. On a phone it will be in Files or Downloads.</li></ol></details></section>';
+        '<li>Save the file, then choose it here. On a phone it will be in Files or Downloads.</li></ol></details>'
+          : '<details><summary>How to get a CSV</summary><ol><li>Sign in to your bank\'s online banking in a web browser. Banking apps often don\'t offer exports.</li>' +
+            '<li>Open the card account and look for Export, Download or Statements.</li><li>Pick CSV and the dates, then choose the file here.</li></ol>' +
+            '<p class="hint">The file needs a date, a description and an amount for each spend, which most banks\' CSV files have.</p></details>') + '</section>';
     }
     if (!S.readOnly && pilot('splitwise')) {
       out += stagedCard() || swHistoryCard() || ('<section class="card"><h2 style="font-size:19px;margin-bottom:6px">Moving from Splitwise?</h2>' +
@@ -3483,9 +3527,9 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       }
       const res = L.rowsToSpends(rows);
       if (res.error) { S.importing = false; S.importResult = { error: res.error }; render(); return; }
-      const C = cfg(), H = holder(), ids = L.importIds(res.spends);
+      const C = cfg(), H = hasCard() ? holder() : impWho(), ids = L.importIds(res.spends);
       const rules = S.rules || {}, rmap = rules.map || {}, rcats = rules.cats || {};
-      const pool = matchPool();
+      const pool = matchPool(H);
       const byYm = {};
       let added = 0, auto = 0, dup = 0, dupes = 0, early = 0, from = null, to = null;
       const cut = C.cardFrom;
@@ -3500,7 +3544,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
         if (twin) { status = 'dupe'; dupOf = twin.ref; dupes++; }
         else if (status !== 'check') auto++;
         const cat = C.remember && rcats[key] && C.categories.indexOf(rcats[key]) >= 0 ? rcats[key] : L.guessCategory(sp.desc, C.categories);
-        const e = makeEntry({ id, kind: 'expense', source: 'import', status, date: sp.date, title: L.cleanTitle(sp.desc), raw: sp.desc, key, amount: sp.amount, payer: H, onCard: true, splitA: C.splitA, category: cat, dupOf });
+        const e = makeEntry({ id, kind: 'expense', source: 'import', status, date: sp.date, title: L.cleanTitle(sp.desc), raw: sp.desc, key, amount: sp.amount, payer: H, onCard: hasCard(), splitA: C.splitA, category: cat, dupOf });
         const ym = sp.date.slice(0, 7);
         (byYm[ym] = byYm[ym] || {})[id] = e;
         added++;
@@ -3518,19 +3562,19 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     });
   }
   /* Hand-added spends paid on the card, so an import of the same spend isn't counted twice. */
-  function matchPool() {
-    const H = holder(), used = {}, pool = [];
+  function matchPool(who) {
+    const H = who || holder(), mine = (e) => e.onCard || (!hasCard() && payerOf(e) === H), used = {}, pool = [];
     S.entries.forEach((e) => { if (e.source === 'import' && e.dupOf) used[e.dupOf] = true; });
     S.entries.forEach((e) => {
       if (e.kind !== 'expense' || e.source === 'import' || e.status !== 'shared') return;
       const g = giftOk(e.gift);
       if (g) {
         /* The card part matches its own line. The gift card was most likely bought on the card too, some days before. */
-        if (e.onCard && g.bill > g.face) pool.push({ ref: e.id + ':0', amount: g.bill - g.face, date: e.date });
+        if (mine(e) && g.bill > g.face) pool.push({ ref: e.id + ':0', amount: g.bill - g.face, date: e.date });
         pool.push({ ref: e.id + ':g', amount: g.face - g.saved, date: e.date, gift: true });
       } else if (e.parts && e.parts.length) {
         e.parts.forEach((p, i) => { if (p.payer === H) pool.push({ ref: e.id + ':' + i, amount: p.amount, date: e.date }); });
-      } else if (e.onCard) {
+      } else if (mine(e)) {
         const amts = e.items && e.items.length > 1 ? e.items : [e.amount];
         amts.forEach((a, i) => pool.push({ ref: e.id + ':' + i, amount: a, date: e.date }));
       }
@@ -3890,6 +3934,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     return '<section class="card"><div class="card-head"><h2>Rent</h2><span class="amt">' + L.fmt(sumAmt(rentIn)) + '</span></div><p class="muted">' + esc(nm(rf)) + ' to ' + esc(nm(other(rf))) + '. It\'s in the balance on Home, not in shared spend.</p></section>';
   }
   function pointsCard(list) {
+    if (!hasCard()) return '';
     const C = cfg(), H = holder(), cardList = list.filter((e) => e.onCard), onCard = sumAmt(cardList), est = L.estimatePoints(cardList, C.card);
     let out = '<section class="card"><div class="card-head"><h2>' + esc(programLabel()) + ' points</h2></div>';
     if (C.card.pointsBal != null && C.card.pointsAsOf) {
@@ -3908,7 +3953,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       out += '<div class="stat"><span class="muted" style="font-weight:700">' + L.fmt(onCard) + ' on ' + esc(poss(nm(H))) + ' card</span><span class="big">' + est.velocity.toLocaleString('en-AU') + '</span></div>' +
         (C.card.earns === 'altitude' ? '<p class="hint">From ' + est.points.toLocaleString('en-AU') + ' Altitude Points, at ' + est.ratio + ' to 1 Velocity Point.</p>' : '') +
         (kinds.length ? '<p class="hint">' + esc(listNames(kinds)) + '.</p>' : '') +
-        '<p class="hint">An estimate from Westpac\'s published rates. Only spends marked as on the card count, so Splitwise history isn\'t included.</p>';
+        '<p class="hint">' + (L.CARD_PRESETS[C.card.earns] ? 'An estimate from Westpac\'s published rates.' : 'An estimate at ' + C.card.rate + ' points per $1.') + ' Only spends marked as on the card count, so Splitwise history isn\'t included.</p>';
     } else {
       out += '<p class="muted" style="margin-bottom:8px">' + L.fmt(onCard) + ' of shared spend went on ' + esc(poss(nm(H))) + ' ' + esc(cardLabel()) + '.</p>' +
         '<button class="link" data-act="go" data-arg="custom">Pick how the card earns points</button>';
@@ -5455,7 +5500,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     let out = '<header class="top"><div><p class="eyebrow">Our household</p><h1 class="title">Settings</h1></div></header>';
     const waiting = pendingAll().length;
     out += '<button class="card row-card' + (waiting ? ' attn' : '') + '" data-act="go" data-arg="upload"><span class="row-lead">' + (waiting ? '<span class="count">' + waiting + '<span class="sr"> to check</span></span>' : '') +
-      '<span><span class="row-t">Upload</span><span class="k">' + esc(poss(nm(holder()))) + ' Westpac statement' + (pilot('splitwise') ? ' and Splitwise files' : '') + '</span></span></span>' + icon('arrow') + '</button>';
+      '<span><span class="row-t">Upload</span><span class="k">' + (hasCard() ? esc(poss(nm(holder()))) + ' ' + esc(cardBank() || 'card') + ' statement' : 'Card statements') + (pilot('splitwise') ? ' and Splitwise files' : '') + '</span></span></span>' + icon('arrow') + '</button>';
     out += '<button class="card row-card" data-act="go" data-arg="profile"><span class="row-lead"><span class="duo" aria-hidden="true">' + av('a') + av('b') + '</span><span><span class="row-t">Profiles</span><span class="k">Photos, names and colours</span></span></span>' + icon('arrow') + '</button>';
     out += '<button class="card row-card" data-act="go" data-arg="custom"><span><span class="row-t">Customise</span><span class="k">' + (pilot('insights') ? 'Look, budget, rent, card and categories' : 'Look, rent, card and categories') + '</span></span>' + icon('arrow') + '</button>';
     if (isEditor() && RELEASES.length) {
@@ -5465,8 +5510,13 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     }
     if (inHouse()) out += partnerCard();
     if (fb) out += pushCard();
+    if (inHouse()) out += '<button class="card row-card" data-act="go" data-arg="feedback"><span><span class="row-t">Send feedback</span><span class="k">An idea, a bug, or something you\'d change</span></span>' + icon('arrow') + '</button>';
     out += '<button class="card row-card" data-act="gohelp"><span><span class="row-t">How to use Two of Us</span><span class="k">A quick guide to each part, and how your data is kept</span></span>' + icon('arrow') + '</button>';
-    if (S.isAdmin) out += '<button class="card row-card" data-act="go" data-arg="admin"><span><span class="row-t">Households</span><span class="k">Just for you: everyone using Two of Us, and their pilot features</span></span>' + icon('arrow') + '</button>';
+    if (S.isAdmin) {
+      const nNew = (S.fbNotes || []).filter((x) => !x.read).length;
+      out += '<button class="card row-card' + (nNew ? ' attn' : '') + '" data-act="go" data-arg="admin"><span class="row-lead">' + (nNew ? '<span class="count">' + nNew + '<span class="sr"> new notes</span></span>' : '') +
+        '<span><span class="row-t">Households</span><span class="k">Just for you: everyone using Two of Us, their feedback and pilot features</span></span></span>' + icon('arrow') + '</button>';
+    }
     if (fb) {
       out += '<section class="card"><div class="card-head"><h2>Account</h2></div><p class="muted">Signed in as <strong>' + esc((S.authUser && S.authUser.email) || '') + '</strong></p>' +
         '<button class="btn btn-secondary btn-block" style="margin-top:12px" data-act="auout">Sign out</button></section>';
@@ -5564,7 +5614,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       ['tag', 'Deals', 'What\'s on special at Coles, Woolies, Harris Farm, Umall, Liquorland and Meat Emporium, plus gift card deals. Tap + on one to put it on your weekend list.'],
       ['cal', 'Calendar and sale days', 'Each day\'s spends, and the sale days you\'re keen on.'],
       ['bell', 'Pop-ups', 'Put the app on your Home Screen, then turn on pop-ups in Settings. Each of you turns them on for your own phone, so you hear when ' + them + ' adds a spend.'],
-      ['star', 'Make it yours', 'Profiles has your photos, names and colours. Customise has the look, rent, card and categories.']
+      ['star', 'Make it yours', 'Profiles has your photos, names and colours. Customise has the look, rent, card and categories.'],
+      ['pencil', 'Tell us what you think', 'Settings has Send feedback. It goes to the person who runs Two of Us.']
     ];
     if (pilot('insights')) items.splice(5, 0, ['chart', 'Insights and budgets', 'Set a monthly budget in Customise. Insights then shows how each month is tracking and where the money goes.']);
     const off = Object.keys(PILOTS).filter((k) => !pilot(k));
@@ -5574,6 +5625,48 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     if (off.length) out += '<section class="card"><div class="card-head"><h2>Pilot features</h2></div><p class="muted">A few features are being tried with some households first: ' + esc(listNames(off.map((k) => PILOTS[k]).map((x, i) => (i ? x.charAt(0).toLowerCase() + x.slice(1) : x)))) + '. They\'ll appear once they\'re switched on for you.</p></section>';
     if (inHouse()) out += '<section class="card" id="privacy"><div class="card-head"><h2>Your data</h2></div><p class="muted">' + esc(PRIVACY) + '</p></section>';
     return out;
+  }
+  /* Feedback: a note from either of you, saved where only the person who runs Two of Us can read it, with your
+     household's name so they know who it's from. */
+  function viewFeedback() {
+    const F = S.fb || (S.fb = { text: '', busy: false, error: null });
+    return '<header class="top"><div><button class="back-link" data-act="go" data-arg="settings">' + icon('left') + 'Settings</button><p class="eyebrow">Tell us</p><h1 class="title">Send feedback</h1></div></header>' +
+      '<section class="card"><label class="field"><span>What\'s on your mind?</span><textarea class="input wl-text" id="fbText" rows="6" maxlength="1000" placeholder="An idea, something that didn\'t work, or something you\'d change" data-bind="fb.text">' + esc(F.text) + '</textarea></label>' +
+      '<p class="hint" style="margin:-6px 0 14px">It goes to the person who runs Two of Us, with your household\'s name and your email, so they can get back to you.</p>' +
+      (F.error ? '<p class="err-text" role="alert">' + esc(F.error) + '</p>' : '') +
+      '<button class="btn btn-primary btn-block" id="fbSend" data-act="fbsend"' + (F.busy ? ' disabled' : '') + '>' + (F.busy ? 'Sending' : 'Send') + '</button></section>';
+  }
+  function sendFeedback() {
+    const F = S.fb;
+    if (!F || F.busy || !inHouse()) return;
+    const text = String(F.text || '').trim().slice(0, 1000);
+    if (!text) { F.error = 'Write a few words first.'; render(); return; }
+    F.busy = true; F.error = null; render();
+    S.db.doc('/feedback/' + newCode(16)).set({ hid: S.hid, by: S.myId, label: houseLabel(), email: myEmail(), text, at: Date.now() }).then(() => {
+      S.fb = null; go('settings'); toast('Thanks! Your note is on its way.');
+    }, () => { F.busy = false; F.error = 'That didn\'t send. Check you\'re online and try again.'; render(); });
+  }
+  function loadNotes() {
+    if (!S.isAdmin || !S.root) return Promise.resolve();
+    return S.root.collection('/feedback').get().then((q) => {
+      S.fbNotes = q.docs.filter((d) => d.exists).map((d) => Object.assign({ id: d.id }, d.data())).sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+      safeRender();
+    }, noop);
+  }
+  function notesHtml() {
+    const N = S.fbNotes || [];
+    if (!N.length) return '<section class="card"><div class="card-head"><h2>Feedback</h2></div><p class="muted">No notes yet. Couples send them from Settings.</p></section>';
+    const nNew = N.filter((x) => !x.read).length;
+    return '<section class="card" id="fbNotes"><div class="card-head"><h2>Feedback</h2>' + (nNew ? '<span class="k">' + nNew + ' new</span>' : '') + '</div>' +
+      '<ul class="fb-list">' + N.slice(0, 30).map((x) => '<li class="' + (x.read ? '' : 'new') + '"><p class="k">' + esc(String(x.label || 'A household')) + ' · ' + esc(L.fmtDay(isoOf(x.at))) +
+        (x.email ? ' · ' + esc(String(x.email)) : '') + '</p><p class="fb-text">' + esc(String(x.text || '')) + '</p></li>').join('') + '</ul>' +
+      (nNew ? '<button class="btn btn-secondary btn-block" data-act="fbread">Mark all as read</button>' : '') + '</section>';
+  }
+  function markNotesRead() {
+    const N = (S.fbNotes || []).filter((x) => !x.read);
+    N.forEach((x) => { x.read = true; });
+    render();
+    Promise.all(N.map((x) => S.root.doc('/feedback/' + x.id).update({ read: true }))).catch(() => toast('Not all of them were marked. Check you\'re online.'));
   }
   function adminLoad() {
     const A = S.admin = S.admin || {};
@@ -5585,13 +5678,14 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   }
   function viewAdmin() {
     const A = S.admin || {};
-    if (!A.list && !A.busy && !A.error) setTimeout(adminLoad, 0);
+    if (!A.list && !A.busy && !A.error) { setTimeout(adminLoad, 0); loadNotes(); }
     let out = '<header class="top"><div><button class="back-link" data-act="go" data-arg="settings">' + icon('left') + 'Settings</button><p class="eyebrow">Just for you</p><h1 class="title">Households</h1></div></header>';
     if (A.error) out += '<p class="err-text" role="alert">' + esc(A.error) + '</p>';
     if (!A.list) return out + '<p class="hint" role="status">Loading the list…</p>';
     const wk = L.addDays(today(), -6), used = A.list.filter((h) => typeof h.active === 'string' && h.active >= wk).length;
     out += '<section class="card"><p id="admCount"><strong>' + A.list.length + '</strong> ' + (A.list.length === 1 ? 'household' : 'households') + ' · <strong>' + used + '</strong> used this week</p>' +
       '<button class="link sm" data-act="adminload"' + (A.busy ? ' disabled' : '') + '>Refresh</button></section>';
+    out += notesHtml();
     out += '<section class="card"><div class="card-head"><h2>Locks</h2></div><p class="muted" style="margin-bottom:12px">Checks that a login can\'t open another household\'s spends. It tries with yours, which can see this list but nothing inside the others.</p>' +
       '<button class="btn btn-secondary btn-block" data-act="lockcheck">Check the locks</button>' +
       (A.lock ? '<p class="' + (A.lock.ok ? 'push-on' : 'err-text') + '" role="status" id="lockResult" data-ok="' + (A.lock.ok ? 1 : 0) + '">' + (A.lock.ok ? icon('check') : '') + esc(A.lock.text) + '</p>' : '') + '</section>';
@@ -5658,8 +5752,9 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       categories: C.categories.slice(), newCat: '',
       goal: { name: C.goal.name, target: C.goal.target ? centsToStr(C.goal.target) : '', saved: C.goal.saved ? centsToStr(C.goal.saved) : '' },
       card: {
-        name: C.card.name, holder: C.card.holder, earns: C.card.earns,
-        rates: C.card.earns ? strRates(C.card.rates && C.card.rates.intl != null ? C.card.rates : L.CARD_PRESETS[C.card.earns].rates) : { intl: '', everyday: '', other: '', after: '' },
+        name: C.card.name, holder: C.card.none ? 'none' : C.card.holder, earns: C.card.earns, bank: C.card.bank,
+        program: C.card.earns === 'other' ? C.card.program : '', rate: C.card.earns === 'other' && C.card.rate ? String(C.card.rate) : '',
+        rates: L.CARD_PRESETS[C.card.earns] ? strRates(C.card.rates && C.card.rates.intl != null ? C.card.rates : L.CARD_PRESETS[C.card.earns].rates) : { intl: '', everyday: '', other: '', after: '' },
         ratio: String(C.card.ratio || 3),
         pointsBal: C.card.pointsBal != null ? C.card.pointsBal.toLocaleString('en-AU') : '', pointsAsOf: C.card.pointsAsOf || ''
       },
@@ -5685,8 +5780,11 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     const budget = money(D.budget, 'The budget'); if (budget.err) return { error: budget.err };
     const target = money(D.goal.target, 'The goal'); if (target.err) return { error: target.err };
     const saved = money(D.goal.saved, 'Saved so far'); if (saved.err) return { error: saved.err };
-    let rates = null, ratio = 1;
-    if (D.card.earns) {
+    let rates = null, ratio = 1, rate = null;
+    const noCard = D.card.holder === 'none', pre = !noCard && D.card.bank === 'Westpac' && L.CARD_PRESETS[D.card.earns] ? D.card.earns : null;
+    const otherPts = !noCard && D.card.bank !== 'Westpac' && D.card.earns === 'other';
+    if (otherPts && String(D.card.rate || '').trim()) { rate = parseFloat(D.card.rate); if (!(rate > 0 && rate <= 20)) return { error: 'Points per $1 needs to be a number, like 1.' }; }
+    if (pre) {
       rates = {};
       for (const k of ['intl', 'everyday', 'other', 'after']) {
         const v = parseFloat(D.card.rates[k]);
@@ -5711,7 +5809,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
         budget: budget.v, resetDay: L.clamp(parseInt(D.resetDay, 10) || 1, 1, 28), splitA: L.clamp(D.splitA, 0, 100),
         categories: D.categories.slice(0, 30),
         goal: { name: String(D.goal.name || '').trim().slice(0, 40), target: target.v, saved: saved.v || 0 },
-        card: { name: String(D.card.name || '').trim().slice(0, 40), holder: D.card.holder === 'a' ? 'a' : 'b', program: D.card.earns ? L.CARD_PRESETS[D.card.earns].program : cfg().card.program, earns: D.card.earns || null, rates, ratio, rate: null, pointsBal, pointsAsOf },
+        card: { name: noCard ? '' : String(D.card.name || '').trim().slice(0, 40), holder: noCard ? cfg().card.holder : D.card.holder === 'a' ? 'a' : 'b', none: noCard, bank: noCard ? '' : BANKS.indexOf(D.card.bank) >= 0 ? D.card.bank : '',
+          program: pre ? L.CARD_PRESETS[pre].program : otherPts ? String(D.card.program || '').trim().slice(0, 40) : '', earns: pre || (otherPts ? 'other' : null), rates, ratio, rate, pointsBal: noCard ? null : pointsBal, pointsAsOf: noCard ? '' : pointsAsOf },
         home: { week: !!D.home.week, goal: !!D.home.goal, spot: !!D.home.spot, recap: !!D.home.recap, soon: !!D.home.soon, fact: !!D.home.fact, sale: !!D.home.sale, deals: !!D.home.deals },
         spot: { type: D.spot.type, text: String(D.spot.text || '').trim().slice(0, 60), date: spotDate },
         budgetSkip: D.budgetSkip.filter((c) => typeof c === 'string').slice(0, 30),
@@ -5765,20 +5864,20 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       '<label class="field"><span>What are you saving for?</span><input class="input" id="dgname" maxlength="40" placeholder="A trip, a couch, a rainy day" data-bind="draft.goal.name" data-change="dirty" value="' + esc(D.goal.name) + '"' + ro + '></label>' +
       '<div class="row2"><label class="field"><span>Target</span><div class="money"><input class="input" id="dgtarget" inputmode="decimal" placeholder="0" data-bind="draft.goal.target" data-change="dirty" value="' + esc(D.goal.target) + '"' + ro + '></div></label>' +
       '<label class="field"><span>Saved so far</span><div class="money"><input class="input" id="dgsaved" inputmode="decimal" placeholder="0" data-bind="draft.goal.saved" data-change="dirty" value="' + esc(D.goal.saved) + '"' + ro + '></div></label></div></section>';
+    const dNone = D.card.holder === 'none', dPre = !dNone && D.card.bank === 'Westpac' && L.CARD_PRESETS[D.card.earns];
     out += '<section class="card"><div class="card-head"><h2>Card and points</h2></div>' +
-      '<label class="field"><span>Card name</span><input class="input" id="dcname" maxlength="40" data-bind="draft.card.name" data-change="dirty" value="' + esc(D.card.name) + '"' + ro + '></label>' +
-      '<fieldset><legend>Whose card is it?</legend><div class="seg">' + segBtn('cholder', 'a', D.card.holder === 'a', poss(nm('a')), 'a') + segBtn('cholder', 'b', D.card.holder === 'b', poss(nm('b')), 'b') + '</div></fieldset>' +
-      '<fieldset style="margin-bottom:12px"><legend>Which points does it earn?</legend>' + earnsSeg('cearns', D.card.earns) + '</fieldset>' +
-      (D.card.earns
+      cardFields('c', { holder: D.card.holder, bank: D.card.bank, earns: D.card.earns, program: D.card.program, rate: D.card.rate, bind: 'draft.card' }) +
+      (dNone ? '' : '<label class="field"><span>Card name (optional)</span><input class="input" id="dcname" maxlength="40" data-bind="draft.card.name" data-change="dirty" value="' + esc(D.card.name) + '"' + ro + '></label>') +
+      (dPre
         ? '<div class="rate-grid">' + [['intl', 'Overseas'], ['everyday', 'Supermarkets, petrol, utilities'], ['other', 'Everything else'], ['after', 'After $10,000']].map((f) =>
             '<label class="field"><span>' + f[1] + '</span><input class="input" id="dr' + f[0] + '" inputmode="decimal" data-bind="draft.card.rates.' + f[0] + '" data-change="dirty" value="' + esc(D.card.rates[f[0]]) + '"' + ro + '></label>').join('') +
           (D.card.earns === 'altitude' ? '<label class="field"><span>Altitude per Velocity Point</span><input class="input" id="drratio" inputmode="decimal" data-bind="draft.card.ratio" data-change="dirty" value="' + esc(D.card.ratio) + '"' + ro + '></label>' : '') + '</div>' +
           '<p class="hint" style="margin:-6px 0 16px">' + L.CARD_PRESETS[D.card.earns].unit + ' per $1, filled in with Westpac\'s published rates. ' + (S.readOnly ? '' : '<button class="link sm" data-act="cpreset">Use Westpac\'s rates</button>') + '</p>'
-        : '<p class="hint" style="margin:-4px 0 16px">' + EARNS_HINT + ' Pick one to see a points estimate.</p>') +
-      '<div class="row2"><label class="field"><span>Points balance</span><input class="input" id="dpbal" inputmode="numeric" placeholder="e.g. 50,000" data-bind="draft.card.pointsBal" data-change="dirty" value="' + esc(D.card.pointsBal) + '"' + ro + '></label>' +
+        : !dNone && D.card.bank === 'Westpac' ? '<p class="hint" style="margin:-4px 0 16px">' + EARNS_HINT + ' Pick one to see a points estimate.</p>' : '') +
+      (dNone ? '' : '<div class="row2"><label class="field"><span>Points balance</span><input class="input" id="dpbal" inputmode="numeric" placeholder="e.g. 50,000" data-bind="draft.card.pointsBal" data-change="dirty" value="' + esc(D.card.pointsBal) + '"' + ro + '></label>' +
       '<label class="field"><span>As of</span><input class="input" id="dpasof" type="date" data-bind="draft.card.pointsAsOf" data-change="dirty" value="' + esc(D.card.pointsAsOf) + '"' + ro + '></label></div>' +
-      '<p class="hint" style="margin:-6px 0 16px">From a statement or the bank app. Insights adds an estimate for card spends after that date.</p>' +
-      '<label class="field" style="margin:0"><span>Bring in card spends from</span><input class="input" id="dcfrom" type="date" data-bind="draft.cardFrom" data-change="dirty" value="' + esc(D.cardFrom) + '"' + ro + '><p class="hint">Westpac imports leave out card spends before this date. Leave it empty to bring in everything.</p></label></section>';
+      '<p class="hint" style="margin:-6px 0 16px">From a statement or the bank app. Insights adds an estimate for card spends after that date.</p>') +
+      '<label class="field" style="margin:0"><span>Bring in card spends from</span><input class="input" id="dcfrom" type="date" data-bind="draft.cardFrom" data-change="dirty" value="' + esc(D.cardFrom) + '"' + ro + '><p class="hint">Statement imports leave out card spends before this date. Leave it empty to bring in everything.</p></label></section>';
     out += '<section class="card"><div class="card-head"><h2>Home screen</h2></div>' + sw('week', 'Last 7 days') + sw('goal', 'Our goal') + sw('spot', 'Your spot') + sw('fact', 'Fun fact') + sw('soon', 'Coming up') + sw('sale', 'Next sale day') + sw('deals', 'Specials on our watch list') + sw('recap', 'Insights link') + '</section>';
     out += '<section class="card"><div class="card-head"><h2>Your spot</h2></div><p class="muted" style="margin-bottom:12px">A space on Home for whatever you like: a note to each other or a countdown.</p>' +
       '<fieldset><legend class="sr">Type</legend><div class="seg">' + segBtn('cspot', 'note', D.spot.type === 'note', 'Note') + segBtn('cspot', 'countdown', D.spot.type === 'countdown', 'Countdown') + '</div></fieldset>' +
@@ -5806,7 +5905,10 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     return {
       step: 1, names: PRESET && PRESET.names ? clone(PRESET.names) : { a: '', b: '' }, colours: { a: 'cobalt', b: 'coral' }, me: null, scheme: SCHEMES[lsGet('hh.scheme')] ? lsGet('hh.scheme') : 'warm',
       budget: '', resetDay: '1', splitA: 50, categories: [], newCat: '',
-      goalName: '', goalTarget: '', cardName: PRESET && PRESET.card ? PRESET.card.name : '', holder: PRESET && PRESET.card ? PRESET.card.holder : 'b',
+      goalName: '', goalTarget: '', cardName: PRESET && PRESET.card ? PRESET.card.name : '',
+      /* A new couple starts with no shared card; the original setup kept its card question as it was. */
+      holder: PRESET && PRESET.card ? PRESET.card.holder : S.hid && !(S.house && S.house.legacy) ? 'none' : 'b',
+      bank: PRESET && PRESET.card ? 'Westpac' : S.hid && !(S.house && S.house.legacy) ? '' : 'Westpac', program: '', rate: '',
       earns: PRESET && PRESET.card ? PRESET.card.earns : null, rentOn: !!(PRESET && PRESET.rent), error: null
     };
   }
@@ -5843,10 +5945,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
         '<div class="add-row" style="grid-template-columns:1fr auto"><label><span class="sr">Your own category</span><input class="input" id="snewcat" maxlength="24" placeholder="Add your own" data-bind="setup.newCat" data-enter="saddcat" value="' + esc(U.newCat) + '"></label><button class="btn btn-secondary" data-act="saddcat">Add</button></div></fieldset>' +
         '<fieldset><legend>A shared goal (optional)</legend><div class="row2"><label><span class="sr">Goal name</span><input class="input" id="sgname" maxlength="40" placeholder="What for?" data-bind="setup.goalName" value="' + esc(U.goalName) + '"></label>' +
         '<label><span class="sr">Goal target</span><div class="money"><input class="input" id="sgtarget" inputmode="decimal" placeholder="Target" data-bind="setup.goalTarget" value="' + esc(U.goalTarget) + '"></div></label></div></fieldset>' +
-        '<fieldset><legend>Our shared card</legend><p class="muted" style="margin:-2px 0 10px">' + esc(poss(U.holder === 'a' ? nA : nB)) + ' ' + esc(U.cardName || 'card') + (U.earns ? ' · earns ' + esc(L.CARD_PRESETS[U.earns].unit) : '') + '</p>' +
-        '<div class="seg" style="margin-bottom:12px">' + ['a', 'b'].map((p) => '<button type="button" data-act="sholder" data-arg="' + p + '" aria-pressed="' + (U.holder === p) + '">' + esc(poss(p === 'a' ? nA : nB)) + ' card</button>').join('') + '</div>' +
-        '<p class="lbl" style="margin-top:4px">Which points does it earn?</p>' + earnsSeg('searns', U.earns) +
-        '<p class="hint" style="margin-bottom:18px">' + (U.earns ? esc(ratesLine(U.earns)) + ' Westpac\'s published rates.' : esc(EARNS_HINT)) + '</p></fieldset>' +
+        cardFields('s', { holder: U.holder, bank: U.bank, earns: U.earns, program: U.program, rate: U.rate, bind: 'setup', nA, nB, name: U.cardName || '' }) +
+        (U.holder !== 'none' && U.bank === 'Westpac' ? '<p class="hint" style="margin-bottom:18px">' + (U.earns ? esc(ratesLine(U.earns)) + ' Westpac\'s published rates.' : esc(EARNS_HINT)) + '</p>' : '') +
         err + '<div class="setup-actions"><button class="btn btn-secondary" data-act="sback">Back</button><button class="btn btn-primary" data-act="sfinish">Start using it</button></div>';
     }
     return '<div class="setup">' + steps + body + '</div>';
@@ -5888,8 +5988,12 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     s.splitA = U.splitA;
     s.categories = U.categories.slice();
     s.goal = { name: U.goalName.trim().slice(0, 40), target, saved: 0 };
-    const pr = L.CARD_PRESETS[U.earns];
-    s.card = { name: U.cardName.trim(), holder: U.holder, program: pr ? pr.program : '', earns: pr ? U.earns : null, rates: pr ? Object.assign({}, pr.rates) : null, ratio: pr ? pr.ratio : 1, rate: null };
+    const pr = U.holder !== 'none' && U.bank === 'Westpac' ? L.CARD_PRESETS[U.earns] : null, other = U.holder !== 'none' && U.bank !== 'Westpac' && U.earns === 'other';
+    const rate = other && String(U.rate).trim() ? parseFloat(U.rate) : null;
+    if (other && rate != null && !(rate > 0 && rate <= 20)) { U.error = 'Points per $1 needs to be a number, like 1.'; render(); return; }
+    s.card = U.holder === 'none' ? { name: '', holder: 'b', none: true, bank: '', program: '', earns: null, rates: null, ratio: 1, rate: null }
+      : { name: U.cardName.trim(), holder: U.holder === 'a' ? 'a' : 'b', bank: BANKS.indexOf(U.bank) >= 0 ? U.bank : '', program: pr ? pr.program : other ? String(U.program || '').trim().slice(0, 40) : '',
+        earns: pr ? U.earns : other ? 'other' : null, rates: pr ? Object.assign({}, pr.rates) : null, ratio: pr ? pr.ratio : 1, rate };
     s.rent.on = !!U.rentOn;
     if (U.me === 'a' || U.me === 'b') { s.editor = U.me; if (RELEASES.length) s.news[U.me] = RELEASES[0].id; }
     if (S.myId) s.members[U.me] = S.myId;
@@ -6235,7 +6339,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     closeadd: () => { const back = (S.add && S.add.from) || 'home'; S.add = null; S.view = back; render(); window.scrollTo(0, 0); },
     key: (k) => pressKey(k),
     addcat: (c) => { S.add.category = S.add.category === c ? null : c; render(); },
-    addpayer: (p) => { S.add.payer = p; S.add.onCard = p === holder(); render(); },
+    addpayer: (p) => { S.add.payer = p; S.add.onCard = hasCard() && p === holder(); render(); },
+    impwho: (p) => { if (p === 'a' || p === 'b') { S.impWho = p; render(); } },
     addpay: (m) => { if (['card', 'gift', 'both'].indexOf(m) >= 0) { S.add.pay = m; render(); } },
     addsplit: (m) => { S.add.splitMode = m; render(); },
     addstep: (d) => { S.add.splitA = L.clamp(S.add.splitA + Number(d), 0, 100); render(); },
@@ -6317,7 +6422,9 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     a2hs: () => openDialog({ type: 'a2hs' }),
     gohelp: () => go('help'),
     guideoff: () => { lsSet('hh.guide', 'off'); render(); toast('Hidden. The guide is still in Settings, under How to use Two of Us.'); },
-    adminload: () => adminLoad(),
+    adminload: () => { adminLoad(); loadNotes(); },
+    fbsend: () => sendFeedback(),
+    fbread: () => markNotesRead(),
     adminpilot: (arg) => adminPilot(arg),
     lockcheck: () => lockCheck(),
     hhdelete: () => openDialog({ type: 'hhdelete' }),
@@ -6337,8 +6444,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     cholder: (p) => { S.draft.card.holder = p; S.draftSaved = false; render(); },
     cearns: (v) => {
       const c = S.draft.card;
-      c.earns = c.earns === v ? null : v;
-      if (c.earns) { const pr = L.CARD_PRESETS[c.earns]; c.rates = strRates(pr.rates); c.ratio = String(pr.ratio); }
+      c.earns = v === 'none' ? null : v === 'other' ? 'other' : c.earns === v ? null : v;
+      if (L.CARD_PRESETS[c.earns]) { const pr = L.CARD_PRESETS[c.earns]; c.rates = strRates(pr.rates); c.ratio = String(pr.ratio); }
       S.draftSaved = false; render();
     },
     cpreset: () => { const c = S.draft.card, pr = L.CARD_PRESETS[c.earns]; if (pr) { c.rates = strRates(pr.rates); c.ratio = String(pr.ratio); S.draftSaved = false; render(); } },
@@ -6569,7 +6676,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     scat: (c) => { const U = S.setup, i = U.categories.indexOf(c); if (i >= 0) U.categories.splice(i, 1); else U.categories.push(c); render(); },
     saddcat: () => { addCat(S.setup); render(); const el = document.getElementById('snewcat'); if (el) el.focus(); },
     sholder: (p) => { S.setup.holder = p; render(); },
-    searns: (v) => { S.setup.earns = S.setup.earns === v ? null : v; render(); },
+    searns: (v) => { S.setup.earns = v === 'none' ? null : v === 'other' ? 'other' : S.setup.earns === v ? null : v; render(); },
     snext: () => setupNext(),
     sback: () => { S.setup.step = Math.max(1, S.setup.step - 1); S.setup.error = null; render(); window.scrollTo(0, 0); },
     sfinish: () => setupFinish(),
@@ -6620,6 +6727,9 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     snapcount: () => { const d = S.dialog, b = document.getElementById('snapGo'); if (d && d.form && b) b.textContent = snapLabel(d.form.items.filter((x) => x.on).length); },
     remember: (el) => { upsert('hh/settings', { remember: !!el.checked }, defaults()); },
     dirty: () => { S.draftSaved = false; },
+    /* A different bank changes which points questions show. */
+    cbank: () => { const c = S.draft.card; if (c.bank !== 'Westpac' && L.CARD_PRESETS[c.earns]) c.earns = null; if (c.bank === 'Westpac' && c.earns === 'other') c.earns = null; S.draftSaved = false; render(); },
+    sbank: () => { const U = S.setup; if (U.bank !== 'Westpac' && L.CARD_PRESETS[U.earns]) U.earns = null; if (U.bank === 'Westpac' && U.earns === 'other') U.earns = null; render(); },
     swfiles: (el) => {
       const files = Array.from(el.files || []);
       el.value = '';
