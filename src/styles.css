@@ -649,6 +649,24 @@ a.sp-n, a.ozb-t { text-decoration: underline; text-decoration-color: var(--line)
 .tcn-none { margin: 10px 0; }
 .tcn-more { margin-top: 2px; }
 @media (prefers-reduced-motion: reduce) { .tcn-head .ic { transition: none; } }
+.tcn-open { margin-top: 4px; }
+.tcn-inputs { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 8px; }
+.tcn-inputs .field { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.tcn-paywith { margin: 12px 0 6px; }
+.tcn-for { margin: 14px 0 6px; }
+.tcn-calc { margin: 0 0 12px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.tcn-opt { padding: 12px 14px; border: 2px solid var(--line); border-radius: 16px; background: #fff; }
+.tcn-opt.best { border-color: var(--ink); background: var(--marigold-soft); }
+.tcn-opt-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tcn-opt-top .tag.hit { margin-top: 0; }
+.tcn-opt-n { font-size: 17px; font-weight: 800; }
+.tcn-opt > .k { margin: 2px 0 8px; font-size: 13px; }
+.tcn-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.tcn-nums div { min-width: 0; }
+.tcn-nums dt { font-size: 12px; font-weight: 700; color: var(--ink2); }
+.tcn-nums dd { margin: 2px 0 0; font-weight: 800; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tcn-nums dd span { display: block; font-size: 12px; font-weight: 700; color: var(--ink2); }
+
 .dlg-extra { margin: 12px 0 0; text-align: center; }
 @media (max-width: 360px) { .sale-row { grid-template-columns: 64px minmax(0, 1fr) auto; } .sale-row .soon-when { font-size: 13px; } .keen-btn { padding: 0 10px; } }
 

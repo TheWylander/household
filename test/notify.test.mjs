@@ -206,7 +206,7 @@ await t('a TCN gift card deal pops up once, when it starts, if it is worth havin
   p.subs.p1.welcomed = true;
   const got = plan({ push: p, deals: deals(), feed: f, now: FRI_EVENING }).out.filter((n) => /^tcn:/.test(n.key));
   assert.deepStrictEqual(got.map((n) => [n.key, n.to, n.title, n.body, n.url]), [['tcn:984101|2026-11-17', ['p1'], '🎁 TCN gift cards: 15% off at Coles',
-    'Good Food, Shop and Active, till Tue 17 Nov\nCovers Uber, Uber Eats, rebel and BCF', './#deals']], "one that's on now and 10% or more; next week's and a 5% one don't");
+    'Good Food, Shop and Active, till Tue 17 Nov\nCovers Uber, Uber Eats, rebel and BCF', './#tcn']], "one that's on now and 10% or more; next week's and a 5% one don't");
   p.sent['tcn:984101|2026-11-17'] = 1;
   assert.ok(!plan({ push: p, deals: deals(), feed: f, now: FRI_EVENING }).out.some((n) => /^tcn:/.test(n.key)), 'once only');
   const later = plan({ push: p, deals: deals(), feed: f, now: new Date('2026-11-17T20:37:00Z') }).out.filter((n) => /^tcn:/.test(n.key));

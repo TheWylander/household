@@ -234,7 +234,7 @@ export function plan({ push, deals, feed, now, mode = 'all' }) {
   const tcn = feed && feed.tcn && typeof feed.tcn === 'object' ? feed.tcn : {}, toTcn = subs.filter((x) => wants(x.who, 'specials')).map((x) => x.id);
   (Array.isArray(tcn.deals) ? tcn.deals : []).filter((d) => d && d.id && (d.off >= 10 || d.back >= 10) && (!d.from || d.from <= day) && (!d.to || d.to >= day))
     .map((d) => ({ d, key: 'tcn:' + d.id + (d.to ? '|' + d.to : '') })).filter((x) => !sent[x.key]).slice(0, 2)
-    .forEach((x) => { if (toTcn.length) out.push(Object.assign({ key: x.key, to: toTcn, url: './#deals', tag: 'tcn-' + x.d.id }, tcnPop(x.d, tcn.cards))); });
+    .forEach((x) => { if (toTcn.length) out.push(Object.assign({ key: x.key, to: toTcn, url: './#tcn', tag: 'tcn-' + x.d.id }, tcnPop(x.d, tcn.cards))); });
   return { day, hour, subs, out };
 }
 
