@@ -80,9 +80,9 @@
      decides when the other person gets it; edits live in hh/news. The other person sees the newest shown note once,
      or as a few things to try straight after the welcome. */
   const RELEASES = [
-    { id: '2026-11-23', date: '2026-11-23', title: 'Faces in focus, and JFC Online specials', items: [
+    { id: '2026-11-23', date: '2026-11-23', title: 'Faces in focus', items: [
       ['duo', 'Faces in focus.', 'Profile photos now centre on the face. A new photo is framed around the face as you add it, and photos already in the app zoom in on the face by themselves. The loading screen shows the close-up too.'],
-      ['tag', 'JFC Online in Deals.', "Deals now has specials from JFC Online, the Japanese grocer, checked every day. Tap one to open it on JFC's site."]
+      ['camera', 'Sharper photos.', 'New profile photos are kept a little bigger, so they stay sharp on the loading screen.']
     ] },
     { id: '2026-11-22b', date: '2026-11-22', title: 'Gift cards, and Two of Us for other couples', items: [
       ['star', 'Paid with a gift card.', 'Bought a gift card on special? When you add the spend, choose Paid with, then Gift card or Both. It saves what it really cost, and Home adds up what gift cards have saved.'],
@@ -4220,7 +4220,7 @@
       ['plus', 'Add a spend', 'Tap + to type one in or snap a receipt. Pick who paid and how it splits, and untick anything that\'s just yours.'],
       ['duo', 'Stay square', 'Home shows who owes who. When money moves between you, record it with Settle up.'],
       ['gear', 'Bring in a statement', 'Settings, then Upload, takes your card statement and lists the spends to check, so you only keep the shared ones.'],
-      ['tag', 'Deals', 'What\'s on special at Coles, Woolies, Harris Farm, Umall, Liquorland, Meat Emporium and JFC Online, plus gift card deals. Tap + on one to put it on your weekend list.'],
+      ['tag', 'Deals', 'What\'s on special at Coles, Woolies, Harris Farm, Umall, Liquorland and Meat Emporium, plus gift card deals. Tap + on one to put it on your weekend list.'],
       ['cal', 'Calendar and sale days', 'Each day\'s spends, and the sale days you\'re keen on.'],
       ['bell', 'Pop-ups', 'Put the app on your Home Screen, then turn on pop-ups in Settings. Each of you turns them on for your own phone, so you hear when ' + them + ' adds a spend.'],
       ['star', 'Make it yours', 'Profiles has your photos, names and colours. Customise has the look, rent, card and categories.'],
@@ -4644,7 +4644,7 @@
     return [
       ['camera', 'Add a spend', 'Tap + to capture a receipt, or type one in. Mark anything that\'s just yours.'],
       ['duo', 'Stay square', pilot('insights') ? 'Home shows where you two stand, what\'s left of the month\'s budget and what\'s coming up.' : 'Home shows where you two stand and what\'s coming up.'],
-      ['tag', 'Grab the specials', 'Deals has what\'s on special at Coles, Woolies, Harris Farm, Umall, Liquorland, Meat Emporium and JFC Online. Tap + to put one on our weekend list.'],
+      ['tag', 'Grab the specials', 'Deals has what\'s on special at Coles, Woolies, Harris Farm, Umall, Liquorland and Meat Emporium. Tap + to put one on our weekend list.'],
       ['cal', 'Every day, and sale days', 'The Calendar shows each day\'s spends, and the sale days we\'re keen on.'],
       ['bell', 'Pop-ups', 'Turn them on in Settings to hear when ' + from + ' adds a spend, and when something we buy is on special.']
     ];

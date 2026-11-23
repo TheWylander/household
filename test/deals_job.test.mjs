@@ -176,6 +176,20 @@ await t('a run with JFC Online: counted out of its products, kept for the week i
   const down = await build({ prev: run, now: new Date('2026-11-09T07:00:00Z'), fetchText: async () => ({ status: 0, text: '' }), wait: 0 });
   assert.deepStrictEqual([down.sources.jfc.stale, down.specials.filter((x) => x.src === 'jf').length], [true, 2], "kept while this week's list runs");
 });
+await t('JFC Online asking for a sign-in: left alone for a week, then asked once more', async () => {
+  const shut = await build({ prev: {}, now: NOW, fetchText: site({ [JF_ALL]: { status: 401, text: 'Unauthorized' } }).fetchText, wait: 0 });
+  assert.deepStrictEqual([shut.sources.jfc.ok, shut.sources.jfc.tried, shut.sources.jfc.at], [false, 401, NOW.toISOString()]);
+  const s2 = site({ [JF_ALL]: { status: 200, text: read('jf-products.json') } });
+  const days = await build({ prev: shut, now: new Date(NOW.getTime() + 6 * 864e5), fetchText: s2.fetchText, wait: 0 });
+  assert.ok(!s2.calls.includes(JF_ALL), 'not asked again within the week');
+  assert.deepStrictEqual([days.sources.jfc.ok, days.sources.jfc.tried, days.sources.jfc.at], [false, 401, NOW.toISOString()], 'the first refusal is kept');
+  const s3 = site({ [JF_ALL]: { status: 200, text: read('jf-products.json') } });
+  const week = await build({ prev: days, now: new Date(NOW.getTime() + 7 * 864e5 + 3600e3), fetchText: s3.fetchText, wait: 0 });
+  assert.ok(s3.calls.includes(JF_ALL), 'asked again a week on');
+  assert.deepStrictEqual([week.sources.jfc.ok, week.sources.jfc.n], [true, 2], 'and read once the shop opens up');
+  const old = await build({ prev: { sources: { jfc: { ok: false, tried: 401 } } }, now: NOW, fetchText: site().fetchText, wait: 0 });
+  assert.strictEqual(old.sources.jfc.tried, 404, 'a refusal from before the date was kept is asked again');
+});
 
 await t('the next run reuses the report and the Harris Farm list that worked', async () => {
   const s = site({ 'https://www.ozbargain.com.au/node/980001': { status: 403, text: 'blocked' } });
