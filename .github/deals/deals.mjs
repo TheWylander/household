@@ -500,7 +500,10 @@ export async function build({ prev, now = new Date(), fetchText, wait = 400, log
 
   /* JFC Online: the same as Meat Emporium. Its markdowns have no end day, so they run to the end of the specials week. */
   const pj = PS.jfc || {}, prevJf = (Array.isArray(P.specials) ? P.specials : []).filter((x) => x.src === 'jf');
-  const jfGot = await shopifyProducts(fetchText, JF + '/products.json?limit=250', wait);
+  /* A shop that asks for a sign-in (401) or turns the job away (403) is left alone for a week, as the job never signs
+     in. Then it asks once more, in case the shop has opened up. */
+  const shut = (pj.tried === 401 || pj.tried === 403) && pj.at && Date.parse(at) - Date.parse(pj.at) < 7 * 864e5;
+  const jfGot = shut ? { status: pj.tried, products: null } : await shopifyProducts(fetchText, JF + '/products.json?limit=250', wait);
   if (jfGot.products) {
     const list = jfItems(jfGot.products), wk = specialsWeek(today);
     out.sources.jfc = { ok: true, from: wk.from, to: wk.to, at, n: list.length, of: jfGot.products.length };
@@ -509,7 +512,12 @@ export async function build({ prev, now = new Date(), fetchText, wait = 400, log
     log('JFC Online specials not read, keeping what ran last time');
     out.sources.jfc = Object.assign({}, pj, { ok: true, stale: true, n: prevJf.length });
     out.specials.push(...prevJf);
-  } else { log('JFC Online specials not read'); out.sources.jfc = { ok: false, tried: jfGot.status }; }
+  } else if (shut) {
+    out.sources.jfc = { ok: false, tried: pj.tried, at: pj.at };
+  } else {
+    log(jfGot.status === 401 || jfGot.status === 403 ? 'JFC Online asks for a sign-in (' + jfGot.status + '), so it is left alone for a week' : 'JFC Online specials not read');
+    out.sources.jfc = { ok: false, tried: jfGot.status, at };
+  }
   return out;
 }
 
@@ -555,7 +563,7 @@ async function main() {
     ' | Harris Farm: ' + (s.harris.n || 0) + (s.harris.handle ? ' from /collections/' + s.harris.handle : '') + (s.harris.stale ? ' (kept from last run)' : '') +
     ' | Umall: ' + (s.umall.n || 0) + (s.umall.lists ? ' from ' + s.umall.lists : '') + (s.umall.stale ? ' (kept from last run)' : '') +
     ' | Meat Emporium: ' + (s.meat.n || 0) + (s.meat.stale ? ' (kept from last run)' : '') +
-    ' | JFC Online: ' + (s.jfc && s.jfc.ok ? (s.jfc.n || 0) + (s.jfc.of ? ' of ' + s.jfc.of + ' products' : '') + (s.jfc.stale ? ' (kept from last run)' : '') : 'not read') +
+    ' | JFC Online: ' + (s.jfc && s.jfc.ok ? (s.jfc.n || 0) + (s.jfc.of ? ' of ' + s.jfc.of + ' products' : '') + (s.jfc.stale ? ' (kept from last run)' : '') : s.jfc && (s.jfc.tried === 401 || s.jfc.tried === 403) ? 'asks for a sign-in, tried again a week after ' + String(s.jfc.at).slice(0, 10) : 'not read') +
     ' | TCN: ' + (s.tcn ? s.tcn.cards + ' cards' + (s.tcn.asAt ? ' (as at ' + s.tcn.asAt + ')' : '') + ', ' + s.tcn.deals + ' deals' : 'not read'));
 }
 
