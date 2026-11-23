@@ -2,7 +2,7 @@
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { build, parseRss, parseReport, splitTitle, hfItems, hfCat, FEEDS, HF_LISTS, UM_LISTS, umWindow, umItems, umCat, meItems, meCat, sydneyDay, specialsWeek, fingerprint, tcnCards, tcnDeals, TCN_FEEDS, TCN_WIKI } from '../src/github/deals.mjs';
+import { build, parseRss, parseReport, splitTitle, hfItems, hfCat, FEEDS, HF_LISTS, UM_LISTS, umWindow, umItems, umCat, meItems, meCat, jfItems, sydneyDay, specialsWeek, fingerprint, tcnCards, tcnDeals, TCN_FEEDS, TCN_WIKI } from '../src/github/deals.mjs';
 
 const dir = fileURLToPath(new URL('./fixtures/', import.meta.url));
 const read = (f) => readFileSync(dir + f, 'utf8');
@@ -155,6 +155,26 @@ await t('a run with Meat Emporium: its sales run to the end of the specials week
   assert.deepStrictEqual([later.sources.meat.ok, later.specials.filter((x) => x.src === 'me').length], [false, 0], 'but not into the next week');
   const none = await build({ prev: run, now: NOW, fetchText: site({ [ME_ALL]: { status: 200, text: '{"products":[]}' } }).fetchText, wait: 0 });
   assert.deepStrictEqual([none.sources.meat.ok, none.sources.meat.n, none.specials.filter((x) => x.src === 'me').length], [true, 0, 0], 'a sale that ends is dropped');
+});
+
+const JF_ALL = 'https://syd.jfconline.com.au/products.json?limit=250';
+await t('JFC Online specials: in-stock products with a was-price above the price, in the right aisle', () => {
+  const list = jfItems(JSON.parse(read('jf-products.json')).products);
+  assert.deepStrictEqual(list.map((x) => [x.n, x.now, x.was, x.off, x.cat]), [
+    ['Kewpie Mayonnaise 500g', 650, 820, 21, 'Pantry'],
+    ['Ajinomoto Pork Gyoza 30pc', 900, 1200, 25, 'Freezer']
+  ], 'no sold-out rice, no full-price soy sauce, no 0.00 was-price');
+  assert.deepStrictEqual([list[0].s, list[0].src, list[0].link, list[0].img.split('/').pop()], ['JFC', 'jf', 'https://syd.jfconline.com.au/products/kewpie-mayonnaise-500g', 'kewpie.jpg?v=1700000001']);
+});
+await t('a run with JFC Online: counted out of its products, kept for the week if the shop is down, noted if never read', async () => {
+  const run = await build({ prev: {}, now: NOW, fetchText: site({ [JF_ALL]: { status: 200, text: read('jf-products.json') } }).fetchText, wait: 0 });
+  assert.deepStrictEqual([run.sources.jfc.ok, run.sources.jfc.n, run.sources.jfc.of, run.sources.jfc.from, run.sources.jfc.to], [true, 2, 5, '2026-11-04', '2026-11-10']);
+  assert.strictEqual(run.specials.filter((x) => x.src === 'jf').length, 2);
+  const none = await build({ prev: {}, now: NOW, fetchText: site().fetchText, wait: 0 });
+  assert.deepStrictEqual([none.sources.jfc.ok, none.sources.jfc.tried], [false, 404], 'not answering is noted');
+  assert.notStrictEqual(fingerprint(run), fingerprint(none), 'new JFC sales are news');
+  const down = await build({ prev: run, now: new Date('2026-11-09T07:00:00Z'), fetchText: async () => ({ status: 0, text: '' }), wait: 0 });
+  assert.deepStrictEqual([down.sources.jfc.stale, down.specials.filter((x) => x.src === 'jf').length], [true, 2], "kept while this week's list runs");
 });
 
 await t('the next run reuses the report and the Harris Farm list that worked', async () => {

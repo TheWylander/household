@@ -6,6 +6,7 @@
      - Umall, Sydney's online Asian supermarket (the same range as Asian Grocer Online): its half-price picks, Saturday to
        Tuesday, and its weekly specials, Wednesday to Friday, from the public product lists of its Shopify shop.
      - Meat Emporium, Sydney's big meat market: whatever its Shopify shop has marked down (a was-price above the price).
+     - JFC Online, the Sydney shop of Japan Food Corporation: the same, from its online shop's public product list.
    Nothing about the household is in here. Each phone picks out what matters to it.
    Run: node deals.mjs prev.json out/deals.json   (prev.json is the last deals.json, or {}) */
 import { readFile, writeFile, mkdir, appendFile } from 'node:fs/promises';
@@ -29,9 +30,10 @@ export const HF_LISTS = ['online-specials', 'grocery-specials', 'fruit-and-veg-s
 const KEEP_CATS = /\/cat\/(groceries|alcohol|gift-cards)$/;
 const STATE = /^(NSW|VIC|QLD|SA|WA|TAS|ACT|NT)$/;
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
-const LINK_OK = /^https:\/\/(www\.)?(ozbargain\.com\.au|coles\.com\.au|woolworths\.com\.au|harrisfarm\.com\.au|umall\.com\.au|meatemporium\.com\.au)\//;
+const LINK_OK = /^https:\/\/(www\.)?(ozbargain\.com\.au|coles\.com\.au|woolworths\.com\.au|harrisfarm\.com\.au|umall\.com\.au|meatemporium\.com\.au|syd\.jfconline\.com\.au)\//;
 const UM = 'https://www.umall.com.au';
 const ME = 'https://www.meatemporium.com.au';
+const JF = 'https://syd.jfconline.com.au';
 /* Umall's lists and when each runs: from (0 Sunday to 6 Saturday), for this many more days. */
 export const UM_LISTS = [{ handle: 'half-price', from: 6, days: 3 }, { handle: 'weekly-special', from: 3, days: 2 }];
 
@@ -323,6 +325,23 @@ export function meItems(products) {
   });
   return out.slice(0, 200);
 }
+/* ---------- JFC Online ---------- */
+/* Japanese groceries, sorted into aisles the way Umall's are. Only what's in stock with a was-price above the price. */
+export function jfItems(products) {
+  const out = [], seen = {};
+  (products || []).forEach((p) => {
+    if (!p || !p.title) return;
+    (p.variants || []).slice(0, 3).forEach((v) => {
+      const now = cents(v && v.price), was = cents(v && v.compare_at_price);
+      if (!(now > 0 && was > now) || (v && v.available === false)) return;
+      const n = clip(text(p.title) + (v.title && !/^default title$/i.test(v.title) ? ' ' + text(v.title) : ''), 120), k = n.toLowerCase();
+      if (!n || seen[k]) return;
+      seen[k] = true;
+      out.push({ s: 'JFC', n, was, now, off: Math.round((1 - now / was) * 100), cat: umCat(p), last: '', link: p.handle ? safeLink(JF + '/products/' + encodeURIComponent(p.handle)) : '', img: shopImg(p), src: 'jf' });
+    });
+  });
+  return out.slice(0, 200);
+}
 /* A Shopify shop's public product list, up to three pages of 250. */
 async function shopifyProducts(fetchText, url, wait) {
   const r = await fetchText(url);
@@ -478,6 +497,19 @@ export async function build({ prev, now = new Date(), fetchText, wait = 400, log
     out.sources.meat = Object.assign({}, pm, { ok: true, stale: true, n: prevMe.length });
     out.specials.push(...prevMe);
   } else { log('Meat Emporium specials not read'); out.sources.meat = { ok: false, tried: meGot.status }; }
+
+  /* JFC Online: the same as Meat Emporium. Its markdowns have no end day, so they run to the end of the specials week. */
+  const pj = PS.jfc || {}, prevJf = (Array.isArray(P.specials) ? P.specials : []).filter((x) => x.src === 'jf');
+  const jfGot = await shopifyProducts(fetchText, JF + '/products.json?limit=250', wait);
+  if (jfGot.products) {
+    const list = jfItems(jfGot.products), wk = specialsWeek(today);
+    out.sources.jfc = { ok: true, from: wk.from, to: wk.to, at, n: list.length, of: jfGot.products.length };
+    out.specials.push(...list);
+  } else if (live(pj) && prevJf.length) {
+    log('JFC Online specials not read, keeping what ran last time');
+    out.sources.jfc = Object.assign({}, pj, { ok: true, stale: true, n: prevJf.length });
+    out.specials.push(...prevJf);
+  } else { log('JFC Online specials not read'); out.sources.jfc = { ok: false, tried: jfGot.status }; }
   return out;
 }
 
@@ -489,6 +521,7 @@ export function fingerprint(out) {
     harris: s.harris && s.harris.ok ? [s.harris.from, s.harris.to] : null,
     umall: s.umall && s.umall.ok ? [s.umall.from, s.umall.to] : null,
     meat: s.meat && s.meat.ok ? [s.meat.from, s.meat.to] : null,
+    jfc: s.jfc && s.jfc.ok ? [s.jfc.from, s.jfc.to] : null,
     tcn: o.tcn && Array.isArray(o.tcn.cards) ? [o.tcn.asAt, o.tcn.cards.map((c) => c.n + ':' + (c.shops || []).length).join(',')] : null,
     specials: (Array.isArray(o.specials) ? o.specials : []).map((x) => [x.s, x.n, x.now, x.was, x.img ? 1 : 0]),
     deals: (Array.isArray(o.deals) ? o.deals : []).map((d) => d.id + '|' + d.to).sort()
@@ -522,6 +555,7 @@ async function main() {
     ' | Harris Farm: ' + (s.harris.n || 0) + (s.harris.handle ? ' from /collections/' + s.harris.handle : '') + (s.harris.stale ? ' (kept from last run)' : '') +
     ' | Umall: ' + (s.umall.n || 0) + (s.umall.lists ? ' from ' + s.umall.lists : '') + (s.umall.stale ? ' (kept from last run)' : '') +
     ' | Meat Emporium: ' + (s.meat.n || 0) + (s.meat.stale ? ' (kept from last run)' : '') +
+    ' | JFC Online: ' + (s.jfc && s.jfc.ok ? (s.jfc.n || 0) + (s.jfc.of ? ' of ' + s.jfc.of + ' products' : '') + (s.jfc.stale ? ' (kept from last run)' : '') : 'not read') +
     ' | TCN: ' + (s.tcn ? s.tcn.cards + ' cards' + (s.tcn.asAt ? ' (as at ' + s.tcn.asAt + ')' : '') + ', ' + s.tcn.deals + ' deals' : 'not read'));
 }
 

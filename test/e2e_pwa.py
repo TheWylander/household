@@ -161,7 +161,7 @@ try:
         TODAY = datetime.now(ZoneInfo('Australia/Sydney')).date()
         ctx.add_init_script("window.HH_DEALS_URL = '%s';" % deals_fixture.URL)
         # the loading screen's cut-out comes from MediaPipe on a CDN tests can't reach: a stand-in that finds nobody (test/loading.py covers it)
-        ctx.add_init_script("window.HH_CUTOUT = () => null;")
+        ctx.add_init_script("window.HH_CUTOUT = () => null; window.HH_FACE = () => [];")
         # a stand-in for the phone's keyboard: window.__kb(px) shrinks the visible area the way an iPhone keyboard does
         ctx.add_init_script("""(() => {
           const fake = new EventTarget(); let h = null;
@@ -249,7 +249,7 @@ try:
 
         # Robin shows Claude's draft note to Jules
         act(a, 'go', 'home'); act(a, 'go', 'newsedit'); act(a, 'newspublish'); a.wait_for_timeout(300)
-        check(a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/news'].notes['2026-11-22b'].status") == 'published', 'the update note is saved to Firestore')
+        check(a.evaluate("JSON.parse(localStorage.getItem('__fbdb'))['hh/news'].notes['2026-11-23'].status") == 'published', 'the update note is saved to Firestore')
         act(a, 'go', 'home')
 
         # ---------- Jules's phone ----------

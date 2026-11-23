@@ -1,0 +1,7 @@
+{"products":[
+{"id":1,"title":"Kewpie Mayonnaise 500g","handle":"kewpie-mayonnaise-500g","product_type":"Sauces & Condiments","tags":["Mayonnaise"],"variants":[{"title":"Default Title","price":"6.50","compare_at_price":"8.20","available":true}],"images":[{"src":"//cdn.shopify.com/s/files/1/0601/0000/0001/products/kewpie.jpg?v=1700000001"}]},
+{"id":2,"title":"Ajinomoto Pork Gyoza 30pc","handle":"ajinomoto-pork-gyoza","product_type":"Frozen Food","tags":[],"variants":[{"title":"Default Title","price":"9.00","compare_at_price":"12.00","available":true}],"images":[]},
+{"id":3,"title":"Koshihikari Rice 5kg","handle":"koshihikari-5kg","product_type":"Rice","tags":[],"variants":[{"title":"Default Title","price":"24.90","compare_at_price":"29.90","available":false}],"images":[]},
+{"id":4,"title":"Kikkoman Soy Sauce 1L","handle":"kikkoman-1l","product_type":"Sauces & Condiments","tags":[],"variants":[{"title":"Default Title","price":"7.50","compare_at_price":null,"available":true}],"images":[]},
+{"id":5,"title":"Pocky Chocolate","handle":"pocky","product_type":"Snacks","tags":[],"variants":[{"title":"Default Title","price":"2.00","compare_at_price":"0.00","available":true}],"images":[]}
+]}

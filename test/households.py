@@ -125,8 +125,11 @@ try:
         TODAY = datetime.now(ZoneInfo('Australia/Sydney')).date()
         ctx.add_init_script("window.HH_DEALS_URL = '%s';" % deals_fixture.URL)
         ctx.add_init_script("window.HH_CUTOUT = () => null;")
-        ctx.route(deals_fixture.URL, lambda r: r.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'},
-                                                         body=json.dumps(deals_fixture.feed(TODAY.isoformat()))))
+        FEED = deals_fixture.feed(TODAY.isoformat())
+        FEED['specials'].append({'s': 'JFC', 'n': 'Kewpie Mayonnaise 500g', 'was': 820, 'now': 650, 'off': 21, 'cat': 'Pantry', 'last': '',
+                                 'link': 'https://syd.jfconline.com.au/products/kewpie-mayonnaise-500g', 'img': '', 'src': 'jf'})
+        FEED['sources']['jfc'] = dict(FEED['sources']['meat'], n=1)
+        ctx.route(deals_fixture.URL, lambda r: r.fulfill(status=200, content_type='application/json', headers={'Access-Control-Allow-Origin': '*'}, body=json.dumps(FEED)))
 
         # ---------- before: the one household, on the old rules ----------
         a = watch(ctx.new_page(), 'ari')
@@ -273,7 +276,12 @@ try:
         t = text(r)
         r.fill('#spQ', 'calypso'); r.wait_for_timeout(500)
         check('Calypso Mangoes' in text(r), "the Coles specials from the owner's laptop show for the new couple")
+        r.fill('#spQ', 'kewpie'); r.wait_for_timeout(500)
+        t2 = text(r)
+        check('Kewpie Mayonnaise 500g' in t2 and 'JFC' in t2, 'JFC Online specials show in Deals')
+        check(r.locator('a[href="https://syd.jfconline.com.au/products/kewpie-mayonnaise-500g"]').count() >= 1 or 'syd.jfconline' in r.content(), 'with a link to JFC Online')
         r.fill('#spQ', ''); r.wait_for_timeout(300)
+        check('JFC Online, the Japanese grocer' in text(r), "and the footer says where they're from")
         check('laptop' not in t and 'Ari' not in t, "without saying whose laptop: " + ([l for l in t.split('\n') if 'Coles fresh food' in l] or [''])[0][:160])
         act(r, 'go', 'home')
 

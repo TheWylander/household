@@ -19,6 +19,9 @@ TEST_CONFIG = "window.HH_FIREBASE = { apiKey: 'test-key', authDomain: 'test-proj
 STUB = """
   window.HH_REPO = 'robin/household';
   window.HH_CUTOUT_WAIT = 0;
+  window.HH_FACE_WAIT = 0;
+  /* Stands in for MediaPipe's face finder: the face in these head-and-shoulders photos, which already fill the frame. */
+  window.HH_FACE = (cv) => [{ x: cv.width / 3, y: cv.height * 0.18, w: cv.width / 3, h: cv.height * 0.43, score: 0.95 }];
   /* Stands in for MediaPipe: how sure it is that each pixel is the person. A head and shoulders in the middle, nobody,
      or a download that fails, as the test says. */
   window.HH_CUTOUT = (img) => {
