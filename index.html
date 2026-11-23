@@ -1427,7 +1427,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   var STORES = [
     ['Liquorland', /\bliquorland\b/i], ['Coles', /\bcoles\b|^cl$/i], ['Woolworths', /\bwoolworths\b|\bwoolies\b|^ww$/i], ['Harris Farm', /\bharris ?farm/i],
     ['ALDI', /\baldi\b/i], ['Costco', /\bcostco\b/i], ['IGA', /\biga\b/i], ['Lucky Mart', /\blucky ?mart\b/i], ['Umall', /\bumall\b/i],
-    ['Meat Emporium', /\bmeat emporium\b/i], ['United Meat Co', /\bunited meat\b/i]
+    ['Meat Emporium', /\bmeat emporium\b/i], ['United Meat Co', /\bunited meat\b/i], ['JFC', /\bjfc\b|\bjapan food corp/i]
   ];
   function storeName(s) {
     s = String(s || '').trim();
@@ -1585,6 +1585,10 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
      decides when the other person gets it; edits live in hh/news. The other person sees the newest shown note once,
      or as a few things to try straight after the welcome. */
   const RELEASES = [
+    { id: '2026-11-23', date: '2026-11-23', title: 'Faces in focus, and JFC Online specials', items: [
+      ['duo', 'Faces in focus.', 'Profile photos now centre on the face. A new photo is framed around the face as you add it, and photos already in the app zoom in on the face by themselves. The loading screen shows the close-up too.'],
+      ['tag', 'JFC Online in Deals.', "Deals now has specials from JFC Online, the Japanese grocer, checked every day. Tap one to open it on JFC's site."]
+    ] },
     { id: '2026-11-22b', date: '2026-11-22', title: 'Gift cards, and Two of Us for other couples', items: [
       ['star', 'Paid with a gift card.', 'Bought a gift card on special? When you add the spend, choose Paid with, then Gift card or Both. It saves what it really cost, and Home adds up what gift cards have saved.'],
       ['duo', 'Share Two of Us.', 'Other couples can have Two of Us too, each in their own locked household. Only the two of you can open yours.'],
@@ -2071,7 +2075,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     try { if (!fb.apps.length) fb.initializeApp(fbConfig()); S.auth = fb.auth(); } catch (e) { S.fbMissing = true; render(); return; }
     S.auth.onAuthStateChanged((u) => {
       S.authUser = u || null; S.authReady = true;
-      if (!u) splashSet(null);
+      if (!u) { splashSet(null); lsSet(FACES, ''); }
       if (u && u.emailVerified && !S.root) {
         S.root = FirebaseDB(fb.firestore(), ''); S.myId = u.uid; S.idResolved = true;
         findHousehold();
@@ -2538,35 +2542,49 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   const PHOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
   const hasPhoto = (p) => !!(S.photos && typeof S.photos[p] === 'string' && S.photos[p].length < 80000 && PHOTO_RE.test(S.photos[p]));
   let photoCss = null;
+  const pc = (n) => Math.round(n * 100) / 100 + '%';
   function applyPhotos() {
-    const css = ['a', 'b'].filter(hasPhoto).map((p) => '.av.ph-' + p + '{background-image:url("' + S.photos[p] + '")}').join('');
+    /* A photo with the face small or off to one side is zoomed in on the face (see checkFaces). */
+    const css = ['a', 'b'].filter(hasPhoto).map((p) => {
+      const fr = faceOf(S.photos[p]), f = fr && fr.f;
+      return '.av.ph-' + p + '{background-image:url("' + S.photos[p] + '")' +
+        (f ? ';background-size:' + pc(100 / f[2]) + ';background-position:' + pc(f[0] / (1 - f[2]) * 100) + ' ' + pc(f[1] / (1 - f[2]) * 100) : '') + '}';
+    }).join('');
+    checkFaces();
     if (css === photoCss) return;
     photoCss = css;
     let el = document.getElementById('hhPhotos');
     if (!el) { el = document.createElement('style'); el.id = 'hhPhotos'; document.head.appendChild(el); }
     el.textContent = css;
   }
-  /* A square from the middle of the photo, 192px, as a small JPEG: a few KB, so it fits in the shared data. */
+  /* A square around the face, 256px, as a small JPEG: a few KB, so it fits in the shared data. With no face found, or
+     if the face finder can't be reached in 15 seconds, a square from the middle of the photo, as before (and the
+     phones look for the face again later, see checkFaces). */
   function readPhoto(file) {
+    let url = '';
     return new Promise((resolve, reject) => {
       if (!file || !/^image\//.test(file.type || 'image/')) { reject(new Error('type')); return; }
-      const url = URL.createObjectURL(file), img = new Image();
-      img.onload = () => {
-        const w = img.naturalWidth, h = img.naturalHeight, side = Math.min(w, h);
-        if (!side) { URL.revokeObjectURL(url); reject(new Error('empty')); return; }
+      const img = new Image();
+      url = URL.createObjectURL(file);
+      img.onload = () => (Math.min(img.naturalWidth, img.naturalHeight) ? resolve(img) : reject(new Error('empty')));
+      img.onerror = () => reject(new Error('decode'));
+      img.src = url;
+    }).then((img) => {
+      const late = new Promise((res) => setTimeout(() => res(undefined), window.HH_FACE_LIMIT != null ? Number(window.HH_FACE_LIMIT) : 15000));
+      return Promise.race([faceFrame(img).catch(() => undefined), late]).then((fr) => {
+        const w = img.naturalWidth, h = img.naturalHeight, side = Math.min(w, h), sq = fr || { x: (w - side) / 2, y: (h - side) / 2, s: side };
         const c = document.createElement('canvas');
-        c.width = c.height = 192;
+        c.width = c.height = 256;
         const g = c.getContext('2d');
         g.imageSmoothingQuality = 'high';
-        g.drawImage(img, (w - side) / 2, (h - side) / 2, side, side, 0, 0, 192, 192);
-        URL.revokeObjectURL(url);
-        let q = 0.82, out = c.toDataURL('image/jpeg', q);
-        while (out.length > 30000 && q > 0.4) { q -= 0.12; out = c.toDataURL('image/jpeg', q); }
-        resolve(out);
-      };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode')); };
-      img.src = url;
-    });
+        g.drawImage(img, sq.x, sq.y, sq.s, sq.s, 0, 0, 256, 256);
+        let q = 0.84, out = c.toDataURL('image/jpeg', q);
+        while (out.length > 36000 && q > 0.4) { q -= 0.11; out = c.toDataURL('image/jpeg', q); }
+        /* Framed already, or no face in it: nothing more to look for. */
+        if (fr !== undefined) faceSet(out, { f: 0 });
+        return out;
+      });
+    }).then((out) => { URL.revokeObjectURL(url); return out; }, (e) => { if (url) URL.revokeObjectURL(url); throw e; });
   }
   function segBtn(act, val, pressed, label, person) {
     let style = '';
@@ -2599,6 +2617,8 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
      cut-out of just them once the phone has made one. It's kept with a fingerprint of the photo, so a new photo is
      picked up, and cleared on signing out. */
   const SPLASH = 'hh.splash', SPLASH_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/, TWIRL_MS = 2200;
+  const FACES = 'hh.faces', faceTried = {}, faceDone = {};
+  let facing = false;
   function splashGet() {
     try {
       const v = JSON.parse(lsGet(SPLASH) || 'null');
@@ -2615,16 +2635,19 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   let splashKey = '', cutting = false;
   function updateSplash() {
     if (S.mode !== 'firebase' || !S.hhLoaded || (S.me !== 'a' && S.me !== 'b')) return;
-    const o = other(S.me), url = hasPhoto(o) ? S.photos[o] : '', h = url ? printOf(url) : '';
+    const o = other(S.me), url = hasPhoto(o) ? S.photos[o] : '', fr = url ? faceOf(url) : null, h = url ? printOf(url) + (fr ? '.' + printOf(fr.src) : '') : '';
     if (o + h === splashKey) return;
     splashKey = o + h;
     if (!url) { splashSet(null); return; }
     let sp = splashGet();
-    if (!sp || sp.p !== o || sp.h !== h) { sp = { p: o, h, src: url, cut: false, tries: 0, at: 0 }; splashSet(sp); }
+    if (!sp || sp.p !== o || sp.h !== h) { sp = { p: o, h, src: fr ? fr.src : url, cut: false, tries: 0, at: 0 }; splashSet(sp); }
+    /* Until the phone has looked for the face, it waits to cut them out, so it cuts out the face rather than the whole photo. */
+    if (fr === undefined && !faceDone[printOf(url)]) { splashKey = ''; return; }
     /* A cut-out that didn't work is tried again a day later, three times at most. Nobody found in the photo won't change, so that's it for that photo. */
     if (sp.cut || cutting || sp.tries >= 3 || Date.now() - (sp.at || 0) < 864e5) return;
     cutting = true;
-    setTimeout(() => cutOut(url).then((png) => {
+    const src = sp.src;
+    setTimeout(() => cutOut(src).then((png) => {
       const now = splashGet();
       if (now && now.h === h) splashSet({ p: o, h, src: png, cut: true });
     }, (e) => {
@@ -2686,6 +2709,96 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
         if (!SPLASH_RE.test(png) || png.length >= 400000) throw new Error('size');
         return png;
       }));
+  }
+  /* ---------- faces ---------- */
+  /* Where the face is in a photo, found on this phone too: MediaPipe's face finder, fetched only when a photo needs it.
+     It looks at the whole photo, then, if no face turns up, at nine closer squares of it, as a face far from the camera
+     is too small to find in the whole photo. The biggest face wins. Gives a square around it, with room for hair and a
+     little neck, in the photo's pixels, or null for no face. Tests swap in window.HH_FACE. */
+  const MP_FACE = ['https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite',
+    'https://huggingface.co/litert-community/MediaPipe-FaceDetector-BlazeFace-Short-Range/resolve/main/blaze_face_short_range.tflite'];
+  let faceDet = null;
+  function faceDetector() {
+    if (!faceDet) {
+      faceDet = import(MP_LIB + '/vision_bundle.mjs').then((v) => v.FilesetResolver.forVisionTasks(MP_LIB + '/wasm').then((files) => {
+        const make = (i) => v.FaceDetector.createFromOptions(files, { baseOptions: { modelAssetPath: MP_FACE[i], delegate: 'CPU' }, runningMode: 'IMAGE', minDetectionConfidence: 0.55 })
+          .catch((e) => { if (i + 1 < MP_FACE.length) return make(i + 1); throw e; });
+        return make(0);
+      }));
+      faceDet.catch(() => { faceDet = null; });
+    }
+    return faceDet;
+  }
+  function facesIn(cv) {
+    if (typeof window.HH_FACE === 'function') return Promise.resolve().then(() => window.HH_FACE(cv));
+    return faceDetector().then((fd) => ((fd.detect(cv) || {}).detections || []).filter((d) => d && d.boundingBox).map((d) => ({
+      x: d.boundingBox.originX, y: d.boundingBox.originY, w: d.boundingBox.width, h: d.boundingBox.height, score: d.categories && d.categories[0] ? d.categories[0].score : 1 })));
+  }
+  function faceFrame(img) {
+    const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+    if (!(W > 0) || !(H > 0)) return Promise.resolve(null);
+    const view = (x, y, w, h, px) => {
+      const c = document.createElement('canvas'), k = Math.min(px / Math.max(w, h), 4);
+      c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+      c.getContext('2d').drawImage(img, x, y, w, h, 0, 0, c.width, c.height);
+      return { c, x, y, k: c.width / w };
+    };
+    const look = (v) => facesIn(v.c).then((fs) => (Array.isArray(fs) ? fs : [])
+      .filter((f) => f && f.w > 0 && f.h > 0 && isFinite(f.x) && isFinite(f.y) && !(f.score < 0.55))
+      .map((f) => ({ x: v.x + f.x / v.k, y: v.y + f.y / v.k, w: f.w / v.k, h: f.h / v.k })));
+    const t = Math.min(W, H) / 2, tiles = [];
+    [0, 0.5, 1].forEach((fy) => [0, 0.5, 1].forEach((fx) => tiles.push([(W - t) * fx, (H - t) * fy])));
+    return look(view(0, 0, W, H, Math.min(1024, Math.max(W, H))))
+      .then((fs) => (fs.length ? fs : tiles.reduce((p, xy) => p.then((all) => look(view(xy[0], xy[1], t, t, 256)).then((more) => all.concat(more))), Promise.resolve([]))))
+      .then((fs) => {
+        if (!fs.length) return null;
+        const f = fs.reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a)), m = Math.max(f.w, f.h), s = Math.min(W, H, m * 2.2);
+        const cx = f.x + f.w / 2, cy = f.y + f.h / 2 - m * 0.18;
+        return { x: Math.max(0, Math.min(W - s, cx - s / 2)), y: Math.max(0, Math.min(H - s, cy - s / 2)), s };
+      });
+  }
+  /* Photos saved before the app looked for faces (or when it couldn't reach the face finder): each phone looks once,
+     and keeps where the face is, with a close-up for the loading screen, against a fingerprint of the photo. A face
+     that's small or off to one side is zoomed in on; nothing changes in the shared photo. Cleared on signing out. */
+  function facesGet() {
+    try { const v = JSON.parse(lsGet(FACES) || 'null'); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (e) { return {}; }
+  }
+  /* undefined: not looked at yet; null: leave the photo as it is; otherwise the face's square (as parts of the photo) and the close-up. */
+  function faceOf(url) {
+    const v = facesGet()[printOf(url)];
+    if (!v || typeof v !== 'object') return undefined;
+    const f = v.f;
+    const ok = Array.isArray(f) && f.length === 3 && f.every((n) => typeof n === 'number' && n >= 0 && n <= 1) && f[2] >= 0.15 && f[2] < 0.86 &&
+      f[0] + f[2] <= 1.001 && f[1] + f[2] <= 1.001 && typeof v.src === 'string' && v.src.length < 120000 && SPLASH_RE.test(v.src);
+    return ok ? { f, src: v.src } : null;
+  }
+  function faceSet(url, v) {
+    const all = facesGet(), keep = {}, live = ['a', 'b'].filter(hasPhoto).map((p) => printOf(S.photos[p]));
+    Object.keys(all).forEach((k) => { if (live.indexOf(k) >= 0) keep[k] = all[k]; });
+    keep[printOf(url)] = v;
+    lsSet(FACES, JSON.stringify(keep));
+  }
+  function checkFaces() {
+    if (facing || S.mode !== 'firebase') return;
+    const first = S.me === 'a' || S.me === 'b' ? [other(S.me), S.me] : ['a', 'b'];
+    const url = first.filter(hasPhoto).map((p) => S.photos[p]).filter((u) => faceOf(u) === undefined && !faceTried[printOf(u)])[0];
+    if (!url) return;
+    const k = printOf(url);
+    facing = true; faceTried[k] = true;
+    setTimeout(() => new Promise((res, rej) => { const img = new Image(); img.onload = () => res(img); img.onerror = () => rej(new Error('image')); img.src = url; })
+      .then((img) => faceFrame(img).then((fr) => {
+        const W = img.naturalWidth, H = img.naturalHeight;
+        if (!fr || Math.abs(W - H) > 2 || fr.s >= Math.min(W, H) * 0.86) { faceSet(url, { f: 0 }); return; }
+        const c = document.createElement('canvas');
+        c.width = c.height = 192;
+        const g = c.getContext('2d');
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(img, fr.x, fr.y, fr.s, fr.s, 0, 0, 192, 192);
+        faceSet(url, { f: [fr.x / W, fr.y / H, fr.s / W], src: c.toDataURL('image/jpeg', 0.88) });
+      }))
+      .catch(() => { /* the face finder couldn't be reached: the next time the app opens */ })
+      .then(() => { faceDone[k] = true; facing = false; photoCss = null; applyPhotos(); splashKey = ''; updateSplash(); }),
+    window.HH_FACE_WAIT != null ? Number(window.HH_FACE_WAIT) : 2000);
   }
   function viewNotSetUp() {
     return '<div class="setup"><h1>Not set up yet</h1><p class="lead">Once this is set up, your shared spends will show here.</p></div>';
@@ -4112,7 +4225,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   ];
   const DEALS_BASE = { sales: [], watch: [], keen: {}, list: [] };
   const centsOk = (v) => (typeof v === 'number' && isFinite(v) && v > 0 && v < 1e7 ? Math.round(v) : 0);
-  const LINK_OK = /^https:\/\/(www\.)?(ozbargain\.com\.au|coles\.com\.au|woolworths\.com\.au|harrisfarm\.com\.au|umall\.com\.au|meatemporium\.com\.au|sushifactory\.com\.au)\/[^\s"'<>]*$/;
+  const LINK_OK = /^https:\/\/(www\.)?(ozbargain\.com\.au|coles\.com\.au|woolworths\.com\.au|harrisfarm\.com\.au|umall\.com\.au|meatemporium\.com\.au|sushifactory\.com\.au|syd\.jfconline\.com\.au)\/[^\s"'<>]*$/;
   const linkOk = (u) => (LINK_OK.test(String(u || '')) ? String(u).slice(0, 300) : '');
   const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
   /* Specials read from our screenshots (see the reader further down): their categories match the shops' own, so they land in the right aisle. */
@@ -4197,10 +4310,10 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     const so = j.sources && typeof j.sources === 'object' ? j.sources : {};
     return {
       updated: str(j.updated, 40),
-      sources: { ozb: src(so.ozb), report: src(so.report), harris: src(so.harris), umall: src(so.umall), meat: src(so.meat), tcn: src(so.tcn) },
+      sources: { ozb: src(so.ozb), report: src(so.report), harris: src(so.harris), umall: src(so.umall), meat: src(so.meat), jfc: src(so.jfc), tcn: src(so.tcn) },
       specials: (Array.isArray(j.specials) ? j.specials : []).slice(0, 1500).filter((x) => x && typeof x.n === 'string' && x.n.trim() && int(x.now) > 0).map((x) => ({
         s: L.storeName(str(x.s, 40)), n: str(x.n, 120), was: int(x.was), now: int(x.now), off: L.clamp(int(x.off), 0, 99), cat: str(x.cat, 40), last: str(x.last, 40),
-        link: linkOk(x.link), img: imgOk(x.img), src: x.src === 'hf' || x.src === 'um' || x.src === 'me' ? x.src : 'hp', to: day(x.to)
+        link: linkOk(x.link), img: imgOk(x.img), src: x.src === 'hf' || x.src === 'um' || x.src === 'me' || x.src === 'jf' ? x.src : 'hp', to: day(x.to)
       })),
       deals: (Array.isArray(j.deals) ? j.deals : []).slice(0, 150).filter((x) => x && typeof x.t === 'string' && x.t.trim()).map((x) => ({
         id: str(x.id, 12), t: str(x.t, 160), s: str(x.s, 40), link: linkOk(x.link), from: day(x.from), to: day(x.to), votes: int(x.votes), hp: x.hp === true, tcn: x.tcn === true
@@ -4234,7 +4347,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       .then(() => { S.feedBusy = false; S.feedAt = Date.now(); refreshDeals(); if (S.settings && S.me) safeRender(); });
   }
   /* Which list a special belongs to: Harris Farm's and Meat Emporium's run for the specials week, Umall's carry their own end day. */
-  const feedKey = (x) => (x.src === 'hf' ? 'harris' : x.src === 'me' ? 'meat' : 'report');
+  const feedKey = (x) => (x.src === 'hf' ? 'harris' : x.src === 'me' ? 'meat' : x.src === 'jf' ? 'jfc' : 'report');
   /* Specials from our screenshots that haven't ended, shaped like the lists' own. */
   let snapMemo = { doc: undefined, day: '', list: [] };
   function snapSpecials() {
@@ -4287,7 +4400,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
      Fridays, the rest on Tuesdays), the app starts the refresh itself with the token kept for instant pop-ups, at most
      every two hours from each phone, and looks for the new lists over the next few minutes. The refresh then sends
      any pop-ups that are due, like the week's top specials. */
-  const DUE_NAMES = { report: 'Coles and Woolies', harris: 'Harris Farm', umall: 'Umall', meat: 'Meat Emporium' };
+  const DUE_NAMES = { report: 'Coles and Woolies', harris: 'Harris Farm', umall: 'Umall', meat: 'Meat Emporium', jfc: 'JFC Online' };
   function dealsDue() {
     const F = S.feed, t = today();
     return F ? Object.keys(DUE_NAMES).filter((k) => { const s = F.sources[k]; return !!(s && s.ok && s.to && s.to < t); }) : [];
@@ -4867,6 +4980,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     if (hf.ok || hf.stale) srcs.push('Harris Farm from its online specials');
     if (F.sources.umall.ok || F.sources.umall.stale) srcs.push('Umall, Sydney\'s online Asian supermarket, from its half-price and weekly specials (delivery only)');
     if (F.sources.meat.ok || F.sources.meat.stale) srcs.push('Meat Emporium, Sydney\'s big meat market, from what its online shop has marked down');
+    if (F.sources.jfc && (F.sources.jfc.ok || F.sources.jfc.stale) && F.sources.jfc.n > 0) srcs.push('JFC Online, the Japanese grocer, from what its Sydney online shop has marked down (delivery only)');
     const W = webInfo(), mine = webMine(), onLaptop = (x) => (mine ? 'read in the browser on ' + esc(poss(nm(x.by))) + ' laptop ' : 'read ') + esc(agoLabel(x.at));
     if (W.coles) srcs.push('Coles fresh food and Liquorland from Coles\' website (Liquorland\'s ' + LIQ_MIN_OFF + '% off or more' + (mine ? ', plus anything on our watch list' : '') + '), ' + onLaptop(W.coles));
     if (W.ww) srcs.push('Woolies fresh food from Woolworths\' website, ' + onLaptop(W.ww));
@@ -4876,7 +4990,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
   function ozbCard() {
     const F = S.feed, t = today();
     if (!F || !F.deals.length) return '';
-    const D = dealsCfg(), shops = /^(Coles|Woolworths|Harris Farm|ALDI|Costco|IGA|Lucky Mart|Liquorland|Meat Emporium|United Meat Co)$/;
+    const D = dealsCfg(), shops = /^(Coles|Woolworths|Harris Farm|ALDI|Costco|IGA|Lucky Mart|Liquorland|Meat Emporium|United Meat Co|JFC)$/;
     const list = F.deals.filter((d) => !d.hp && (!d.to || d.to >= t)).map((d) => Object.assign({ shop: L.storeName(d.s), ours: L.watchHits(d.t + ' ' + d.s, D.watch).length > 0 }, d))
       .sort((a, b) => (b.votes || 0) - (a.votes || 0));
     if (!list.length) return '';
@@ -5611,7 +5725,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
       ['plus', 'Add a spend', 'Tap + to type one in or snap a receipt. Pick who paid and how it splits, and untick anything that\'s just yours.'],
       ['duo', 'Stay square', 'Home shows who owes who. When money moves between you, record it with Settle up.'],
       ['gear', 'Bring in a statement', 'Settings, then Upload, takes your card statement and lists the spends to check, so you only keep the shared ones.'],
-      ['tag', 'Deals', 'What\'s on special at Coles, Woolies, Harris Farm, Umall, Liquorland and Meat Emporium, plus gift card deals. Tap + on one to put it on your weekend list.'],
+      ['tag', 'Deals', 'What\'s on special at Coles, Woolies, Harris Farm, Umall, Liquorland, Meat Emporium and JFC Online, plus gift card deals. Tap + on one to put it on your weekend list.'],
       ['cal', 'Calendar and sale days', 'Each day\'s spends, and the sale days you\'re keen on.'],
       ['bell', 'Pop-ups', 'Put the app on your Home Screen, then turn on pop-ups in Settings. Each of you turns them on for your own phone, so you hear when ' + them + ' adds a spend.'],
       ['star', 'Make it yours', 'Profiles has your photos, names and colours. Customise has the look, rent, card and categories.'],
@@ -6035,7 +6149,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     return [
       ['camera', 'Add a spend', 'Tap + to capture a receipt, or type one in. Mark anything that\'s just yours.'],
       ['duo', 'Stay square', pilot('insights') ? 'Home shows where you two stand, what\'s left of the month\'s budget and what\'s coming up.' : 'Home shows where you two stand and what\'s coming up.'],
-      ['tag', 'Grab the specials', 'Deals has what\'s on special at Coles, Woolies, Harris Farm, Umall, Liquorland and Meat Emporium. Tap + to put one on our weekend list.'],
+      ['tag', 'Grab the specials', 'Deals has what\'s on special at Coles, Woolies, Harris Farm, Umall, Liquorland, Meat Emporium and JFC Online. Tap + to put one on our weekend list.'],
       ['cal', 'Every day, and sale days', 'The Calendar shows each day\'s spends, and the sale days we\'re keen on.'],
       ['bell', 'Pop-ups', 'Turn them on in Settings to hear when ' + from + ' adds a spend, and when something we buy is on special.']
     ];
@@ -6429,7 +6543,7 @@ a.match-n { text-decoration: underline; text-decoration-color: var(--line); text
     lockcheck: () => lockCheck(),
     hhdelete: () => openDialog({ type: 'hhdelete' }),
     dlghhdelete: () => deleteHousehold(),
-    auout: () => { splashSet(null); if (S.auth) S.auth.signOut().then(() => location.reload(), () => location.reload()); },
+    auout: () => { splashSet(null); lsSet(FACES, ''); if (S.auth) S.auth.signOut().then(() => location.reload(), () => location.reload()); },
     reload: () => location.reload(),
     welcomein: () => welcomeIn(),
     wnotme: () => { S.whoPick = true; render(); window.scrollTo(0, 0); },
